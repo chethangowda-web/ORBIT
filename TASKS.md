@@ -473,8 +473,8 @@ ngrok http 8000
 
 | # | Task | Status |
 |---|------|--------|
-| 6.1 | Create `backend/scheduler/scheduler.py` — APScheduler with Redis job store | ⬜ |
-| 6.2 | Register scheduler start/stop in FastAPI lifespan (`main.py`) | ⬜ |
+| 6.1 | Create `backend/scheduler/scheduler.py` — APScheduler with Redis job store | ✅ Done |
+| 6.2 | Register scheduler start/stop in FastAPI lifespan (`main.py`) | ✅ Done |
 
 ```python
 # backend/scheduler/scheduler.py
@@ -493,14 +493,14 @@ scheduler = AsyncIOScheduler(
 
 | # | Task | Status |
 |---|------|--------|
-| 6.3 | Create `backend/scheduler/jobs/daily_briefing.py` | ⬜ |
-| 6.4 | Job logic: load active users → for each: PlannerAgent → send DM → log | ⬜ |
-| 6.5 | Register job: `cron(hour=9, minute=0)` | ⬜ |
-| 6.6 | Create `backend/scheduler/jobs/overdue_alert.py` | ⬜ |
-| 6.7 | Job logic: find overdue tasks → group by assignee → RecommendationAgent → send DM | ⬜ |
-| 6.8 | Register job: `cron(hour=18, minute=0)` | ⬜ |
-| 6.9 | Create `backend/scheduler/jobs/weekly_summary.py` (OPTIONAL) | ⬜ |
-| 6.10 | Add `POST /api/admin/trigger-briefing` debug endpoint (manual trigger) | ⬜ |
+| 6.3 | Create `backend/scheduler/jobs/daily_briefing.py` | ✅ Done |
+| 6.4 | Job logic: load active users → for each: PlannerAgent → send DM → log | ✅ Done |
+| 6.5 | Register job: `cron(hour=9, minute=0)` | ✅ Done |
+| 6.6 | Create `backend/scheduler/jobs/overdue_alert.py` | ✅ Done |
+| 6.7 | Job logic: find overdue tasks → group by assignee → RecommendationAgent → send DM | ✅ Done |
+| 6.8 | Register job: `cron(hour=18, minute=0)` | ✅ Done |
+| 6.9 | Create `backend/scheduler/jobs/weekly_summary.py` (OPTIONAL) | ✅ Done |
+| 6.10 | Add `POST /api/admin/trigger-briefing` debug endpoint (manual trigger) | ✅ Done |
 
 **✅ Definition of Done:**
 - Trigger `POST /api/admin/trigger-briefing` → all users receive DM in Google Chat

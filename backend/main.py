@@ -8,6 +8,7 @@ from typing import Any, Dict
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.admin import router as admin_router
 from api.analytics import router as analytics_router
 from api.auth import router as auth_router
 from api.health import router as health_router
@@ -16,12 +17,17 @@ from api.users import router as users_router
 from api.webhook import router as webhook_router
 from config import settings
 from exceptions import register_exception_handlers
+from scheduler.scheduler import start_scheduler, stop_scheduler
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan event handler for startup and shutdown procedures."""
+    if settings.SCHEDULER_ENABLED:
+        start_scheduler()
     yield
+    if settings.SCHEDULER_ENABLED:
+        stop_scheduler()
 
 
 app = FastAPI(
@@ -53,6 +59,7 @@ api_router.include_router(tasks_router)
 api_router.include_router(users_router)
 api_router.include_router(analytics_router)
 api_router.include_router(webhook_router)
+api_router.include_router(admin_router)
 
 app.include_router(api_router)
 
