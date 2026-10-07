@@ -102,11 +102,11 @@ structlog==24.4.0
 
 | # | Task | Status |
 |---|------|--------|
-| 1.1 | Create `backend/config.py` — pydantic-settings class reading `.env` | ⬜ |
-| 1.2 | Create `backend/main.py` — FastAPI with CORS, lifespan, routers included | ⬜ |
-| 1.3 | Create `backend/dependencies.py` — `get_db()`, `get_current_user()`, `require_role()` | ⬜ |
-| 1.4 | Create global exception handler (`backend/exceptions.py`) | ⬜ |
-| 1.5 | Create response helper `api_response(data, meta, error)` | ⬜ |
+| 1.1 | Create `backend/config.py` — pydantic-settings class reading `.env` | ✅ Done |
+| 1.2 | Create `backend/main.py` — FastAPI with CORS, lifespan, routers included | ✅ Done |
+| 1.3 | Create `backend/dependencies.py` — `get_db()`, `get_current_user()`, `require_role()` | ✅ Done |
+| 1.4 | Create global exception handler (`backend/exceptions.py`) | ✅ Done |
+| 1.5 | Create response helper `api_response(data, meta, error)` | ✅ Done |
 
 **`config.py` fields:**
 ```python
@@ -128,12 +128,12 @@ LANGCHAIN_API_KEY: str = ""
 
 | # | Task | Status |
 |---|------|--------|
-| 1.6 | Create `backend/db/engine.py` — async engine + session factory | ⬜ |
-| 1.7 | Create `backend/db/models.py` — `User`, `Task`, `TaskAuditLog`, `UserPreference`, `NotificationLog` | ⬜ |
-| 1.8 | Init Alembic: `alembic init alembic` + configure `env.py` | ⬜ |
-| 1.9 | Generate migration: `alembic revision --autogenerate -m "initial schema"` | ⬜ |
-| 1.10 | Apply migration: `alembic upgrade head` | ⬜ |
-| 1.11 | Create `backend/db/seed.py` — insert 3 test users + 5 sample tasks | ⬜ |
+| 1.6 | Create `backend/db/session.py` — async engine + session factory | ✅ Done |
+| 1.7 | Create `backend/db/models.py` — `User`, `Task`, `TaskAuditLog`, `UserPreference`, `NotificationLog` | ✅ Done |
+| 1.8 | Init Alembic: `alembic init alembic` + configure `env.py` | ✅ Done |
+| 1.9 | Generate migration: `alembic revision --autogenerate -m "initial schema"` | ✅ Done |
+| 1.10 | Apply migration: `alembic upgrade head` | ✅ Done |
+| 1.11 | Create `backend/db/seed.py` — insert 3 test users + 5 sample tasks | ✅ Done |
 
 ---
 
@@ -141,10 +141,10 @@ LANGCHAIN_API_KEY: str = ""
 
 | # | Task | Status |
 |---|------|--------|
-| 1.12 | Create `backend/auth/jwt.py` — `create_token()`, `decode_token()` | ⬜ |
-| 1.13 | Create `backend/api/auth.py` — `POST /api/auth/token`, `GET /api/auth/me` | ⬜ |
-| 1.14 | Create `backend/schemas/auth.py` — `TokenRequest`, `TokenResponse` | ⬜ |
-| 1.15 | Register auth router in `main.py` | ⬜ |
+| 1.12 | Create `backend/auth/jwt.py` — `create_token()`, `decode_token()` | ✅ Done |
+| 1.13 | Create `backend/api/auth.py` — `POST /api/auth/token`, `GET /api/auth/me` | ✅ Done |
+| 1.14 | Create `backend/schemas/auth.py` — `TokenRequest`, `TokenResponse` | ✅ Done |
+| 1.15 | Register auth router in `main.py` | ✅ Done |
 
 **✅ Definition of Done:**
 - `GET /api/health` → `{"database": "connected", "redis": "connected"}`
