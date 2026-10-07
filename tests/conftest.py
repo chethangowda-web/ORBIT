@@ -70,18 +70,6 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides.clear()
 
 
-@pytest.fixture
-def custom_session_factory():
-    """Fixture providing test async session factory."""
-    return test_async_session_factory
-
-
-@pytest.fixture
-def custom_engine():
-    """Fixture providing test async engine."""
-    return test_engine
-
-
 @pytest_asyncio.fixture(scope="function")
 async def seed_test_user(db_session: AsyncSession) -> User:
     """Create a verified test employee in the test database."""
