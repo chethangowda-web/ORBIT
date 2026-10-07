@@ -151,5 +151,9 @@ async def seed_data(session: Optional[AsyncSession] = None) -> None:
         print("Database seed completed successfully!")
 
 
+# Alias for compatibility
+seed_database = seed_data
+
+
 if __name__ == "__main__":
     asyncio.run(seed_data())

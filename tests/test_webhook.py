@@ -110,3 +110,64 @@ async def test_webhook_card_clicked_event(client: AsyncClient):
 
     assert response.status_code == 200
     assert response.json().get("event_type") == "CARD_CLICKED"
+
+
+@pytest.mark.asyncio
+async def test_webhook_invalid_signature_rejected(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    """Test webhook rejects requests with invalid signature when secret is configured."""
+    from config import settings
+    monkeypatch.setattr(settings, "GOOGLE_CHAT_WEBHOOK_SECRET", "super-secret-key")
+
+    event_payload = {
+        "type": "ADDED_TO_SPACE",
+        "space": {"name": "spaces/TEST"},
+    }
+    response = await client.post(
+        "/api/chat/webhook",
+        json=event_payload,
+        headers={"X-Goog-Signature": "invalid-signature"},
+    )
+    assert response.status_code == 403
+    assert "Invalid Google Chat webhook signature" in response.json().get("error", "")
+
+
+@pytest.mark.asyncio
+async def test_webhook_valid_hmac_signature(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    """Test webhook accepts request with valid HMAC SHA256 signature."""
+    import hashlib
+    import hmac
+    from config import settings
+
+    secret = "production-webhook-secret-123"
+    monkeypatch.setattr(settings, "GOOGLE_CHAT_WEBHOOK_SECRET", secret)
+
+    event_payload = {
+        "type": "ADDED_TO_SPACE",
+        "space": {"name": "spaces/TESTSPACE999"},
+        "user": {"name": "users/999", "displayName": "Secret Agent"},
+    }
+    body_bytes = json.dumps(event_payload).encode("utf-8")
+    valid_sig = hmac.new(secret.encode("utf-8"), body_bytes, hashlib.sha256).hexdigest()
+
+    response = await client.post(
+        "/api/chat/webhook",
+        content=body_bytes,
+        headers={
+            "Content-Type": "application/json",
+            "X-Goog-Signature": valid_sig,
+        },
+    )
+    assert response.status_code == 200
+    assert response.json().get("status") == "accepted"
+
+
+@pytest.mark.asyncio
+async def test_webhook_malformed_json_payload(client: AsyncClient):
+    """Test webhook handles malformed JSON payload with 400 Bad Request."""
+    response = await client.post(
+        "/api/chat/webhook",
+        content=b"not-a-valid-json-string",
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 400
+    assert "Invalid event schema" in response.json().get("error", "")
