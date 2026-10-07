@@ -14,16 +14,7 @@ class TokenRequest(BaseModel):
     password: str
 
 
-class UserSummary(BaseModel):
-    """Minimal user information embedded in auth responses."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    email: str
-    display_name: str
-    role: str
-    google_space_id: Optional[str] = None
+from schemas.user import UserSummary
 
 
 class TokenResponseData(BaseModel):
