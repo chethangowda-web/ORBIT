@@ -167,9 +167,9 @@ LANGCHAIN_API_KEY: str = ""
 
 | # | Task | Status |
 |---|------|--------|
-| 2.1 | Create `backend/schemas/user.py` — `UserCreate`, `UserRead`, `UserUpdate` | ⬜ |
-| 2.2 | Create `backend/schemas/task.py` — `TaskCreate`, `TaskRead`, `TaskUpdate`, `TaskListResponse` | ⬜ |
-| 2.3 | Create `backend/schemas/common.py` — `PaginationMeta`, `APIResponse[T]` | ⬜ |
+| 2.1 | Create `backend/schemas/user.py` — `UserCreate`, `UserRead`, `UserUpdate` | ✅ Done |
+| 2.2 | Create `backend/schemas/task.py` — `TaskCreate`, `TaskRead`, `TaskUpdate`, `TaskListResponse` | ✅ Done |
+| 2.3 | Create `backend/schemas/common.py` — `PaginationMeta`, `APIResponse[T]` | ✅ Done |
 
 ---
 
@@ -177,9 +177,9 @@ LANGCHAIN_API_KEY: str = ""
 
 | # | Task | Status |
 |---|------|--------|
-| 2.4 | Create `backend/crud/users.py` — `get_user_by_id`, `get_user_by_google_id`, `get_user_by_name`, `get_all_users`, `create_user`, `update_user` | ⬜ |
-| 2.5 | Create `backend/crud/tasks.py` — `create_task`, `get_task`, `update_task`, `soft_delete_task`, `complete_task`, `search_tasks`, `get_user_tasks`, `get_overdue_tasks`, `get_tasks_due_today`, `get_task_stats` | ⬜ |
-| 2.6 | Create `backend/crud/audit.py` — `log_task_action(task_id, user_id, action, changes)` | ⬜ |
+| 2.4 | Create `backend/crud/users.py` — `get_user_by_id`, `get_user_by_google_id`, `get_user_by_name`, `get_all_users`, `create_user`, `update_user` | ✅ Done |
+| 2.5 | Create `backend/crud/tasks.py` — `create_task`, `get_task`, `update_task`, `soft_delete_task`, `complete_task`, `search_tasks`, `get_user_tasks`, `get_overdue_tasks`, `get_tasks_due_today`, `get_task_stats` | ✅ Done |
+| 2.6 | Create `backend/crud/audit.py` — `log_task_action(task_id, user_id, action, changes)` | ✅ Done |
 
 ---
 
@@ -187,11 +187,11 @@ LANGCHAIN_API_KEY: str = ""
 
 | # | Task | Status |
 |---|------|--------|
-| 2.7 | Create `backend/api/tasks.py` — all 8 task endpoints | ⬜ |
-| 2.8 | Create `backend/api/users.py` — list, get, update me, get user tasks | ⬜ |
-| 2.9 | Create `backend/api/analytics.py` — `/stats`, `/team-workload` | ⬜ |
-| 2.10 | Create `backend/api/health.py` — `GET /api/health` | ⬜ |
-| 2.11 | Register all routers in `main.py` | ⬜ |
+| 2.7 | Create `backend/api/tasks.py` — all 8 task endpoints | ✅ Done |
+| 2.8 | Create `backend/api/users.py` — list, get, update me, get user tasks | ✅ Done |
+| 2.9 | Create `backend/api/analytics.py` — `/stats`, `/team-workload` | ✅ Done |
+| 2.10 | Create `backend/api/health.py` — `GET /api/health` | ✅ Done |
+| 2.11 | Register all routers in `main.py` | ✅ Done |
 
 **Task endpoints to build:**
 ```

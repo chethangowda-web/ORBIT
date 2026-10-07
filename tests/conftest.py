@@ -98,3 +98,33 @@ def user_auth_headers(seed_test_user: User) -> dict:
         }
     )
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture(scope="function")
+async def seed_manager_user(db_session: AsyncSession) -> User:
+    """Create a verified test manager in the test database."""
+    user = User(
+        email="manager@orbit.dev",
+        hashed_password=get_password_hash("password123"),
+        display_name="Test Manager",
+        role="manager",
+        timezone="Asia/Kolkata",
+        is_active=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture(scope="function")
+def manager_auth_headers(seed_manager_user: User) -> dict:
+    """Return Authorization header with valid JWT for the test manager."""
+    token = create_access_token(
+        data={
+            "sub": str(seed_manager_user.id),
+            "email": seed_manager_user.email,
+            "role": seed_manager_user.role,
+        }
+    )
+    return {"Authorization": f"Bearer {token}"}
