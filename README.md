@@ -1,4 +1,4 @@
-﻿# ORBIT — Multi-Agent AI Task Management System
+# ORBIT — Multi-Agent AI Task Management System
 
 > Orchestrated Resource & Business Intelligence Taskmaster
 
@@ -98,18 +98,35 @@ ORBIT: ✅ Marked complete: CRM Deployment (Task #38)
 
 ---
 
-## 🏛️ Architecture
+## 🏛️ System Architecture
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for full system design.
+![ORBIT Multi-Agent System Architecture](./architecture-a2-1791376610323.png)
+
+Detailed architecture evaluation and documentation:
+- [Architecture Deep-Dive](docs/ARCHITECTURE.md)
+- [Architecture & Diagram Tool Evaluation](ARCHITECTURE_EVALUATION.md)
+- [Technical Design Decisions](docs/DESIGN.md)
 
 ```
-Google Chat → FastAPI Webhook → LangGraph Supervisor
-                                      ├── Task Agent → PostgreSQL
-                                      ├── Planner Agent
-                                      ├── Recommendation Agent
-                                      ├── Review Agent (HITL)
-                                      └── Memory Agent → Redis
+Google Chat / Webhook ──► FastAPI Router ──► LangGraph Supervisor
+                                                    ├── Task Agent ──► PostgreSQL
+                                                    ├── Planner Agent
+                                                    ├── Recommendation Agent
+                                                    ├── Review Agent (HITL Guard)
+                                                    └── Memory Agent ──► Redis Checkpointer
 ```
+
+---
+
+## 🔑 Default Test Credentials
+
+All accounts seeded with password: `password123`
+
+| Role | Email | Display Name | Permissions |
+|------|-------|--------------|-------------|
+| **System Admin** | `admin@orbit.dev` | System Admin | Full system administration, trigger jobs, mutate all records |
+| **Manager** | `sarah@orbit.dev` | Sarah Connor | Team workload analytics, delete tasks, manual job execution |
+| **Employee** | `john@orbit.dev` | John Doe | Linked to Google Chat (`users/1029384756`), task CRUD |
 
 ---
 

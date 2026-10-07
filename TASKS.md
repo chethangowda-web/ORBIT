@@ -603,11 +603,11 @@ scheduler = AsyncIOScheduler(
 
 | # | Task | Status |
 |---|------|--------|
-| 8.1 | Write `backend/Dockerfile` (multi-stage, python:3.11-slim) | ⬜ |
-| 8.2 | Write `frontend/Dockerfile` (multi-stage, node:20-alpine) | ⬜ |
-| 8.3 | Finalize `docker-compose.yml` with health checks on all services | ⬜ |
-| 8.4 | Write final `README.md` with setup + example interactions | ⬜ |
-| 8.5 | Write `ARCHITECTURE_EVALUATION.md` (required: thoughts on the diagram tool) | ⬜ |
+| 8.1 | Write `backend/Dockerfile` (multi-stage, python:3.11-slim) | ✅ Done |
+| 8.2 | Write `frontend/Dockerfile` (multi-stage, node:20-alpine) | ✅ Done |
+| 8.3 | Finalize `docker-compose.yml` with health checks on all services | ✅ Done |
+| 8.4 | Write final `README.md` with setup + example interactions | ✅ Done |
+| 8.5 | Write `ARCHITECTURE_EVALUATION.md` (required: thoughts on the diagram tool) | ✅ Done |
 | 8.6 | Record 3–5 min demo video covering all use cases | ⬜ |
 
 **✅ Definition of Done:**

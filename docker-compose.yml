@@ -56,6 +56,12 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - orbit-network
 
@@ -70,11 +76,16 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - backend
+      backend:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000 || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     networks:
       - orbit-network
-    profiles:
-      - frontend
 
 volumes:
   postgres_data:
