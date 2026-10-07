@@ -626,10 +626,10 @@ scheduler = AsyncIOScheduler(
 
 | # | Task | Status |
 |---|------|--------|
-| 9.1 | Unit test all 10 task tools (`tests/unit/test_task_tools.py`) | ⬜ |
-| 9.2 | Integration test all task API endpoints (`tests/integration/test_tasks_api.py`) | ⬜ |
-| 9.3 | Intent classification eval (`tests/eval/test_intent_accuracy.py`) — runs 8 test cases | ⬜ |
-| 9.4 | End-to-end manual test log (`tests/manual/e2e_checklist.md`) | ⬜ |
+| 9.1 | Unit test all 10 task tools (`tests/unit/test_task_tools.py`) | ✅ Done |
+| 9.2 | Integration test all task API endpoints (`tests/integration/test_tasks_api.py`) | ✅ Done |
+| 9.3 | Intent classification eval (`tests/eval/test_intent_accuracy.py`) — runs 8 test cases | ✅ Done |
+| 9.4 | End-to-end manual test log (`tests/manual/e2e_checklist.md`) | ✅ Done |
 
 ---
 

@@ -1,0 +1,42 @@
+[
+  {
+    "id": "IC-001",
+    "input": "Create a high priority task for John to deploy the frontend by Friday",
+    "expected_intent": "CREATE_TASK"
+  },
+  {
+    "id": "IC-002",
+    "input": "Assign API testing to Rahul",
+    "expected_intent": "CREATE_TASK"
+  },
+  {
+    "id": "IC-003",
+    "input": "Show my pending tasks",
+    "expected_intent": "GET_MY_TASKS"
+  },
+  {
+    "id": "IC-004",
+    "input": "What should I focus on today?",
+    "expected_intent": "PLAN_DAY"
+  },
+  {
+    "id": "IC-005",
+    "input": "Mark the CRM deployment task as completed",
+    "expected_intent": "COMPLETE_TASK"
+  },
+  {
+    "id": "IC-006",
+    "input": "What are my overdue tasks?",
+    "expected_intent": "GET_OVERDUE_TASKS"
+  },
+  {
+    "id": "IC-007",
+    "input": "Delete the old login page task",
+    "expected_intent": "DELETE_TASK"
+  },
+  {
+    "id": "IC-008",
+    "input": "Update the API testing deadline to next Monday",
+    "expected_intent": "UPDATE_TASK"
+  }
+]
