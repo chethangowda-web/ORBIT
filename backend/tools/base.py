@@ -15,14 +15,22 @@ current_tool_session: ContextVar[Optional[AsyncSession]] = ContextVar("current_t
 
 
 @asynccontextmanager
-async def get_tool_session() -> AsyncGenerator[AsyncSession, None]:
-    """Yield current active context session or open a new session."""
-    active_session = current_tool_session.get()
+async def get_tool_session(provided_session: Optional[AsyncSession] = None) -> AsyncGenerator[AsyncSession, None]:
+    """Yield active session or open a new session."""
+    active_session = provided_session or current_tool_session.get()
     if active_session is not None:
-        yield active_session
+        token = current_tool_session.set(active_session)
+        try:
+            yield active_session
+        finally:
+            current_tool_session.reset(token)
     else:
         async with async_session_factory() as session:
-            yield session
+            token = current_tool_session.set(session)
+            try:
+                yield session
+            finally:
+                current_tool_session.reset(token)
 
 
 class ToolResult(TypedDict):

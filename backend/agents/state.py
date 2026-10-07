@@ -1,0 +1,41 @@
+"""Agent state definitions for LangGraph multi-agent workflow."""
+
+from typing import Any, Optional, TypedDict
+from langchain_core.messages import BaseMessage
+
+
+class AgentState(TypedDict, total=False):
+    """Shared state dictionary passed across all nodes in the LangGraph."""
+
+    # === INPUT ===
+    user_id: str                          # Internal user UUID string
+    google_user_id: str                   # Google Chat user ID
+    space_id: str                         # Google Chat space ID
+    thread_id: str                        # Conversation thread ID (space_id:user_id)
+    raw_message: str                      # Original user message
+
+    # === ROUTING ===
+    intent: str                           # Classified intent enum value
+    confidence: float                     # Intent classification confidence (0.0 to 1.0)
+    active_agent: str                     # Which specialist agent is running
+
+    # === CONVERSATION HISTORY ===
+    messages: list[BaseMessage]           # Full LangChain message history
+
+    # === EXTRACTED CONTEXT ===
+    task_context: dict[str, Any]          # Extracted fields {title, assignee_name, priority, due_date, ...}
+    referenced_task_id: Optional[str]     # If user referenced a specific task UUID / ID
+
+    # === CONTROL FLOW ===
+    needs_confirmation: bool              # HITL — requires user confirmation
+    confirmed: bool                       # User confirmed the action
+
+    # === OUTPUT ===
+    response: str                         # Final response text for Google Chat
+    response_type: str                    # "text" | "card" | "confirmation_dialog"
+    card_data: Optional[dict[str, Any]]   # Google Chat card payload
+    tool_calls_made: list[str]            # Audit log of tools called in this run
+
+    # === ERROR ===
+    error: Optional[str]                  # Error message if agent failed
+    retry_count: int                      # Number of retries attempted

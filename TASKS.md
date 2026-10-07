@@ -298,10 +298,10 @@ async def create_task(
 
 | # | Task | Status |
 |---|------|--------|
-| 4.1 | Create `backend/agents/state.py` — `AgentState` TypedDict (see AGENTS.md §2) | ⬜ |
-| 4.2 | Create `backend/agents/intents.py` — `Intent` enum + `IntentClassification` Pydantic model | ⬜ |
-| 4.3 | Create `backend/agents/prompts.py` — all system prompts as constants | ⬜ |
-| 4.4 | Create `backend/services/llm.py` — LiteLLM client setup, model config | ⬜ |
+| 4.1 | Create `backend/agents/state.py` — `AgentState` TypedDict (see AGENTS.md §2) | ✅ Done |
+| 4.2 | Create `backend/agents/intents.py` — `Intent` enum + `IntentClassification` Pydantic model | ✅ Done |
+| 4.3 | Create `backend/agents/prompts.py` — all system prompts as constants | ✅ Done |
+| 4.4 | Create `backend/services/llm.py` — LiteLLM client setup, model config | ✅ Done |
 
 **`prompts.py` contains:**
 ```python
@@ -318,12 +318,12 @@ REVIEW_PROMPT = "..."         # Validation & HITL
 
 | # | Task | Status |
 |---|------|--------|
-| 4.5 | Create `backend/agents/memory_agent.py` — load/save Redis checkpoints | ⬜ |
-| 4.6 | Create `backend/agents/supervisor.py` — LLM classification → Intent + TaskContext | ⬜ |
-| 4.7 | Create `backend/agents/task_agent.py` — LLM with TASK_AGENT_TOOLS | ⬜ |
-| 4.8 | Create `backend/agents/planner_agent.py` — LLM with PLANNER_TOOLS | ⬜ |
-| 4.9 | Create `backend/agents/recommendation_agent.py` — LLM with RECOMMENDATION_TOOLS | ⬜ |
-| 4.10 | Create `backend/agents/review_agent.py` — HITL validation | ⬜ |
+| 4.5 | Create `backend/agents/memory_agent.py` — load/save Redis checkpoints | ✅ Done |
+| 4.6 | Create `backend/agents/supervisor.py` — LLM classification → Intent + TaskContext | ✅ Done |
+| 4.7 | Create `backend/agents/task_agent.py` — LLM with TASK_AGENT_TOOLS | ✅ Done |
+| 4.8 | Create `backend/agents/planner_agent.py` — LLM with PLANNER_TOOLS | ✅ Done |
+| 4.9 | Create `backend/agents/recommendation_agent.py` — LLM with RECOMMENDATION_TOOLS | ✅ Done |
+| 4.10 | Create `backend/agents/review_agent.py` — HITL validation | ✅ Done |
 
 ---
 
@@ -331,11 +331,11 @@ REVIEW_PROMPT = "..."         # Validation & HITL
 
 | # | Task | Status |
 |---|------|--------|
-| 4.11 | Create `backend/agents/graph.py` — `StateGraph` with all nodes + edges | ⬜ |
-| 4.12 | Implement `route_to_agent()` conditional edge function | ⬜ |
-| 4.13 | Implement `check_confirmation()` conditional edge (Review Agent) | ⬜ |
-| 4.14 | Compile graph with `AsyncRedisSaver` checkpointer | ⬜ |
-| 4.15 | Create `backend/agents/orchestrator.py` — `process_message(user_id, space_id, message)` → `str` | ⬜ |
+| 4.11 | Create `backend/agents/graph.py` — `StateGraph` with all nodes + edges | ✅ Done |
+| 4.12 | Implement `route_to_agent()` conditional edge function | ✅ Done |
+| 4.13 | Implement `check_confirmation()` conditional edge (Review Agent) | ✅ Done |
+| 4.14 | Compile graph with `AsyncRedisSaver` checkpointer | ✅ Done |
+| 4.15 | Create `backend/agents/orchestrator.py` — `process_message(user_id, space_id, message)` → `str` | ✅ Done |
 
 ---
 
@@ -343,9 +343,9 @@ REVIEW_PROMPT = "..."         # Validation & HITL
 
 | # | Task | Status |
 |---|------|--------|
-| 4.16 | Create `backend/scripts/test_agent.py` — CLI script to test agents | ⬜ |
-| 4.17 | Test all 8 intents from `EVALUATION.md §3.1` manually | ⬜ |
-| 4.18 | Verify multi-turn memory works (reference "it" in turn 2) | ⬜ |
+| 4.16 | Create `backend/scripts/test_agent.py` — CLI script to test agents | ✅ Done |
+| 4.17 | Test all 8 intents from `EVALUATION.md §3.1` manually | ✅ Done |
+| 4.18 | Verify multi-turn memory works (reference "it" in turn 2) | ✅ Done |
 
 **Test script:**
 ```python
