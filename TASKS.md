@@ -522,12 +522,12 @@ scheduler = AsyncIOScheduler(
 
 | # | Task | Status |
 |---|------|--------|
-| 7.1 | `npx create-next-app@14 frontend --typescript --tailwind --app --no-src-dir` | ⬜ |
-| 7.2 | Install deps: `@tanstack/react-query`, `axios`, `recharts`, `lucide-react` | ⬜ |
-| 7.3 | Create `frontend/lib/api-client.ts` — typed wrapper for all ORBIT API calls | ⬜ |
-| 7.4 | Create `frontend/lib/auth.ts` — login, store JWT, auth context | ⬜ |
-| 7.5 | Create `frontend/types/index.ts` — `Task`, `User`, `APIResponse` types | ⬜ |
-| 7.6 | Setup TanStack Query provider in `layout.tsx` | ⬜ |
+| 7.1 | `npx create-next-app@14 frontend --typescript --tailwind --app --no-src-dir` | ✅ Done |
+| 7.2 | Install deps: `@tanstack/react-query`, `axios`, `recharts`, `lucide-react` | ✅ Done |
+| 7.3 | Create `frontend/lib/api-client.ts` — typed wrapper for all ORBIT API calls | ✅ Done |
+| 7.4 | Create `frontend/lib/auth.ts` — login, store JWT, auth context | ✅ Done |
+| 7.5 | Create `frontend/types/index.ts` — `Task`, `User`, `APIResponse` types | ✅ Done |
+| 7.6 | Setup TanStack Query provider in `layout.tsx` | ✅ Done |
 
 ---
 
@@ -535,10 +535,10 @@ scheduler = AsyncIOScheduler(
 
 | # | Task | Status |
 |---|------|--------|
-| 7.7 | Create `app/login/page.tsx` — login form | ⬜ |
-| 7.8 | Create `app/layout.tsx` — sidebar nav (Dashboard, Tasks, Analytics, Settings) | ⬜ |
-| 7.9 | Create `components/Sidebar.tsx` with nav links | ⬜ |
-| 7.10 | Create `middleware.ts` — redirect to login if no JWT | ⬜ |
+| 7.7 | Create `app/login/page.tsx` — login form | ✅ Done |
+| 7.8 | Create `app/layout.tsx` — sidebar nav (Dashboard, Tasks, Analytics, Settings) | ✅ Done |
+| 7.9 | Create `components/Sidebar.tsx` with nav links | ✅ Done |
+| 7.10 | Create `middleware.ts` — redirect to login if no JWT | ✅ Done |
 
 ---
 
@@ -546,13 +546,13 @@ scheduler = AsyncIOScheduler(
 
 | # | Task | Status |
 |---|------|--------|
-| 7.11 | Create `app/tasks/page.tsx` — task table with TanStack Query | ⬜ |
-| 7.12 | Create `components/TaskTable.tsx` — sortable columns | ⬜ |
-| 7.13 | Create `components/FilterBar.tsx` — status, priority, assignee, date filters | ⬜ |
-| 7.14 | Create `components/SearchBar.tsx` — debounced search (300ms) | ⬜ |
-| 7.15 | Create `components/StatusBadge.tsx` — colored status pills | ⬜ |
-| 7.16 | Create `components/PriorityBadge.tsx` — colored priority pills | ⬜ |
-| 7.17 | Create `components/Pagination.tsx` | ⬜ |
+| 7.11 | Create `app/tasks/page.tsx` — task table with TanStack Query | ✅ Done |
+| 7.12 | Create `components/TaskTable.tsx` — sortable columns | ✅ Done |
+| 7.13 | Create `components/FilterBar.tsx` — status, priority, assignee, date filters | ✅ Done |
+| 7.14 | Create `components/SearchBar.tsx` — debounced search (300ms) | ✅ Done |
+| 7.15 | Create `components/StatusBadge.tsx` — colored status pills | ✅ Done |
+| 7.16 | Create `components/PriorityBadge.tsx` — colored priority pills | ✅ Done |
+| 7.17 | Create `components/Pagination.tsx` | ✅ Done |
 
 ---
 
@@ -560,9 +560,9 @@ scheduler = AsyncIOScheduler(
 
 | # | Task | Status |
 |---|------|--------|
-| 7.18 | Create `app/tasks/[id]/page.tsx` — full task detail view | ⬜ |
-| 7.19 | Show: title, description, assignee, priority, status, due date, audit history | ⬜ |
-| 7.20 | Add "Mark Complete" + "Edit" buttons | ⬜ |
+| 7.18 | Create `app/tasks/[id]/page.tsx` — full task detail view | ✅ Done |
+| 7.19 | Show: title, description, assignee, priority, status, due date, audit history | ✅ Done |
+| 7.20 | Add "Mark Complete" + "Edit" buttons | ✅ Done |
 
 ---
 
@@ -570,10 +570,10 @@ scheduler = AsyncIOScheduler(
 
 | # | Task | Status |
 |---|------|--------|
-| 7.21 | Create `app/page.tsx` — Kanban board (4 columns: TODO, IN_PROGRESS, REVIEW, DONE) | ⬜ |
-| 7.22 | Create `components/KanbanColumn.tsx` | ⬜ |
-| 7.23 | Create `components/TaskCard.tsx` — compact card for kanban | ⬜ |
-| 7.24 | Show stats summary at top (total, overdue, completed today) | ⬜ |
+| 7.21 | Create `app/page.tsx` — Kanban board (4 columns: TODO, IN_PROGRESS, REVIEW, DONE) | ✅ Done |
+| 7.22 | Create `components/KanbanColumn.tsx` | ✅ Done |
+| 7.23 | Create `components/TaskCard.tsx` — compact card for kanban | ✅ Done |
+| 7.24 | Show stats summary at top (total, overdue, completed today) | ✅ Done |
 
 ---
 
@@ -581,10 +581,10 @@ scheduler = AsyncIOScheduler(
 
 | # | Task | Status |
 |---|------|--------|
-| 7.25 | Create `app/analytics/page.tsx` | ⬜ |
-| 7.26 | Add completion rate donut chart (Recharts) | ⬜ |
-| 7.27 | Add tasks-per-day bar chart | ⬜ |
-| 7.28 | Add team workload horizontal bar chart | ⬜ |
+| 7.25 | Create `app/analytics/page.tsx` | ✅ Done |
+| 7.26 | Add completion rate donut chart (Recharts) | ✅ Done |
+| 7.27 | Add tasks-per-day bar chart | ✅ Done |
+| 7.28 | Add team workload horizontal bar chart | ✅ Done |
 
 **✅ Definition of Done:**
 - `http://localhost:3000` shows Kanban or task table with real data from API
