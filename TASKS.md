@@ -394,11 +394,11 @@ asyncio.run(main())
 
 | # | Task | Status |
 |---|------|--------|
-| 5.1 | Create `backend/services/google_chat.py` | ⬜ |
-| 5.2 | Implement `send_text_message(space_id, text)` → POST to Chat API | ⬜ |
-| 5.3 | Implement `send_card_message(space_id, card_json)` → POST to Chat API | ⬜ |
-| 5.4 | Implement `send_dm(google_user_id, text)` — for proactive notifications | ⬜ |
-| 5.5 | Implement `verify_webhook_signature(body, signature)` | ⬜ |
+| 5.1 | Create `backend/services/google_chat.py` | ✅ Done |
+| 5.2 | Implement `send_text_message(space_id, text)` → POST to Chat API | ✅ Done |
+| 5.3 | Implement `send_card_message(space_id, card_json)` → POST to Chat API | ✅ Done |
+| 5.4 | Implement `send_dm(google_user_id, text)` — for proactive notifications | ✅ Done |
+| 5.5 | Implement `verify_webhook_signature(body, signature)` | ✅ Done |
 
 ---
 
@@ -406,13 +406,13 @@ asyncio.run(main())
 
 | # | Task | Status |
 |---|------|--------|
-| 5.6 | Create `backend/api/webhook.py` — `POST /api/chat/webhook` | ⬜ |
-| 5.7 | Handle `MESSAGE` event → extract sender + text → `process_message()` → send response | ⬜ |
-| 5.8 | Handle `CARD_CLICKED` event → HITL confirmation flow | ⬜ |
-| 5.9 | Handle `ADDED_TO_SPACE` event → welcome message | ⬜ |
-| 5.10 | Auto-register/upsert Google user in DB on first message | ⬜ |
-| 5.11 | Return `200 OK` immediately, process in background task | ⬜ |
-| 5.12 | Register webhook router in `main.py` | ⬜ |
+| 5.6 | Create `backend/api/webhook.py` — `POST /api/chat/webhook` | ✅ Done |
+| 5.7 | Handle `MESSAGE` event → extract sender + text → `process_message()` → send response | ✅ Done |
+| 5.8 | Handle `CARD_CLICKED` event → HITL confirmation flow | ✅ Done |
+| 5.9 | Handle `ADDED_TO_SPACE` event → welcome message | ✅ Done |
+| 5.10 | Auto-register/upsert Google user in DB on first message | ✅ Done |
+| 5.11 | Return `200 OK` immediately, process in background task | ✅ Done |
+| 5.12 | Register webhook router in `main.py` | ✅ Done |
 
 **Webhook handler pattern:**
 ```python
@@ -440,11 +440,11 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
 
 | # | Task | Status |
 |---|------|--------|
-| 5.13 | Create Google Cloud project + enable Chat API | ⬜ |
-| 5.14 | Create service account + download JSON credentials | ⬜ |
-| 5.15 | Configure bot in Google Chat API console (webhook URL) | ⬜ |
-| 5.16 | Expose local server via `ngrok` for webhook testing | ⬜ |
-| 5.17 | Test: add bot to DM space → send "hello" → get response | ⬜ |
+| 5.13 | Create Google Cloud project + enable Chat API | ✅ Done |
+| 5.14 | Create service account + download JSON credentials | ✅ Done |
+| 5.15 | Configure bot in Google Chat API console (webhook URL) | ✅ Done |
+| 5.16 | Expose local server via `ngrok` for webhook testing | ✅ Done |
+| 5.17 | Test: add bot to DM space → send "hello" → get response | ✅ Done |
 
 **ngrok command:**
 ```bash

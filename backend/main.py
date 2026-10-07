@@ -13,6 +13,7 @@ from api.auth import router as auth_router
 from api.health import router as health_router
 from api.tasks import router as tasks_router
 from api.users import router as users_router
+from api.webhook import router as webhook_router
 from config import settings
 from exceptions import register_exception_handlers
 
@@ -51,6 +52,7 @@ api_router.include_router(auth_router)
 api_router.include_router(tasks_router)
 api_router.include_router(users_router)
 api_router.include_router(analytics_router)
+api_router.include_router(webhook_router)
 
 app.include_router(api_router)
 
