@@ -226,16 +226,16 @@ GET    /api/tasks/{id}/history   audit trail
 
 | # | Task | Status |
 |---|------|--------|
-| 3.1 | Create `backend/tools/task_tools.py` | ⬜ |
-| 3.2 | Implement `create_task` tool (wraps `crud.tasks.create_task`) | ⬜ |
-| 3.3 | Implement `get_task_by_id` tool | ⬜ |
-| 3.4 | Implement `update_task` tool | ⬜ |
-| 3.5 | Implement `complete_task` tool | ⬜ |
-| 3.6 | Implement `delete_task` tool | ⬜ |
-| 3.7 | Implement `search_tasks` tool | ⬜ |
-| 3.8 | Implement `get_user_tasks` tool | ⬜ |
-| 3.9 | Implement `get_overdue_tasks` tool | ⬜ |
-| 3.10 | Implement `get_tasks_due_today` tool | ⬜ |
+| 3.1 | Create `backend/tools/task_tools.py` | ✅ Done |
+| 3.2 | Implement `create_task` tool (wraps `crud.tasks.create_task`) | ✅ Done |
+| 3.3 | Implement `get_task_by_id` tool | ✅ Done |
+| 3.4 | Implement `update_task` tool | ✅ Done |
+| 3.5 | Implement `complete_task` tool | ✅ Done |
+| 3.6 | Implement `delete_task` tool | ✅ Done |
+| 3.7 | Implement `search_tasks` tool | ✅ Done |
+| 3.8 | Implement `get_user_tasks` tool | ✅ Done |
+| 3.9 | Implement `get_overdue_tasks` tool | ✅ Done |
+| 3.10 | Implement `get_tasks_due_today` tool | ✅ Done |
 
 ---
 
@@ -243,8 +243,8 @@ GET    /api/tasks/{id}/history   audit trail
 
 | # | Task | Status |
 |---|------|--------|
-| 3.11 | Create `backend/tools/user_tools.py` — `get_user_by_name`, `get_all_users`, `get_team_workload` | ⬜ |
-| 3.12 | Create `backend/tools/analytics_tools.py` — `get_task_stats` | ⬜ |
+| 3.11 | Create `backend/tools/user_tools.py` — `get_user_by_name`, `get_all_users`, `get_team_workload` | ✅ Done |
+| 3.12 | Create `backend/tools/analytics_tools.py` — `get_task_stats` | ✅ Done |
 
 ---
 
@@ -252,8 +252,8 @@ GET    /api/tasks/{id}/history   audit trail
 
 | # | Task | Status |
 |---|------|--------|
-| 3.13 | Create `backend/tools/format_tools.py` — `format_task_card()` returns Google Chat card JSON | ⬜ |
-| 3.14 | Create `backend/tools/format_tools.py` — `format_task_list_text()` returns markdown text | ⬜ |
+| 3.13 | Create `backend/tools/format_tools.py` — `format_task_card()` returns Google Chat card JSON | ✅ Done |
+| 3.14 | Create `backend/tools/format_tools.py` — `format_task_list_text()` returns markdown text | ✅ Done |
 
 **Tool structure pattern:**
 ```python

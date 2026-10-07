@@ -54,6 +54,17 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
         await conn.run_sync(Base.metadata.drop_all)
 
 
+from tools.base import current_tool_session
+
+
+@pytest_asyncio.fixture(scope="function", autouse=True)
+async def bind_tool_session(db_session: AsyncSession) -> AsyncGenerator[None, None]:
+    """Automatically bind the active test session to tools."""
+    token = current_tool_session.set(db_session)
+    yield
+    current_tool_session.reset(token)
+
+
 @pytest_asyncio.fixture(scope="function")
 async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """Async HTTP client overriding get_db dependency with test database session."""
