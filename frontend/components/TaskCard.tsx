@@ -15,7 +15,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange }) => {
   const isOverdue =
     task.due_date &&
     task.status !== "DONE" &&
-    new Date(task.due_date).setHours(23, 59, 59, 999) < Date.now();
+    new Date(task.due_date + "T23:59:59").getTime() < Date.now();
+
+  const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr + "T00:00:00");
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  };
 
   const nextStatusMap: Record<TaskStatus, TaskStatus | null> = {
     TODO: "IN_PROGRESS",
@@ -44,7 +49,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange }) => {
             ) : (
               <Calendar className="w-3 h-3 text-slate-400" />
             )}
-            <span>{task.due_date}</span>
+            <span>{task.due_date ? formatDate(task.due_date) : ""}</span>
           </div>
         )}
       </div>

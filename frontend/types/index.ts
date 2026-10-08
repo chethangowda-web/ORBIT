@@ -58,8 +58,11 @@ export interface TaskStats {
   completed_tasks: number;
   in_progress_tasks: number;
   overdue_tasks: number;
+  completion_rate?: number;
   by_status?: Record<TaskStatus, number>;
   by_priority?: Record<TaskPriority, number>;
+  tasks_by_status?: Record<string, number>;
+  tasks_by_priority?: Record<string, number>;
 }
 
 export interface TeamWorkload {
@@ -70,6 +73,8 @@ export interface TeamWorkload {
   assigned_tasks: number;
   completed_tasks: number;
   overdue_tasks: number;
+  high_priority_tasks?: number;
+  completion_rate?: number;
 }
 
 export interface PaginationMeta {

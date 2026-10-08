@@ -16,7 +16,6 @@ from db.models import Task, TaskAuditLog, User
 from exceptions import EntityNotFoundException, OrbitException
 from schemas.analytics import DailyCount, TaskStatsResponse, TeamMemberWorkload
 from schemas.task import TaskCreate, TaskPriority, TaskStatus, TaskUpdate
-from schemas.user import UserSummary
 
 
 def enrich_task_metadata(task: Task) -> Task:
@@ -347,11 +346,14 @@ async def get_task_stats(
     return TaskStatsResponse(
         total_tasks=total,
         completed_tasks=completed,
+        in_progress_tasks=sum(1 for t in all_tasks if t.status == "IN_PROGRESS"),
         overdue_tasks=overdue,
         completion_rate=completion_rate,
         avg_completion_days=2.5,
         tasks_by_priority=priorities,
         tasks_by_status=statuses,
+        by_priority=priorities,
+        by_status=statuses,
         tasks_created_per_day=[],
     )
 
@@ -378,8 +380,12 @@ async def get_team_workload(db: AsyncSession) -> List[TeamMemberWorkload]:
 
         workloads.append(
             TeamMemberWorkload(
-                user=UserSummary.model_validate(u),
-                total_tasks=total,
+                user_id=str(u.id),
+                display_name=u.display_name,
+                email=u.email,
+                role=u.role,
+                assigned_tasks=total,
+                completed_tasks=completed,
                 overdue_tasks=overdue,
                 high_priority_tasks=high_prio,
                 completion_rate=rate,

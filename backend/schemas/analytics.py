@@ -2,9 +2,9 @@
 Analytics and Statistics Pydantic Schemas
 """
 
-from typing import Any, Dict, List
+import uuid
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict
-from schemas.user import UserSummary
 
 
 class DailyCount(BaseModel):
@@ -21,21 +21,29 @@ class TaskStatsResponse(BaseModel):
 
     total_tasks: int = 0
     completed_tasks: int = 0
+    in_progress_tasks: int = 0
     overdue_tasks: int = 0
     completion_rate: float = 0.0
     avg_completion_days: float = 0.0
+    # Aliased for frontend compatibility
+    by_priority: Dict[str, int] = {}
+    by_status: Dict[str, int] = {}
     tasks_by_priority: Dict[str, int] = {}
     tasks_by_status: Dict[str, int] = {}
     tasks_created_per_day: List[DailyCount] = []
 
 
 class TeamMemberWorkload(BaseModel):
-    """Workload distribution for an individual team member."""
+    """Workload distribution for an individual team member — flattened for frontend."""
 
     model_config = ConfigDict(from_attributes=True)
 
-    user: UserSummary
-    total_tasks: int = 0
+    user_id: str
+    display_name: str
+    email: str
+    role: str
+    assigned_tasks: int = 0
+    completed_tasks: int = 0
     overdue_tasks: int = 0
     high_priority_tasks: int = 0
     completion_rate: float = 0.0

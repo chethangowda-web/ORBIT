@@ -57,9 +57,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(data.access_token);
       setUser(data.user);
       router.push("/");
-    } finally {
+    } catch (err) {
       setIsLoading(false);
+      throw err; // Re-throw so login page can display the error
     }
+    setIsLoading(false);
   };
 
   const logout = () => {

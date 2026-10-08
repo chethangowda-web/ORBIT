@@ -170,7 +170,15 @@ export default function TaskDetailPage() {
               <p className="text-[11px] text-slate-500 font-medium">Due Date</p>
               <div className="flex items-center gap-1.5 mt-1 text-xs text-slate-200 font-medium">
                 <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                <span>{task.due_date || "No deadline"}</span>
+                <span>
+                  {task.due_date
+                    ? new Date(task.due_date + "T00:00:00").toLocaleDateString(undefined, {
+                        month: "long",
+                        day: "numeric",
+                        year: "numeric",
+                      })
+                    : "No deadline"}
+                </span>
               </div>
             </div>
 

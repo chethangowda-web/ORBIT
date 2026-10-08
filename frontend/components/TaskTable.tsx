@@ -59,7 +59,14 @@ export const TaskTable: React.FC<TaskTableProps> = ({
               const isOverdue =
                 task.due_date &&
                 task.status !== "DONE" &&
-                new Date(task.due_date).setHours(23, 59, 59, 999) < Date.now();
+                new Date(task.due_date + "T23:59:59").getTime() < Date.now();
+
+              const formatDate = (dateStr: string) =>
+                new Date(dateStr + "T00:00:00").toLocaleDateString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                });
 
               return (
                 <tr
@@ -130,7 +137,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                         ) : (
                           <Calendar className="w-3 h-3 text-slate-500" />
                         )}
-                        <span>{task.due_date}</span>
+                        <span>{formatDate(task.due_date)}</span>
                       </div>
                     ) : (
                       <span className="text-slate-500 text-[11px]">No deadline</span>

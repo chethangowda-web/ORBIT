@@ -35,8 +35,10 @@ async def get_task_audit_history(
     db: AsyncSession, task_id: uuid.UUID
 ) -> List[TaskAuditLog]:
     """Retrieve full chronological audit history for a task."""
+    from sqlalchemy.orm import selectinload  # avoid circular import
     stmt = (
         select(TaskAuditLog)
+        .options(selectinload(TaskAuditLog.user))
         .where(TaskAuditLog.task_id == task_id)
         .order_by(TaskAuditLog.created_at.desc())
     )

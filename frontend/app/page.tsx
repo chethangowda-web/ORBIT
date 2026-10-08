@@ -164,15 +164,7 @@ export default function DashboardPage() {
       <CreateTaskModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        initialTask={{
-          id: "",
-          title: "",
-          status: defaultColumnStatus,
-          priority: "MEDIUM",
-          created_by_id: "",
-          created_at: "",
-          updated_at: "",
-        }}
+        initialTask={null}
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ["tasks"] });
           queryClient.invalidateQueries({ queryKey: ["taskStats"] });

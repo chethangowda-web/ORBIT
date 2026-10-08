@@ -73,7 +73,8 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       .filter((t) => t.length > 0);
 
     try {
-      if (initialTask) {
+      if (initialTask?.id) {
+        // Editing existing task
         await api.tasks.update(initialTask.id, {
           title: title.trim(),
           description: description.trim() || undefined,
@@ -84,6 +85,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
           tags,
         });
       } else {
+        // Creating new task
         await api.tasks.create({
           title: title.trim(),
           description: description.trim() || undefined,
@@ -108,7 +110,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-5">
           <h2 className="text-lg font-bold text-white">
-            {initialTask ? "Edit Task" : "Create New Task"}
+            {initialTask?.id ? "Edit Task" : "Create New Task"}
           </h2>
           <button
             onClick={onClose}
