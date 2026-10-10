@@ -37,3 +37,28 @@ async def test_seed_execution(db_session: AsyncSession):
     for a in audits:
         assert a.action == "CREATED"
         assert a.source == "seed"
+
+
+def test_seed_password_defaults_in_development(monkeypatch):
+    from config import settings
+    from db.seed import DEV_SEED_PASSWORD, resolve_seed_password
+
+    monkeypatch.setattr(settings, "ENVIRONMENT", "development")
+    monkeypatch.delenv("SEED_PASSWORD", raising=False)
+    assert resolve_seed_password() == DEV_SEED_PASSWORD
+
+
+def test_seed_refuses_weak_or_missing_password_in_production(monkeypatch):
+    import pytest
+    from config import settings
+    from db.seed import resolve_seed_password
+
+    monkeypatch.setattr(settings, "ENVIRONMENT", "production")
+    monkeypatch.delenv("SEED_PASSWORD", raising=False)
+    with pytest.raises(RuntimeError):
+        resolve_seed_password()
+    monkeypatch.setenv("SEED_PASSWORD", "short")
+    with pytest.raises(RuntimeError):
+        resolve_seed_password()
+    monkeypatch.setenv("SEED_PASSWORD", "a-sufficiently-long-secret")
+    assert resolve_seed_password() == "a-sufficiently-long-secret"

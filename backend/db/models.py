@@ -31,10 +31,10 @@ class User(Base):
         Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     google_id: Mapped[Optional[str]] = mapped_column(
-        String(255), unique=True, nullable=True, index=True
+        String(255), unique=True, nullable=True
     )
     email: Mapped[str] = mapped_column(
-        String(255), unique=True, nullable=False, index=True
+        String(255), unique=True, nullable=False
     )
     hashed_password: Mapped[Optional[str]] = mapped_column(
         String(255), nullable=True
@@ -235,7 +235,7 @@ class ChatEventLedger(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    event_key: Mapped[str] = mapped_column(String(512), nullable=False, unique=True, index=True)
+    event_key: Mapped[str] = mapped_column(String(512), nullable=False)
     event_type: Mapped[str] = mapped_column(String(50), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="PROCESSING", nullable=False)
     response_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -244,6 +244,10 @@ class ChatEventLedger(Base):
     )
     completed_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        UniqueConstraint("event_key", name="uq_chat_event_ledger_event_key"),
     )
 
 
