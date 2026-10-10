@@ -8,7 +8,7 @@ asyncpg==0.30.0
 alembic==1.14.0
 
 # Redis & Caching
-redis[asyncio]==5.2.0
+redis==5.2.0
 
 # Data Validation & Settings
 pydantic[email]==2.10.0
@@ -28,7 +28,7 @@ langgraph==0.2.60
 langchain-core==0.3.25
 langchain-community==0.3.9
 langchain-google-genai==2.0.7
-litellm>=1.56.0
+litellm>=1.56.0,<1.96
 
 # Background Scheduler
 apscheduler==3.10.4
