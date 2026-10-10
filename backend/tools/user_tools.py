@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from crud import tasks as task_crud
 from crud import users as user_crud
-from schemas.user import UserRead
+from schemas.user import UserPublic
 from tools.base import ToolResult, get_tool_session, tool_error, tool_success
 
 
@@ -35,7 +35,7 @@ async def get_user_by_name(name: str) -> ToolResult:
         if not users:
             return tool_error(f"No active user found matching '{name}'")
 
-        user_data = [UserRead.model_validate(u).model_dump() for u in users]
+        user_data = [UserPublic.model_validate(u).model_dump() for u in users]
         return tool_success(data=user_data, count=len(user_data))
     except Exception as e:
         return tool_error(f"Failed to lookup user '{name}': {str(e)}")
@@ -48,7 +48,7 @@ async def get_all_users(limit: int = 100) -> ToolResult:
         async with get_tool_session() as db:
             users = await user_crud.get_all_users(db=db, is_active=True, limit=limit)
 
-        user_data = [UserRead.model_validate(u).model_dump() for u in users]
+        user_data = [UserPublic.model_validate(u).model_dump() for u in users]
         return tool_success(data=user_data, count=len(user_data))
     except Exception as e:
         return tool_error(f"Failed to list users: {str(e)}")

@@ -7,7 +7,7 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
-from schemas.user import UserRead
+from schemas.user import UserPublic
 
 
 class TaskStatus(str, Enum):
@@ -71,7 +71,7 @@ class TaskAuditRead(BaseModel):
     changes: Optional[Dict[str, Any]] = None
     source: str
     created_at: datetime
-    user: Optional[UserRead] = None
+    user: Optional[UserPublic] = None
 
 
 class TaskRead(TaskBase):
@@ -88,8 +88,8 @@ class TaskRead(TaskBase):
     created_at: datetime
     updated_at: datetime
     days_overdue: Optional[int] = None
-    assignee: Optional[UserRead] = None
-    creator: Optional[UserRead] = None
+    assignee: Optional[UserPublic] = None
+    creator: Optional[UserPublic] = None
 
 
 class TaskDetailRead(TaskRead):

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.jwt import get_password_hash
 from db.models import User, UserPreference
-from schemas.user import UserCreate, UserUpdate
+from schemas.user import AdminUserUpdate, UserCreate, UserUpdate
 
 
 async def get_user_by_id(db: AsyncSession, user_id: uuid.UUID) -> Optional[User]:
@@ -77,6 +77,52 @@ async def get_all_users(
     stmt = stmt.order_by(User.display_name.asc()).offset(skip).limit(limit)
     result = await db.execute(stmt)
     return list(result.scalars().all())
+
+
+async def list_users(
+    db: AsyncSession,
+    q: Optional[str] = None,
+    role: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    page: int = 1,
+    page_size: int = 100,
+) -> tuple[List[User], int]:
+    """Paginated user directory with search and filters; returns (rows, total)."""
+    stmt = select(User)
+    if q:
+        pattern = f"%{q.strip().lower()}%"
+        stmt = stmt.where(
+            or_(
+                func.lower(User.display_name).like(pattern),
+                func.lower(User.email).like(pattern),
+            )
+        )
+    if role:
+        stmt = stmt.where(User.role == role.strip().lower())
+    if is_active is not None:
+        stmt = stmt.where(User.is_active == is_active)
+
+    total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
+    stmt = stmt.order_by(User.display_name.asc()).offset((page - 1) * page_size).limit(page_size)
+    rows = list((await db.execute(stmt)).scalars().all())
+    return rows, total
+
+
+async def get_user_preferences(db: AsyncSession, user_id: uuid.UUID) -> Dict[str, str]:
+    """Return a user's stored preferences as a key/value mapping."""
+    rows = await db.execute(select(UserPreference).where(UserPreference.user_id == user_id))
+    return {p.key: p.value for p in rows.scalars().all()}
+
+
+async def admin_update_user(db: AsyncSession, user: User, changes: AdminUserUpdate) -> User:
+    """Apply administrator-only changes (role, active flag)."""
+    data = changes.model_dump(exclude_unset=True)
+    for field, value in data.items():
+        if value is not None:
+            setattr(user, field, value)
+    await db.commit()
+    await db.refresh(user)
+    return user
 
 
 async def create_user(db: AsyncSession, user_in: UserCreate) -> User:
