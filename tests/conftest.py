@@ -95,6 +95,14 @@ def allow_registration(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def chat_auth_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tests start with Chat verification off whatever the developer's .env says; tests that
+    exercise verification switch it on explicitly."""
+    monkeypatch.setattr(_settings, "GOOGLE_CHAT_VERIFY_AUTH", False)
+    monkeypatch.setattr(_settings, "GOOGLE_CHAT_AUDIENCE", "")
+
+
+@pytest.fixture(autouse=True)
 def isolated_uploads(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     """Attachments land in a per-test temp directory, never in the real uploads folder."""
     monkeypatch.setattr(_settings, "UPLOAD_DIR", str(tmp_path / "uploads"))

@@ -1,6 +1,7 @@
-"""Google Chat Service: Handles message delivery, card payloads, DMs, and webhook verification."""
+﻿"""Google Chat Service: Handles message delivery, card payloads, DMs, and webhook verification."""
 
 import asyncio
+import base64
 import hashlib
 import hmac
 import json
@@ -20,6 +21,10 @@ CHAT_SERVICE_ACCOUNT = "chat@system.gserviceaccount.com"
 CHAT_CERTS_URL = (
     "https://www.googleapis.com/service_accounts/v1/metadata/x509/" + CHAT_SERVICE_ACCOUNT
 )
+ADDON_SERVICE_ACCOUNT_TEMPLATE = "service-{project_number}@gcp-sa-gsuiteaddons.iam.gserviceaccount.com"
+# Google's clock and the container's clock can differ by a few seconds (Docker Desktop's VM drifts,
+# especially after the PC sleeps); without tolerance fresh tokens are rejected as "used too early".
+TOKEN_CLOCK_SKEW_SECONDS = 30
 CHAT_SCOPES = ["https://www.googleapis.com/auth/chat.bot"]
 
 _credentials: Optional[service_account.Credentials] = None
@@ -77,6 +82,18 @@ async def get_chat_auth_headers() -> dict[str, str]:
         return {"Authorization": f"Bearer {_credentials.token}"}
 
 
+def _unverified_claims(token: str) -> dict:
+    """Identity claims of a token that FAILED verification, for diagnosing a misconfigured audience.
+    Never trusted for any decision; only issuer, audience and email are returned."""
+    try:
+        payload = token.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        claims = json.loads(base64.urlsafe_b64decode(payload))
+        return {key: claims.get(key) for key in ("iss", "aud", "email", "azp")}
+    except Exception:
+        return {"unreadable": True}
+
+
 def verify_google_chat_bearer_token(
     authorization_header: Optional[str],
     audience: Optional[str] = None,
@@ -87,6 +104,9 @@ def verify_google_chat_bearer_token(
     * "HTTP endpoint URL" audience: an OIDC token whose verified email is the
       Chat service account.
     * "Project number" audience: a JWT issued and signed by the Chat service account.
+    * Chat apps published as a Google Workspace add-on: an OIDC token whose verified email is the
+      add-on service agent of YOUR project, `service-<project number>@gcp-sa-gsuiteaddons...`
+      (accepted only when GOOGLE_CHAT_ADDON_PROJECT_NUMBER is configured).
 
     A configured audience is mandatory; without one any token would pass.
     Reference: https://developers.google.com/workspace/chat/verify-requests-from-chat
@@ -107,20 +127,33 @@ def verify_google_chat_bearer_token(
     request = GoogleAuthRequest()
 
     try:
-        info = id_token.verify_oauth2_token(token, request, audience=aud)
-    except Exception:
+        info = id_token.verify_oauth2_token(token, request, audience=aud, clock_skew_in_seconds=TOKEN_CLOCK_SKEW_SECONDS)
+    except Exception as oidc_err:
         try:
-            info = id_token.verify_token(token, request, audience=aud, certs_url=CHAT_CERTS_URL)
-        except Exception as err:
-            logger.warning("Google Chat Bearer token verification failed: %s", err)
+            info = id_token.verify_token(
+                token, request, audience=aud, certs_url=CHAT_CERTS_URL, clock_skew_in_seconds=TOKEN_CLOCK_SKEW_SECONDS
+            )
+        except Exception as jwt_err:
+            logger.warning(
+                "Google Chat Bearer token verification failed. As OIDC token: %s. As Chat service-account JWT: %s. "
+                "Unverified claims: %s. Configured audience: %s",
+                oidc_err,
+                jwt_err,
+                _unverified_claims(token),
+                aud,
+            )
             return False
 
     issuer = info.get("iss", "")
     if issuer == CHAT_SERVICE_ACCOUNT:
         return True
+    allowed_emails = {CHAT_SERVICE_ACCOUNT}
+    project_number = settings.GOOGLE_CHAT_ADDON_PROJECT_NUMBER.strip()
+    if project_number:
+        allowed_emails.add(ADDON_SERVICE_ACCOUNT_TEMPLATE.format(project_number=project_number))
     if (
         issuer in ("https://accounts.google.com", "accounts.google.com")
-        and info.get("email") == CHAT_SERVICE_ACCOUNT
+        and info.get("email") in allowed_emails
         and info.get("email_verified") is True
     ):
         return True
@@ -156,10 +189,10 @@ def build_task_card_v2(task_data: dict[str, Any], header_title: str = "ORBIT Tas
     assignee = task_data.get("assignee_name") or "Unassigned"
 
     priority_icons = {
-        "CRITICAL": "🔴 Critical",
-        "HIGH": "🟠 High",
-        "MEDIUM": "🟡 Medium",
-        "LOW": "🟢 Low",
+        "CRITICAL": "ðŸ”´ Critical",
+        "HIGH": "ðŸŸ  High",
+        "MEDIUM": "ðŸŸ¡ Medium",
+        "LOW": "ðŸŸ¢ Low",
     }
     p_label = priority_icons.get(priority, priority)
 
@@ -213,7 +246,7 @@ def build_confirmation_card_v2(
         "cardId": f"confirm-dialog-{task_id}",
         "card": {
             "header": {
-                "title": "⚠️ Action Confirmation Required",
+                "title": "âš ï¸ Action Confirmation Required",
                 "subtitle": "Human-in-the-Loop Safety Check",
                 "imageType": "CIRCLE",
             },
@@ -225,7 +258,7 @@ def build_confirmation_card_v2(
                             "buttonList": {
                                 "buttons": [
                                     {
-                                        "text": "✅ Confirm Deletion",
+                                        "text": "âœ… Confirm Deletion",
                                         "onClick": {
                                             "action": {
                                                 "function": "confirm_delete_task",
@@ -237,7 +270,7 @@ def build_confirmation_card_v2(
                                         },
                                     },
                                     {
-                                        "text": "❌ Cancel",
+                                        "text": "âŒ Cancel",
                                         "onClick": {
                                             "action": {
                                                 "function": "cancel_action",
@@ -264,7 +297,7 @@ def build_welcome_card_v2() -> dict[str, Any]:
         "cardId": "orbit-welcome-card",
         "card": {
             "header": {
-                "title": "👋 Welcome to ORBIT!",
+                "title": "ðŸ‘‹ Welcome to ORBIT!",
                 "subtitle": "Your Multi-Agent AI Task Assistant",
                 "imageType": "CIRCLE",
             },
