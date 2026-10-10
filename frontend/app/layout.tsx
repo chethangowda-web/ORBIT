@@ -12,6 +12,10 @@ export const viewport: Viewport = {
   colorScheme: "dark",
 };
 
+// Nonce-based CSP needs the nonce on each response, so pages are rendered per request
+// instead of being prerendered to static HTML.
+export const dynamic = "force-dynamic";
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className="dark">

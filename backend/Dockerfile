@@ -2,8 +2,12 @@
 # ORBIT Backend: multi-stage build on python:3.11-slim, runs as a non-root user
 # ==============================================================================
 
+# Base image is configurable so builds can use a registry mirror when Docker Hub is
+# unreachable: --build-arg PYTHON_IMAGE=mirror.gcr.io/library/python:3.11-slim
+ARG PYTHON_IMAGE=python:3.11-slim
+
 # ---- Stage 1: build dependencies into a virtualenv --------------------------
-FROM python:3.11-slim AS builder
+FROM ${PYTHON_IMAGE} AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -19,7 +23,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # ---- Stage 2: slim runtime --------------------------------------------------
-FROM python:3.11-slim AS runtime
+FROM ${PYTHON_IMAGE} AS runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \

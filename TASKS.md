@@ -673,4 +673,6 @@ Delivered the Mission Control design system (docs/DESIGN_MISSION_CONTROL.md) and
 | 11.10 | Frontend | Full rebuild: UI kit, shell, command palette, agent panel, board with drag and drop, tasks, insights, runs, admin, profile; 79 unit/component tests and 14 Playwright tests |
 | 11.12 | Google Chat | Slash commands, task-list cards with one-click Done, local simulator, setup guide; fixed conversation memory leaking between users in shared threads |
 | 11.13 | Collaboration | Task comments (with notifications and audit entries), bulk actions with per-task authorisation |
+| 11.14 | Browser security | Nonce-based Content-Security-Policy with zero-violation e2e check; verified Docker images build and run (non-root, migrate-on-start, healthy) |
+| 11.15 | Agent safety and quality | Questions can never trigger changes (fixed 5 real misclassifications); offline classifier measured on a regression and a holdout set |
 | 11.11 | Docs | README, OPERATIONS runbook, API, schema, agents, tools and decisions brought in line with the code |

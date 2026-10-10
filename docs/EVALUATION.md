@@ -4,6 +4,10 @@
 **Version:** 1.1.0  
 **Last Updated:** 2026-10-10
 
+> **Measured results (offline classifier, `pytest tests/eval -s`).** Regression set (`entity_dataset.json`, 40 phrasings with entity checks): 100% intent, 100% entities. Holdout set (`entity_holdout.json`, 26 phrasings written afterwards): the rules first scored **31%** on it, which exposed how brittle keyword rules are on unseen wording; after broadening them it scores 100%, but because those phrasings were then used to tune the rules, treat the holdout as a regression set too and expect lower accuracy on genuinely new wording. This is why an LLM key is recommended in production: the classifier is the safety net, not the primary path.
+>
+> **Safety property (enforced by `test_questions_are_never_classified_as_changes`).** A question or show/list request never creates, edits, completes or deletes anything. This test caught real bugs: "how many tasks are done?" used to complete a task and "who created the deployment task?" used to create one.
+>
 > **Status.** Implemented: `tests/eval/intent_dataset.json` (intent accuracy, offline classifier) and `tests/eval/test_agent_evaluation.py` (all core intents end to end, grounding and fallback). The entity, response-quality and tool-call datasets and the LangSmith evaluator described below are planned, not built. The backend suite runs fully offline; set `ORBIT_LIVE_LLM=1` to evaluate against a real model manually.
 
 ---

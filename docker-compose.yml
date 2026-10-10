@@ -25,7 +25,7 @@ services:
     restart: unless-stopped
     command: redis-server --appendonly yes
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -40,6 +40,9 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        # Set PYTHON_IMAGE=mirror.gcr.io/library/python:3.11-slim if Docker Hub is unreachable.
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.11-slim}
     container_name: orbit-backend
     restart: unless-stopped
     env_file:
@@ -69,6 +72,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
+        # Set NODE_IMAGE=mirror.gcr.io/library/node:20-alpine if Docker Hub is unreachable.
+        NODE_IMAGE: ${NODE_IMAGE:-node:20-alpine}
         # Inlined at build time; this is the URL the *browser* uses to reach the API.
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8001/api}
     container_name: orbit-frontend

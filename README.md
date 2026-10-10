@@ -67,6 +67,8 @@ cp .env.example .env     # set JWT_SECRET_KEY; SEED_ON_START=true for demo data
 docker compose up -d --build
 ```
 
+If pulling `python`/`node` times out (Docker Hub unreachable), build through a mirror: set `PYTHON_IMAGE=mirror.gcr.io/library/python:3.11-slim` and `NODE_IMAGE=mirror.gcr.io/library/node:20-alpine` in `.env`. If port 6379 is taken by another project, set `REDIS_PORT=6380`.
+
 The backend container applies migrations on start (and seeds when `SEED_ON_START=true`). The frontend image bakes in `NEXT_PUBLIC_API_URL` at **build** time, so rebuild it if the API URL changes.
 
 ### Demo accounts (development only)

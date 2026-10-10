@@ -255,6 +255,6 @@ User          GChat         FastAPI        Supervisor     TaskAgent      DB
 | Brute force | Failed-login limiter per IP + email (Redis, in-memory fallback); successes clear the counter |
 | SQL injection | SQLAlchemy ORM parameterised queries; LIKE wildcards escaped; sort columns whitelisted |
 | Account takeover | Google sign-in requires password proof before linking to an existing email; public registration off by default |
-| Output safety | Dashboard renders agent text as React nodes (never HTML); unhandled errors return a reference id, not exception text |
+| Output safety | Dashboard renders agent text as React nodes (never HTML); nonce-based Content-Security-Policy blocks injected inline script; unhandled errors return a reference id, not exception text |
 | Secrets | Environment variables only; production validates strength; seed password required in production |
 | Privacy | Webhook payloads not logged by default; directory API hides Google ids and chat spaces |
