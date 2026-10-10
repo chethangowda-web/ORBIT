@@ -71,6 +71,23 @@ def offline_llm(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_settings, "OPENAI_API_KEY", "")
 
 
+@pytest.fixture(autouse=True)
+def block_google_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fail fast instead of calling Google's APIs, and skip retry backoff sleeps."""
+    import httpx
+    import services.notifications as notifications
+
+    real_send = httpx.AsyncClient.send
+
+    async def guarded_send(self, request, **kwargs):
+        if request.url.host.endswith("googleapis.com"):
+            raise httpx.ConnectError("Google APIs are blocked in tests")
+        return await real_send(self, request, **kwargs)
+
+    monkeypatch.setattr(httpx.AsyncClient, "send", guarded_send)
+    monkeypatch.setattr(notifications, "RETRY_BACKOFF_SECONDS", 0)
+
+
 @pytest.fixture
 def allow_registration(monkeypatch: pytest.MonkeyPatch) -> None:
     """Enable public self-registration for tests that exercise it."""

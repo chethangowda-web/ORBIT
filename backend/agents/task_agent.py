@@ -3,7 +3,7 @@
 from typing import Any
 from agents.intents import Intent
 from agents.state import AgentState
-from tools.format_tools import format_task_card, format_task_list_text
+from tools.format_tools import format_task_card, format_task_list_card, format_task_list_text
 from tools.task_tools import (
     complete_task,
     create_task,
@@ -191,7 +191,10 @@ async def _handle_complete_task(ctx: dict[str, Any], user_id: str, state_ref_id:
 
 
 async def _handle_list_or_search(intent: str, ctx: dict[str, Any], user_id: str, raw_msg: str, tools_used: list[str]) -> tuple[str, str, Any]:
-    """Handle listing user tasks or full-text searching."""
+    """List or search tasks. Returns (text, response_type, card_data).
+
+    The text always holds the full list so the dashboard and plain-text channels work;
+    Google Chat additionally gets an interactive card."""
     if intent == Intent.SEARCH_TASKS.value:
         q = ctx.get("title_hint") or raw_msg
         tools_used.append("search_tasks")
@@ -207,6 +210,8 @@ async def _handle_list_or_search(intent: str, ctx: dict[str, Any], user_id: str,
 
     tasks = res.get("data", [])
     text = format_task_list_text(tasks, title=title)
+    if tasks:
+        return text, "card", format_task_list_card(tasks, title=title)
     return text, "text", None
 
 

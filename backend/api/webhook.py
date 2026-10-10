@@ -36,6 +36,7 @@ from services.google_chat import (
 from crud.chat_events import claim_event, compute_event_key, finalize_event
 from schemas.common import api_response
 from tools.base import get_tool_session
+from tools.task_tools import complete_task
 
 logger = logging.getLogger(__name__)
 
@@ -212,9 +213,49 @@ def parse_chat_event_payload(body_bytes: bytes) -> GoogleChatEvent:
     )
 
 
+# Slash commands. Names work for typed "/tasks"; ids are the numbers entered for each command in
+# the Chat app configuration (see docs/GOOGLE_CHAT_SETUP.md), so both routes behave the same.
+SLASH_PROMPTS = {
+    "help": "help",
+    "tasks": "Show my pending tasks",
+    "plan": "Plan my day",
+    "overdue": "What are my overdue tasks?",
+    "insights": "Give me workload recommendations",
+}
+SLASH_COMMAND_IDS = {"1": "help", "2": "tasks", "3": "plan", "4": "overdue", "5": "new", "6": "insights"}
+
+
+def expand_slash_command(text: str, command_id: Optional[str] = None, argument: Optional[str] = None) -> str:
+    """Turn a slash command into the natural-language request the agents understand.
+
+    Anything that is not a recognised command is returned unchanged, so ordinary text
+    that merely starts with "/" still reaches the agent.
+    """
+    stripped = text.strip()
+    name = SLASH_COMMAND_IDS.get(str(command_id)) if command_id is not None else None
+    arg = (argument or "").strip()
+    if name is None and stripped.startswith("/"):
+        head, _, rest = stripped[1:].partition(" ")
+        name, arg = head.lower(), arg or rest.strip()
+    if name == "new":
+        return f"Create a task {arg}" if arg else "help"
+    if name in SLASH_PROMPTS:
+        return SLASH_PROMPTS[name]
+    return text
+
+
 CONFIRM_ACTIONS = {"confirm_delete_task", "confirm_action"}
 CANCEL_ACTIONS = {"cancel_action", "cancel"}
 GENERIC_ERROR_TEXT = "ORBIT hit an internal error and could not finish that. Please try again."
+
+
+def conversation_key(thread: str, user_id: str) -> str:
+    """Memory key for one person in one Chat thread.
+
+    Rooms are shared, so keying by thread alone would let "make it high priority" from one
+    person resolve to a colleague's task. Cards carry the plain thread; the user is added here.
+    """
+    return f"{thread}:{user_id}"
 
 
 def _is_dm(space: GoogleChatSpace) -> bool:
@@ -296,6 +337,9 @@ def _message_response(agent_state: dict[str, Any], thread_id: str, is_addon: boo
         return format_chat_response(text, cards_v2=[card], is_addon=is_addon)
 
     if agent_state.get("response_type") == "card" and card_data:
+        # Cards that already contain the full content ask for a short companion line.
+        if isinstance(card_data, dict) and card_data.get("chat_text"):
+            text = card_data["chat_text"]
         if isinstance(card_data, dict) and card_data.get("cardsV2"):
             card = card_data["cardsV2"][0]
         elif isinstance(card_data, dict) and "card" in card_data:
@@ -315,11 +359,18 @@ async def _handle_message(
     thread_name = (event.message.thread or {}).get("name") if event.message.thread else None
     thread_id = space_id if _is_dm(event.space) else (thread_name or space_id)
 
+    slash = event.message.slashCommand or {}
+    message = expand_slash_command(
+        normalize_chat_message(event.message.text),
+        command_id=slash.get("commandId"),
+        argument=event.message.argumentText,
+    )
+
     agent_state = await process_message(
         user_id=user_id,
         space_id=space_id,
-        message=normalize_chat_message(event.message.text),
-        thread_id=thread_id,
+        message=message,
+        thread_id=conversation_key(thread_id, user_id),
         session=session,
     )
     logger.info(
@@ -344,7 +395,12 @@ async def _handle_card_click(
     elif action in CANCEL_ACTIONS:
         message, confirmed = "cancel", False
     elif action == "complete_task" and params.get("task_id"):
-        message, confirmed = f"Mark Task #{params['task_id']} as completed", False
+        # Deterministic: a button press already names the task, so skip language parsing.
+        result = await complete_task.ainvoke({"task_id": params["task_id"], "completed_by_id": user_id})
+        if result.get("success"):
+            title = (result.get("data") or {}).get("title", "Task")
+            return format_chat_response(f"🎉 *{title}* marked as completed!", is_addon=is_addon)
+        return format_chat_response(f"❌ {result.get('error', 'Could not complete that task.')}", is_addon=is_addon)
     else:
         # Never forward unknown button ids to the agent as free text: a crafted
         # action could otherwise be read as "confirm" against a pending delete.
@@ -355,7 +411,7 @@ async def _handle_card_click(
         user_id=user_id,
         space_id=space_id,
         message=message,
-        thread_id=thread_id,
+        thread_id=conversation_key(thread_id, user_id),
         confirmed=confirmed,
         session=session,
     )

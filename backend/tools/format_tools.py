@@ -93,3 +93,54 @@ def format_task_list_text(tasks: List[Dict[str, Any]], title: str = "Tasks") -> 
         lines.append(f"{i}. {status_icon} *{t_title}* — [{prio}] (Due: {due})")
 
     return "\n".join(lines)
+
+
+MAX_CARD_TASKS = 8
+
+
+def format_task_list_card(tasks: List[Dict[str, Any]], title: str = "Tasks") -> Dict[str, Any]:
+    """Google Chat Card v2 listing tasks, each with a one-click Complete button.
+
+    The returned dict also carries ``chat_text``: the short line to send alongside the card
+    (the full list is already in the card).
+    """
+    shown = tasks[:MAX_CARD_TASKS]
+    widgets: List[Dict[str, Any]] = []
+    for t in shown:
+        task_id = str(t.get("id", ""))
+        priority = str(t.get("priority", "MEDIUM")).split(".")[-1]
+        status = str(t.get("status", "TODO")).split(".")[-1].replace("_", " ").title()
+        due = t.get("due_date") or "No due date"
+        row: Dict[str, Any] = {
+            "decoratedText": {
+                "text": f"<b>{t.get('title', 'Untitled')}</b>",
+                "bottomLabel": f"{priority} · {status} · due {due}",
+                "wrapText": True,
+            }
+        }
+        if status.lower() != "done":
+            row["decoratedText"]["button"] = {
+                "text": "Done",
+                "onClick": {
+                    "action": {
+                        "function": "complete_task",
+                        "parameters": [{"key": "task_id", "value": task_id}],
+                    }
+                },
+            }
+        widgets.append(row)
+    if len(tasks) > len(shown):
+        widgets.append({"textParagraph": {"text": f"<i>and {len(tasks) - len(shown)} more in the ORBIT dashboard</i>"}})
+
+    return {
+        "cardsV2": [
+            {
+                "cardId": "task-list-card",
+                "card": {
+                    "header": {"title": title, "subtitle": f"{len(tasks)} task{'s' if len(tasks) != 1 else ''}"},
+                    "sections": [{"widgets": widgets}],
+                },
+            }
+        ],
+        "chat_text": f"📋 *{title}* ({len(tasks)})",
+    }
