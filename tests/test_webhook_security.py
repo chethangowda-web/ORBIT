@@ -106,3 +106,55 @@ def test_bearer_falls_back_to_chat_certificates(monkeypatch):
          patch("services.google_chat.id_token.verify_token", return_value={"iss": CHAT_SERVICE_ACCOUNT}) as chat_verify:
         assert verify_google_chat_bearer_token("Bearer abc") is True
     assert chat_verify.call_args.kwargs["certs_url"].endswith(CHAT_SERVICE_ACCOUNT)
+
+
+async def test_dm_space_is_remembered_for_proactive_messages(client: AsyncClient, db_session):
+    from sqlalchemy import select
+
+    from db.models import User
+
+    event = {**MESSAGE_EVENT, "space": {"name": "spaces/DMSPACE9", "type": "DM"}}
+    event["message"] = {**MESSAGE_EVENT["message"], "name": "spaces/DMSPACE9/messages/M9"}
+    await client.post("/api/chat/webhook", json=event)
+
+    user = (await db_session.execute(select(User).where(User.email == "pat@orbit.dev"))).scalar_one()
+    assert user.google_space_id == "spaces/DMSPACE9"
+
+
+async def test_group_space_is_not_stored_as_dm_space(client: AsyncClient, db_session):
+    from sqlalchemy import select
+
+    from db.models import User
+
+    event = {**MESSAGE_EVENT, "space": {"name": "spaces/TEAMROOM", "type": "ROOM"}}
+    event["message"] = {**MESSAGE_EVENT["message"], "name": "spaces/TEAMROOM/messages/M5"}
+    await client.post("/api/chat/webhook", json=event)
+
+    user = (await db_session.execute(select(User).where(User.email == "pat@orbit.dev"))).scalar_one()
+    assert user.google_space_id is None
+
+
+async def test_send_dm_fails_cleanly_when_dm_space_cannot_be_found():
+    from unittest.mock import AsyncMock, MagicMock
+
+    from services.google_chat import send_dm
+
+    not_found = MagicMock()
+    not_found.status_code = 404
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=not_found), \
+         patch("httpx.AsyncClient.post", new_callable=AsyncMock) as post:
+        assert await send_dm("users/123", "hi") is False
+        post.assert_not_awaited()
+
+
+async def test_send_dm_uses_known_space_without_lookup():
+    from unittest.mock import AsyncMock, MagicMock
+
+    from services.google_chat import send_dm
+
+    ok = MagicMock()
+    ok.status_code = 200
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as lookup, \
+         patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=ok):
+        assert await send_dm("users/123", "hi", space_id="spaces/KNOWN") is True
+        lookup.assert_not_awaited()

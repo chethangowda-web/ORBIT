@@ -140,6 +140,20 @@ async def list_users(
     return rows, total
 
 
+OPT_OUT_VALUES = ("false", "0", "off", "no")
+
+
+async def get_opted_out_user_ids(db: AsyncSession, key: str) -> set[uuid.UUID]:
+    """Ids of users who switched a boolean preference (e.g. daily_briefing) off."""
+    rows = await db.execute(
+        select(UserPreference.user_id).where(
+            UserPreference.key == key,
+            func.lower(UserPreference.value).in_(OPT_OUT_VALUES),
+        )
+    )
+    return set(rows.scalars().all())
+
+
 async def get_user_preferences(db: AsyncSession, user_id: uuid.UUID) -> Dict[str, str]:
     """Return a user's stored preferences as a key/value mapping."""
     rows = await db.execute(select(UserPreference).where(UserPreference.user_id == user_id))

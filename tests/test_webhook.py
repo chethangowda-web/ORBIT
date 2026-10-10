@@ -351,7 +351,12 @@ async def test_outbound_service_messaging_mocked():
         success = await send_card_message("spaces/TEST1234", card)
         assert success is True
 
-    # 3. Direct message (DM)
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_resp):
+    # 3. Direct message (DM): look up the DM space, then post into it
+    lookup = MagicMock()
+    lookup.status_code = 200
+    lookup.json.return_value = {"name": "spaces/DM_SPACE_1"}
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=lookup) as get_mock,          patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_resp) as post_mock:
         success = await send_dm("users/10001", "Your morning briefing is ready!")
         assert success is True
+        assert get_mock.call_args.kwargs["params"] == {"name": "users/10001"}
+        assert "spaces/DM_SPACE_1/messages" in post_mock.call_args.args[0]

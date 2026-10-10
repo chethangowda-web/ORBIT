@@ -9,7 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import settings
 from db.base import local_midnight_utc, local_today, utc_now
 from db.models import NotificationLog, User
-from services.google_chat import send_dm, send_text_message
+from crud.users import get_opted_out_user_ids
+from services.google_chat import send_text_message
+from services.notifications import deliver_with_retry
 from tools.analytics_tools import get_task_stats
 from tools.base import get_tool_session
 
@@ -83,36 +85,31 @@ async def run_weekly_summary(
         )
         result = await s.execute(stmt)
         recipients = result.scalars().all()
+        opted_out = await get_opted_out_user_ids(s, "weekly_summary")
 
         for user in recipients:
+            if user.id in opted_out:
+                summary["skipped"] += 1
+                continue
             if not force and await _has_already_received_weekly_summary(s, user.id):
                 summary["skipped"] += 1
                 continue
 
             try:
-                delivered = False
-                if user.google_id:
-                    delivered = await send_dm(user.google_id, digest)
-                elif user.google_space_id:
-                    delivered = await send_text_message(user.google_space_id, digest)
-                else:
-                    delivered = True
-
-                log_entry = NotificationLog(
-                    user_id=user.id,
-                    type="weekly_summary",
-                    message=digest,
-                    google_space_id=user.google_space_id or user.google_id,
-                    status="sent" if delivered else "failed",
-                    sent_at=utc_now(),
+                delivery_status, error_msg = await deliver_with_retry(user, digest)
+                s.add(
+                    NotificationLog(
+                        user_id=user.id,
+                        type="weekly_summary",
+                        message=digest,
+                        google_space_id=user.google_space_id or user.google_id,
+                        status=delivery_status,
+                        error_msg=error_msg,
+                        sent_at=utc_now(),
+                    )
                 )
-                s.add(log_entry)
                 await s.commit()
-
-                if delivered:
-                    summary["sent"] += 1
-                else:
-                    summary["failed"] += 1
+                summary[delivery_status] += 1
             except Exception as err:
                 logger.error("Failed to send weekly summary to %s: %s", user.id, err)
                 summary["failed"] += 1

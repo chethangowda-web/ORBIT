@@ -56,8 +56,12 @@ def _format_task_event_message(event_type: str, task: Task, actor_name: str) -> 
     return f"ℹ️ Task *{task.title}* changed."
 
 
-async def _deliver_with_retry(recipient: User, message: str) -> tuple[str, Optional[str]]:
-    """Attempts delivery with bounded retries. Returns (status, error_msg)."""
+async def deliver_with_retry(recipient: User, message: str) -> tuple[str, Optional[str]]:
+    """Attempts delivery with bounded retries. Returns (status, error_msg).
+
+    Status is ``sent`` only after a successful API response, ``skipped`` when the
+    recipient has no Google Chat handle, and ``failed`` otherwise.
+    """
     if not recipient.google_id and not recipient.google_space_id:
         return "skipped", "Recipient has no linked Google Chat handle"
 
@@ -65,7 +69,7 @@ async def _deliver_with_retry(recipient: User, message: str) -> tuple[str, Optio
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             if recipient.google_id:
-                delivered = await send_dm(recipient.google_id, message)
+                delivered = await send_dm(recipient.google_id, message, space_id=recipient.google_space_id)
             else:
                 delivered = await send_text_message(recipient.google_space_id, message)  # type: ignore[arg-type]
 
@@ -79,6 +83,9 @@ async def _deliver_with_retry(recipient: User, message: str) -> tuple[str, Optio
             await asyncio.sleep(RETRY_BACKOFF_SECONDS * attempt)
 
     return "failed", last_error
+
+
+_deliver_with_retry = deliver_with_retry  # backwards-compatible alias
 
 
 async def notify_task_event(

@@ -338,15 +338,36 @@ async def send_card_message(
     return False
 
 
-async def send_dm(google_user_id: str, text: str) -> bool:
-    """Sends a direct message to a specific user for proactive notifications."""
-    clean_user = google_user_id if google_user_id.startswith("users/") else f"users/{google_user_id}"
-    url = f"https://chat.googleapis.com/v1/{clean_user}/messages"
+async def find_dm_space(google_user_id: str) -> Optional[str]:
+    """Look up the app's direct-message space with a user.
+
+    The Chat API has no ``users/*/messages`` endpoint: a bot can only post into a
+    space, so a proactive DM first needs that user's DM space.
+    """
+    user_name = google_user_id if google_user_id.startswith("users/") else f"users/{google_user_id}"
     headers = await get_chat_auth_headers()
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(url, json={"text": text}, headers=headers)
-            return resp.status_code in (200, 201)
+            resp = await client.get(
+                "https://chat.googleapis.com/v1/spaces:findDirectMessage",
+                params={"name": user_name},
+                headers=headers,
+            )
+        if resp.status_code == 200:
+            return resp.json().get("name")
+        logger.warning("findDirectMessage for %s returned status %d", user_name, resp.status_code)
     except Exception as err:
-        logger.error("Failed to send DM to %s: %s", google_user_id, err)
+        logger.error("Failed to look up DM space for %s: %s", user_name, err)
+    return None
+
+
+async def send_dm(google_user_id: str, text: str, space_id: Optional[str] = None) -> bool:
+    """Send a direct message for proactive notifications.
+
+    Uses ``space_id`` (the user's known DM space) when given, otherwise discovers
+    it from the Google user id. Returns True only on a successful API response.
+    """
+    target_space = space_id or await find_dm_space(google_user_id)
+    if not target_space:
         return False
+    return await send_text_message(target_space, text)

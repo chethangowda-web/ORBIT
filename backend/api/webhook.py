@@ -416,6 +416,10 @@ async def google_chat_webhook(
     try:
         async with get_tool_session() as session:
             user = await get_or_create_google_user(session, event.user)
+            if _is_dm(event.space) and user.google_space_id != event.space.name:
+                # Remember the verified DM space so proactive messages can reach this user.
+                user.google_space_id = event.space.name
+                await session.commit()
             if event.type == "MESSAGE" and event.message:
                 result = await _handle_message(event, session, str(user.id), is_addon)
             elif event.type == "CARD_CLICKED" and event.action:
