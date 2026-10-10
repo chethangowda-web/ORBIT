@@ -3,11 +3,16 @@ ORBIT Custom Exceptions and Global Exception Handlers
 Formats errors into standard API envelope: {success: False, data: None, meta: None, error: str}
 """
 
+import logging
+import uuid
 from typing import Any
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from schemas.common import api_response
+
+
+logger = logging.getLogger(__name__)
 
 
 class OrbitException(Exception):
@@ -99,11 +104,19 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        error_id = uuid.uuid4().hex[:12]
+        logger.error(
+            "Unhandled error %s on %s %s",
+            error_id,
+            request.method,
+            request.url.path,
+            exc_info=exc,
+        )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=api_response(
                 data=None,
-                error="An unexpected internal server error occurred.",
+                error=f"An unexpected internal server error occurred (ref {error_id}).",
                 success=False,
             ),
         )

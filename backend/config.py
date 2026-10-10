@@ -4,8 +4,10 @@ Loads environment variables using Pydantic Settings
 """
 
 from typing import List
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+DEV_JWT_SECRET = "dev-secret-key-orbit-multi-agent-task-system-jwt-2026"
 
 
 class Settings(BaseSettings):
@@ -28,7 +30,6 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:8001",
-        "*",
     ]
 
     # Database Settings
@@ -39,7 +40,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # Authentication & Security
-    JWT_SECRET_KEY: str = "dev-secret-key-orbit-multi-agent-task-system-jwt-2026"
+    JWT_SECRET_KEY: str = DEV_JWT_SECRET
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
 
@@ -76,6 +77,32 @@ class Settings(BaseSettings):
     # Scheduler
     SCHEDULER_ENABLED: bool = True
     SCHEDULER_INTERVAL_MINUTES: int = 5
+
+    # Product behaviour
+    APP_TIMEZONE: str = "Asia/Kolkata"  # defines "today" for due dates and digests
+    ALLOW_REGISTRATION: bool = False  # public self-registration is opt-in
+    LOG_LEVEL: str = "INFO"
+    LOG_WEBHOOK_PAYLOADS: bool = False  # raw Chat payloads contain PII
+
+    # Login brute-force protection (per client IP + email)
+    LOGIN_RATE_LIMIT_ATTEMPTS: int = 10
+    LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 300
+
+    @model_validator(mode="after")
+    def _enforce_production_safety(self) -> "Settings":
+        """Refuse to boot in production with unsafe defaults."""
+        if self.ENVIRONMENT.lower() != "production":
+            return self
+        problems: list[str] = []
+        if self.JWT_SECRET_KEY == DEV_JWT_SECRET or len(self.JWT_SECRET_KEY) < 32:
+            problems.append("JWT_SECRET_KEY must be a unique secret of at least 32 characters")
+        if "*" in self.CORS_ORIGINS:
+            problems.append("CORS_ORIGINS must not contain '*' when credentials are allowed")
+        if not self.GOOGLE_CHAT_VERIFY_AUTH:
+            problems.append("GOOGLE_CHAT_VERIFY_AUTH must be true")
+        if problems:
+            raise ValueError("Unsafe production configuration: " + "; ".join(problems))
+        return self
 
 
 settings = Settings()

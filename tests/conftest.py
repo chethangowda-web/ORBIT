@@ -69,6 +69,21 @@ def offline_llm(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_settings, "OPENAI_API_KEY", "")
 
 
+@pytest.fixture
+def allow_registration(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Enable public self-registration for tests that exercise it."""
+    monkeypatch.setattr(_settings, "ALLOW_REGISTRATION", True)
+
+
+@pytest.fixture(autouse=True)
+def clean_rate_limits(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep login rate-limit counters in-process and isolated between tests."""
+    import auth.ratelimit as ratelimit
+
+    monkeypatch.setattr(ratelimit, "_get_redis", lambda: None)
+    ratelimit.reset_memory_limits()
+
+
 from tools.base import current_tool_session
 
 

@@ -9,8 +9,10 @@ from typing import Any, Dict
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from config import settings as _boot_settings
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, _boot_settings.LOG_LEVEL.upper(), logging.INFO),
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 
@@ -67,8 +69,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-OAuth-State"],
 )
 
 # API Router (/api)
