@@ -54,11 +54,26 @@ async def get_all_users(limit: int = 100) -> ToolResult:
         return tool_error(f"Failed to list users: {str(e)}")
 
 
-@tool
-async def get_team_workload() -> ToolResult:
+class GetTeamWorkloadInput(BaseModel):
+    """Input for team workload lookups."""
+
+    viewer_id: Optional[str] = Field(
+        None, description="User asking; team-wide workload is limited to managers and admins"
+    )
+
+
+@tool(args_schema=GetTeamWorkloadInput)
+async def get_team_workload(viewer_id: Optional[str] = None) -> ToolResult:
     """Get the current task workload distribution and completion rates across all team members."""
     try:
         async with get_tool_session() as db:
+            if viewer_id is not None:
+                import uuid as _uuid
+                from auth.rbac import is_manager
+
+                viewer = await user_crud.get_user_by_id(db, _uuid.UUID(str(viewer_id)))
+                if not viewer or not is_manager(viewer):
+                    return tool_error("Permission denied: team workload is available to managers and admins.")
             workloads = await task_crud.get_team_workload(db=db)
 
         workload_data = [w.model_dump() for w in workloads]

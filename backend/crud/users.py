@@ -51,6 +51,38 @@ async def get_user_by_name(db: AsyncSession, name_query: str) -> Optional[User]:
     return result.scalars().first()
 
 
+async def find_users_by_name(db: AsyncSession, name_query: str, limit: int = 10) -> List[User]:
+    """Active users matching a name, best matches first.
+
+    Ranking: exact full-name or email match, then exact first-name match, then
+    partial matches. Callers use this to detect ambiguity instead of silently
+    taking the first partial hit.
+    """
+    clean = name_query.strip().lower()
+    if not clean:
+        return []
+    pattern = f"%{clean}%"
+    stmt = select(User).where(
+        or_(
+            func.lower(User.display_name).like(pattern),
+            func.lower(User.first_name).like(pattern),
+            func.lower(User.last_name).like(pattern),
+            func.lower(User.email).like(pattern),
+        ),
+        User.is_active.is_(True),
+    )
+    matches = list((await db.execute(stmt)).scalars().all())
+
+    def rank(user: User) -> tuple[int, str]:
+        if clean in (user.display_name.lower(), user.email.lower()):
+            return (0, user.display_name)
+        if clean == (user.first_name or "").lower() or clean == user.display_name.split(" ")[0].lower():
+            return (1, user.display_name)
+        return (2, user.display_name)
+
+    return sorted(matches, key=rank)[:limit]
+
+
 async def get_all_users(
     db: AsyncSession,
     q: Optional[str] = None,

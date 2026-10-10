@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     # Scheduler
     SCHEDULER_ENABLED: bool = True
     SCHEDULER_INTERVAL_MINUTES: int = 5
+    SCHEDULER_JOBSTORE: str = "redis"  # "redis" | "memory"
 
     # Product behaviour
     APP_TIMEZONE: str = "Asia/Kolkata"  # defines "today" for due dates and digests

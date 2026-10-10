@@ -192,3 +192,52 @@ async def test_admin_endpoints_authorization(
     )
     assert res_weekly.status_code == 200
     assert "stats" in res_weekly.json()["data"]
+
+
+class _FakeRedis:
+    """Minimal async Redis double implementing SET NX EX semantics."""
+
+    store: set[str] = set()
+
+    async def set(self, key, value, nx=False, ex=None):
+        if nx and key in self.store:
+            return None
+        self.store.add(key)
+        return True
+
+    async def aclose(self):
+        return None
+
+
+async def test_job_lock_runs_once_per_firing(monkeypatch):
+    import scheduler.scheduler as sched_module
+
+    _FakeRedis.store = set()
+    monkeypatch.setattr(sched_module.aioredis, "from_url", lambda *a, **k: _FakeRedis())
+    calls: list[int] = []
+
+    async def job():
+        calls.append(1)
+        return "done"
+
+    locked = sched_module.with_job_lock("unit_test_job", job)
+    assert await locked() == "done"
+    assert await locked() is None  # second worker is turned away
+    assert calls == [1]
+
+
+async def test_job_lock_falls_back_to_running_when_redis_down(monkeypatch):
+    import scheduler.scheduler as sched_module
+
+    def boom(*args, **kwargs):
+        raise ConnectionError("redis down")
+
+    monkeypatch.setattr(sched_module.aioredis, "from_url", boom)
+    calls: list[int] = []
+
+    async def job():
+        calls.append(1)
+        return "ran"
+
+    assert await sched_module.with_job_lock("unit_test_job", job)() == "ran"
+    assert calls == [1]

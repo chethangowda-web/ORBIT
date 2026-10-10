@@ -59,7 +59,7 @@ async def _handle_update_task(ctx: dict[str, Any], user_id: str, state_ref_id: A
 
     if not task_id and ctx.get("title_hint"):
         tools_used.append("search_tasks")
-        s_res = await search_tasks.ainvoke({"query": ctx.get("title_hint")})
+        s_res = await search_tasks.ainvoke({"query": ctx.get("title_hint"), "viewer_id": user_id})
         if s_res.get("success") and s_res.get("data"):
             matches = s_res["data"]
             if len(matches) == 1:
@@ -87,22 +87,6 @@ async def _handle_update_task(ctx: dict[str, Any], user_id: str, state_ref_id: A
             None,
             None,
         )
-
-    # Validate assignee if provided
-    assignee_name = ctx.get("assignee_name")
-    if assignee_name:
-        tools_used.append("get_all_users")
-        tm_res = await get_all_users.ainvoke({})
-        if tm_res.get("success") and tm_res.get("data"):
-            members = tm_res["data"]
-            match = next((m for m in members if assignee_name.lower() in m.get("display_name", "").lower() or assignee_name.lower() in m.get("email", "").lower()), None)
-            if not match:
-                return (
-                    f"⚠️ Could not find team member *{assignee_name}*. Please choose from active team members.",
-                    "text",
-                    None,
-                    str(task_id),
-                )
 
     tools_used.append("update_task")
     update_payload: dict[str, Any] = {
@@ -148,7 +132,7 @@ async def _handle_get_task_detail(ctx: dict[str, Any], user_id: str, state_ref_i
     task_id = ctx.get("task_id") or state_ref_id
     if not task_id and ctx.get("title_hint"):
         tools_used.append("search_tasks")
-        s_res = await search_tasks.ainvoke({"query": ctx.get("title_hint")})
+        s_res = await search_tasks.ainvoke({"query": ctx.get("title_hint"), "viewer_id": user_id})
         if s_res.get("success") and s_res.get("data"):
             task_id = s_res["data"][0].get("id")
 
@@ -156,7 +140,7 @@ async def _handle_get_task_detail(ctx: dict[str, Any], user_id: str, state_ref_i
         return "🤔 Which task would you like to view? Please specify the task title or ID.", "text", None, None
 
     tools_used.append("get_task_by_id")
-    res = await get_task_by_id.ainvoke({"task_id": task_id})
+    res = await get_task_by_id.ainvoke({"task_id": task_id, "viewer_id": user_id})
     if not res.get("success"):
         return f"❌ Task not found: {res.get('error')}", "text", None, None
 
@@ -175,18 +159,27 @@ async def _handle_complete_task(ctx: dict[str, Any], user_id: str, state_ref_id:
     task_id = ctx.get("task_id") or state_ref_id
     if not task_id and ctx.get("title_hint"):
         tools_used.append("search_tasks")
-        s_res = await search_tasks.ainvoke({"query": ctx.get("title_hint")})
-        if s_res.get("success") and s_res.get("data"):
-            task_id = s_res["data"][0].get("id")
+        s_res = await search_tasks.ainvoke({"query": ctx.get("title_hint"), "viewer_id": user_id})
+        matches = s_res.get("data") or [] if s_res.get("success") else []
+        if len(matches) == 1:
+            task_id = matches[0].get("id")
+        elif len(matches) > 1:
+            names = ", ".join(f"*{m.get('title')}*" for m in matches[:5])
+            return (
+                f"🤔 Several tasks match '{ctx.get('title_hint')}': {names}. Which one should I complete?",
+                "text",
+                None,
+                None,
+            )
 
     if not task_id:
-        tools_used.append("get_user_tasks")
-        u_res = await get_user_tasks.ainvoke({"user_id": user_id, "status": ["TODO", "IN_PROGRESS"]})
-        if u_res.get("success") and u_res.get("data"):
-            task_id = u_res["data"][0].get("id")
-
-    if not task_id:
-        return "❌ Could not find the task to complete. Please provide the task name or ID.", "text", None, None
+        # Never guess: completing the wrong task is hard to notice and undo.
+        return (
+            "🤔 Which task should I complete? Give me its title or ID (for example: 'complete the CRM deployment task').",
+            "text",
+            None,
+            None,
+        )
 
     tools_used.append("complete_task")
     c_res = await complete_task.ainvoke({"task_id": task_id, "completed_by_id": user_id})
@@ -202,7 +195,7 @@ async def _handle_list_or_search(intent: str, ctx: dict[str, Any], user_id: str,
     if intent == Intent.SEARCH_TASKS.value:
         q = ctx.get("title_hint") or raw_msg
         tools_used.append("search_tasks")
-        res = await search_tasks.ainvoke({"query": q})
+        res = await search_tasks.ainvoke({"query": q, "viewer_id": user_id})
         title = f"Search Results for '{q}'"
     else:
         tools_used.append("get_user_tasks")

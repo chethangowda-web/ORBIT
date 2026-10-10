@@ -1,7 +1,22 @@
 from datetime import datetime, timezone
 from typing import Any
 from agents.state import AgentState
+from auth.rbac import is_manager
+from crud import users as user_crud
+from tools.base import get_tool_session
 from tools.task_tools import delete_task, get_task_by_id, search_tasks
+
+
+async def _caller_may_delete(user_id: str) -> bool:
+    """Only managers and admins can delete; checked before any task is disclosed."""
+    import uuid as _uuid
+
+    try:
+        async with get_tool_session() as db:
+            user = await user_crud.get_user_by_id(db, _uuid.UUID(str(user_id)))
+    except (ValueError, TypeError):
+        return False
+    return bool(user and user.is_active and is_manager(user))
 
 
 async def _resolve_target_task(state: AgentState, tools_used: list[str]) -> tuple[Any, Any]:
@@ -11,13 +26,15 @@ async def _resolve_target_task(state: AgentState, tools_used: list[str]) -> tupl
     task_id = ctx.get("task_id") or state.get("referenced_task_id")
     if task_id:
         tools_used.append("get_task_by_id")
-        t_res = await get_task_by_id.ainvoke({"task_id": task_id})
+        t_res = await get_task_by_id.ainvoke({"task_id": task_id, "viewer_id": state.get("user_id")})
         if t_res.get("success"):
             return task_id, t_res.get("data", {}).get("title", "Untitled")
 
     query = ctx.get("title_hint") or raw_msg
     tools_used.append("search_tasks")
-    s_res = await search_tasks.ainvoke({"query": query, "include_completed": True})
+    s_res = await search_tasks.ainvoke(
+        {"query": query, "include_completed": True, "viewer_id": state.get("user_id")}
+    )
     if s_res.get("success") and s_res.get("data"):
         matched = s_res["data"][0]
         return matched.get("id"), matched.get("title")
@@ -81,7 +98,17 @@ async def review_agent_node(state: AgentState) -> dict[str, Any]:
             "tool_calls_made": tools_used,
         }
 
-    # First turn: Identify target and establish pending confirmation state
+    # First turn: refuse early so employees are never shown a task they cannot delete
+    if not await _caller_may_delete(user_id):
+        return {
+            "response": "🚫 Only managers and admins can delete tasks. Ask a manager, or mark the task complete or cancelled instead.",
+            "response_type": "text",
+            "needs_confirmation": False,
+            "pending_confirmation": None,
+            "tool_calls_made": tools_used,
+        }
+
+    # Identify target and establish pending confirmation state
     task_id, task_title = await _resolve_target_task(state, tools_used)
     if not task_id:
         return {

@@ -18,6 +18,8 @@ async def test_eval_all_eight_intents_end_to_end(
     client: AsyncClient,
     seed_test_user: User,
     user_auth_headers: dict,
+    seed_manager_user: User,
+    manager_auth_headers: dict,
     db_session: AsyncSession,
 ):
     """Evaluates all 8 core intents end-to-end through the multi-agent graph."""
@@ -26,7 +28,7 @@ async def test_eval_all_eight_intents_end_to_end(
     # 1. CREATE_TASK
     res_create = await client.post(
         "/api/chat/query",
-        json={"message": "Create a high priority task for John to deploy the frontend by Friday", "thread_id": "eval-1"},
+        json={"message": "Create a high priority task for Test Employee to deploy the frontend by Friday", "thread_id": "eval-1"},
         headers=user_auth_headers,
     )
     assert res_create.status_code == 200
@@ -93,11 +95,19 @@ async def test_eval_all_eight_intents_end_to_end(
     assert "completed" in res_comp.json()["data"]["response"].lower()
     results["COMPLETE_TASK"] = "PASS"
 
-    # 8. DELETE_TASK (requires HITL confirmation)
+    # 8. DELETE_TASK: employees are refused up front, managers get the HITL confirmation
+    res_denied = await client.post(
+        "/api/chat/query",
+        json={"message": "Delete the Deploy the frontend task", "thread_id": "eval-8a"},
+        headers=user_auth_headers,
+    )
+    assert res_denied.json()["data"]["needs_confirmation"] is False
+    assert "managers and admins" in res_denied.json()["data"]["response"]
+
     res_del = await client.post(
         "/api/chat/query",
-        json={"message": "Delete the Deploy the frontend task", "thread_id": "eval-8"},
-        headers=user_auth_headers,
+        json={"message": "Delete the Deploy the frontend task", "thread_id": "eval-8b"},
+        headers=manager_auth_headers,
     )
     assert res_del.status_code == 200
     assert res_del.json()["data"]["needs_confirmation"] is True

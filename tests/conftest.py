@@ -18,6 +18,8 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+os.environ.setdefault("SCHEDULER_JOBSTORE", "memory")
+
 # Ensure backend directory is in python sys.path
 backend_path = Path(__file__).resolve().parent.parent / "backend"
 if str(backend_path) not in sys.path:

@@ -61,3 +61,34 @@ def tool_error(error_msg: str, data: Any = None) -> ToolResult:
         "error": error_msg,
         "count": None,
     }
+
+
+async def resolve_user_reference(db: AsyncSession, name: str) -> tuple[Optional[Any], Optional[str]]:
+    """Resolve a spoken name to exactly one active user.
+
+    Returns ``(user, None)`` for a single clear match, ``(None, message)`` when the
+    name is unknown or ambiguous so the agent can ask rather than guess.
+    """
+    from crud import users as user_crud
+
+    matches = await user_crud.find_users_by_name(db, name)
+    if not matches:
+        return None, f"I could not find a team member matching '{name}'."
+
+    def label(user: Any) -> str:
+        return f"{user.display_name} ({user.email})"
+
+    clean = name.strip().lower()
+    exact = [
+        u for u in matches
+        if clean in (u.display_name.lower(), u.email.lower())
+    ]
+    if len(exact) == 1:
+        return exact[0], None
+    first_name_hits = [u for u in matches if u.display_name.split(" ")[0].lower() == clean]
+    if len(matches) == 1:
+        return matches[0], None
+    if len(first_name_hits) == 1:
+        return first_name_hits[0], None
+    options = ", ".join(label(u) for u in matches[:5])
+    return None, f"More than one person matches '{name}': {options}. Which one did you mean?"
