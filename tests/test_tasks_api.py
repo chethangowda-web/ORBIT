@@ -8,6 +8,7 @@ import pytest
 from httpx import AsyncClient
 
 from db.models import User
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
@@ -244,3 +245,33 @@ async def test_analytics_api(
     assert workload_res.status_code == 200
     workload = workload_res.json()["data"]
     assert isinstance(workload, list)
+
+
+@pytest.mark.asyncio
+async def test_task_creation_async_serialization_regression(
+    db_session: AsyncSession, seed_test_user: User
+):
+    """Regression test: verify create_task eager-loads relationships so TaskRead serializes without MissingGreenlet."""
+    from crud import tasks as task_crud
+    from schemas.task import TaskCreate, TaskPriority, TaskRead
+
+    task_in = TaskCreate(
+        title="Async Relationship Serialization Test",
+        description="Verify creator and assignee are eagerly loaded",
+        priority=TaskPriority.HIGH,
+        assignee_id=seed_test_user.id,
+    )
+    task = await task_crud.create_task(
+        db=db_session,
+        task_in=task_in,
+        created_by_id=seed_test_user.id,
+        source="regression_test",
+    )
+
+    # Validating into Pydantic schema TaskRead must succeed without MissingGreenlet
+    task_read = TaskRead.model_validate(task)
+    assert task_read.title == "Async Relationship Serialization Test"
+    assert task_read.creator is not None
+    assert task_read.creator.id == seed_test_user.id
+    assert task_read.assignee is not None
+    assert task_read.assignee.id == seed_test_user.id

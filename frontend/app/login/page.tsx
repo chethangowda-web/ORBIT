@@ -28,56 +28,61 @@ export default function LoginPage() {
     }
   };
 
-  const fillQuickAccount = (demoEmail: string) => {
+  const fillQuickAccount = async (demoEmail: string) => {
     setEmail(demoEmail);
     setPassword("password123");
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await login(demoEmail, "password123");
+    } catch (err: any) {
+      setError(err.message || "Failed to sign in. Verify your credentials.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-4 bg-[#090d16] relative overflow-hidden">
-      {/* Background glow effects */}
-      <div className="absolute top-1/4 -left-32 w-96 h-96 bg-indigo-600/15 rounded-full blur-[128px] pointer-events-none" />
-      <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-cyan-500/15 rounded-full blur-[128px] pointer-events-none" />
-
-      <div className="w-full max-w-md glass-panel rounded-2xl p-8 relative z-10 shadow-2xl border border-slate-800">
+      <div className="w-full max-w-md bg-slate-900 rounded-lg p-7 relative z-10 border border-slate-800 shadow-xl">
         {/* Brand Header */}
-        <div className="flex flex-col items-center text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/30 mb-4">
-            <Bot className="w-8 h-8 text-white" />
+        <div className="flex flex-col items-center text-center mb-6">
+          <div className="w-11 h-11 rounded-md bg-slate-800 border border-slate-700/80 flex items-center justify-center text-blue-400 mb-3">
+            <Bot className="w-6 h-6" />
           </div>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight flex items-center gap-2">
+          <h1 className="text-xl font-bold text-slate-100 tracking-tight flex items-center gap-2">
             <span>ORBIT</span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-medium">
+            <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-slate-800 text-slate-300 border border-slate-700/60 font-mono">
               v1.0
             </span>
           </h1>
           <p className="text-xs text-slate-400 mt-1 max-w-xs">
-            Multi-Agent Autonomous Task Management & Google Chat Swarm
+            Multi-Agent Task Management & Autonomous Orchestration
           </p>
         </div>
 
         {error && (
-          <div className="mb-5 p-3 rounded-xl bg-rose-950/40 border border-rose-500/30 text-rose-300 text-xs">
+          <div className="mb-4 p-3 rounded-md bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3.5">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+            <label className="block text-xs font-medium text-slate-300 mb-1">
               Work Email
             </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@orbit.dev"
-              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+              placeholder="admin@orbit.dev"
+              className="w-full px-3 py-2 rounded-md bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 text-xs focus:outline-none focus:border-blue-500 transition-colors"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+            <label className="block text-xs font-medium text-slate-300 mb-1">
               Password
             </label>
             <input
@@ -85,56 +90,58 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+              className="w-full px-3 py-2 rounded-md bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 text-xs focus:outline-none focus:border-blue-500 transition-colors"
             />
           </div>
 
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full mt-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-sm font-semibold shadow-lg shadow-indigo-600/30 transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full mt-2 py-2 px-4 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
           >
-            {isSubmitting ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Sparkles className="w-4 h-4" />
-            )}
+            {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             <span>Sign In to Dashboard</span>
           </button>
         </form>
 
         {/* Quick Demo Logins */}
-        <div className="mt-8 pt-6 border-t border-slate-800/80">
-          <div className="flex items-center gap-2 mb-3 text-xs font-semibold text-slate-400">
-            <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
-            <span>1-Click Test Credentials:</span>
+        <div className="mt-6 pt-5 border-t border-slate-800">
+          <div className="flex items-center gap-1.5 mb-2.5 text-xs font-medium text-slate-400">
+            <KeyRound className="w-3.5 h-3.5 text-blue-400" />
+            <span>1-Click Verified Demo Accounts:</span>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <button
               type="button"
+              disabled={isSubmitting}
               onClick={() => fillQuickAccount("admin@orbit.dev")}
-              className="px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-indigo-500/50 text-[11px] text-slate-300 hover:text-white transition-all text-center"
+              className="px-2.5 py-2 rounded-md bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-xs text-slate-300 hover:text-white transition-colors text-left"
             >
-              <span className="font-semibold block">Admin</span>
-              <span className="text-[9px] text-slate-500">System</span>
+              <span className="font-semibold block text-slate-200">Admin</span>
+              <span className="text-[10px] text-slate-500">System Admin</span>
             </button>
             <button
               type="button"
+              disabled={isSubmitting}
               onClick={() => fillQuickAccount("sarah@orbit.dev")}
-              className="px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-indigo-500/50 text-[11px] text-slate-300 hover:text-white transition-all text-center"
+              className="px-2.5 py-2 rounded-md bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-xs text-slate-300 hover:text-white transition-colors text-left"
             >
-              <span className="font-semibold block">Manager</span>
-              <span className="text-[9px] text-slate-500">Sarah</span>
+              <span className="font-semibold block text-slate-200">Sarah</span>
+              <span className="text-[10px] text-slate-500">Manager</span>
             </button>
             <button
               type="button"
+              disabled={isSubmitting}
               onClick={() => fillQuickAccount("john@orbit.dev")}
-              className="px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-indigo-500/50 text-[11px] text-slate-300 hover:text-white transition-all text-center"
+              className="px-2.5 py-2 rounded-md bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-xs text-slate-300 hover:text-white transition-colors text-left"
             >
-              <span className="font-semibold block">Employee</span>
-              <span className="text-[9px] text-slate-500">John</span>
+              <span className="font-semibold block text-slate-200">John Doe</span>
+              <span className="text-[10px] text-slate-500">13 Tasks</span>
             </button>
           </div>
+          <p className="text-[10px] text-slate-500 mt-2 text-center">
+            Password: <code className="text-slate-400">password123</code> • Google Chat users authenticate via Google Chat.
+          </p>
         </div>
       </div>
     </div>

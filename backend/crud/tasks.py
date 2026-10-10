@@ -66,7 +66,8 @@ async def create_task(
         source=source,
     )
     await db.commit()
-    return enrich_task_metadata(task)
+    reloaded = await get_task(db, task.id)
+    return reloaded if reloaded is not None else enrich_task_metadata(task)
 
 
 async def get_task(
@@ -135,8 +136,8 @@ async def update_task(
         )
 
     await db.commit()
-    await db.refresh(task)
-    return enrich_task_metadata(task)
+    reloaded = await get_task(db, task.id)
+    return reloaded if reloaded is not None else enrich_task_metadata(task)
 
 
 async def soft_delete_task(
@@ -195,8 +196,8 @@ async def complete_task(
         source=source,
     )
     await db.commit()
-    await db.refresh(task)
-    return enrich_task_metadata(task)
+    reloaded = await get_task(db, task.id)
+    return reloaded if reloaded is not None else enrich_task_metadata(task)
 
 
 async def list_tasks(
@@ -205,6 +206,7 @@ async def list_tasks(
     priority: Optional[List[str]] = None,
     assignee_id: Optional[uuid.UUID] = None,
     created_by_id: Optional[uuid.UUID] = None,
+    user_id: Optional[uuid.UUID] = None,
     due_before: Optional[date] = None,
     due_after: Optional[date] = None,
     q: Optional[str] = None,
@@ -228,10 +230,13 @@ async def list_tasks(
 
     if priority:
         stmt = stmt.where(Task.priority.in_(priority))
-    if assignee_id:
-        stmt = stmt.where(Task.assignee_id == assignee_id)
-    if created_by_id:
-        stmt = stmt.where(Task.created_by_id == created_by_id)
+    if user_id:
+        stmt = stmt.where(or_(Task.assignee_id == user_id, Task.created_by_id == user_id))
+    else:
+        if assignee_id:
+            stmt = stmt.where(Task.assignee_id == assignee_id)
+        if created_by_id:
+            stmt = stmt.where(Task.created_by_id == created_by_id)
     if due_before:
         stmt = stmt.where(Task.due_date <= due_before)
     if due_after:

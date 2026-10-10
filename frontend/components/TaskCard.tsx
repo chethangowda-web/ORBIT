@@ -32,16 +32,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange }) => {
   const nextStatus = nextStatusMap[task.status];
 
   return (
-    <div className="glass-card rounded-xl p-4 transition-all duration-200 group relative">
+    <div className="bg-[#151F2C] border border-[#263241] hover:border-slate-600 rounded-md p-3.5 transition-colors group relative">
       {/* Header: Priority & Due Date */}
-      <div className="flex items-center justify-between gap-2 mb-2.5">
+      <div className="flex items-center justify-between gap-2 mb-2">
         <PriorityBadge priority={task.priority} size="sm" />
         {task.due_date && (
           <div
-            className={`flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded ${
+            className={`flex items-center gap-1.5 text-[11px] font-mono px-2 py-0.5 rounded-md border ${
               isOverdue
-                ? "bg-rose-950/70 text-rose-300 border border-rose-500/30"
-                : "bg-slate-800/60 text-slate-400"
+                ? "bg-rose-950/40 text-rose-300 border-rose-500/40 font-semibold"
+                : "bg-[#111821] text-slate-400 border-[#263241]"
             }`}
           >
             {isOverdue ? (
@@ -49,38 +49,38 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange }) => {
             ) : (
               <Calendar className="w-3 h-3 text-slate-400" />
             )}
-            <span>{task.due_date ? formatDate(task.due_date) : ""}</span>
+            <span>{formatDate(task.due_date)}</span>
           </div>
         )}
       </div>
 
       {/* Title */}
       <Link href={`/tasks/${task.id}`}>
-        <h3 className="text-sm font-semibold text-slate-100 hover:text-indigo-400 transition-colors line-clamp-2 mb-2 leading-snug">
+        <h3 className="text-xs font-semibold text-[#E5EAF1] group-hover:text-blue-400 transition-colors line-clamp-2 mb-1.5 leading-snug">
           {task.title}
         </h3>
       </Link>
 
       {/* Description Snippet */}
       {task.description && (
-        <p className="text-xs text-slate-400 line-clamp-2 mb-3 leading-relaxed">
+        <p className="text-[11px] text-slate-400 line-clamp-2 mb-2.5 leading-relaxed">
           {task.description}
         </p>
       )}
 
       {/* Tags */}
       {task.tags && task.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-3">
+        <div className="flex flex-wrap gap-1 mb-2.5">
           {task.tags.slice(0, 3).map((tag, idx) => (
             <span
               key={idx}
-              className="text-[10px] px-2 py-0.5 rounded bg-slate-800/80 text-slate-300 border border-slate-700/50"
+              className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-[#111821] text-slate-300 border border-[#263241]"
             >
               #{tag}
             </span>
           ))}
           {task.tags.length > 3 && (
-            <span className="text-[10px] text-slate-500 self-center">
+            <span className="text-[10px] font-mono text-slate-500 self-center">
               +{task.tags.length - 3}
             </span>
           )}
@@ -88,12 +88,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange }) => {
       )}
 
       {/* Footer: Assignee & Action */}
-      <div className="flex items-center justify-between pt-2.5 border-t border-slate-800/80 mt-1">
+      <div className="flex items-center justify-between pt-2 border-t border-[#263241] mt-1">
         <div className="flex items-center gap-1.5 text-xs text-slate-400">
-          <div className="w-5 h-5 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[10px] text-slate-300 font-semibold uppercase">
+          <div className="w-5 h-5 rounded-md bg-[#111821] border border-[#263241] flex items-center justify-center text-[10px] text-blue-400 font-semibold uppercase">
             {task.assignee?.display_name?.charAt(0) || <User className="w-2.5 h-2.5" />}
           </div>
-          <span className="truncate max-w-[100px] text-[11px]">
+          <span className="truncate max-w-[100px] text-[11px] text-slate-300">
             {task.assignee?.display_name || "Unassigned"}
           </span>
         </div>
@@ -102,7 +102,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange }) => {
           <button
             onClick={() => onStatusChange(task.id, nextStatus)}
             title={`Move to ${nextStatus}`}
-            className="flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-indigo-300 hover:bg-indigo-950/40 px-2 py-1 rounded transition-colors"
+            className="flex items-center gap-1 text-[11px] font-medium text-slate-300 hover:text-white bg-[#111821] hover:bg-[#1A2636] border border-[#263241] hover:border-blue-500/40 px-2 py-0.5 rounded-md transition-colors font-mono"
           >
             <span>Advance</span>
             <ChevronRight className="w-3 h-3" />
@@ -110,7 +110,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange }) => {
         )}
 
         {task.status === "DONE" && (
-          <span className="flex items-center gap-1 text-[11px] text-emerald-400">
+          <span className="flex items-center gap-1 text-[11px] font-mono text-emerald-400">
             <CheckCircle2 className="w-3.5 h-3.5" />
             <span>Complete</span>
           </span>

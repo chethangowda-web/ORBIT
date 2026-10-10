@@ -46,6 +46,7 @@ venv.bak/
 credentials/*.json
 !credentials/.gitkeep
 service-account.json
+orbit-*.json
 *.pem
 *.key
 

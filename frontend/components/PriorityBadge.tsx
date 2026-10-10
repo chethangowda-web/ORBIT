@@ -13,41 +13,41 @@ const priorityConfig: Record<
 > = {
   LOW: {
     label: "Low",
-    color: "text-slate-300",
-    border: "border-slate-700/60",
-    bg: "bg-slate-800/40",
+    color: "text-slate-400",
+    border: "border-[#263241]",
+    bg: "bg-[#151F2C]",
     icon: <ArrowDown className="w-3 h-3 text-slate-400" />,
   },
   MEDIUM: {
     label: "Medium",
-    color: "text-amber-300",
+    color: "text-amber-400",
     border: "border-amber-500/30",
     bg: "bg-amber-950/40",
     icon: <Minus className="w-3 h-3 text-amber-400" />,
   },
   HIGH: {
     label: "High",
-    color: "text-orange-300",
+    color: "text-orange-400",
     border: "border-orange-500/30",
     bg: "bg-orange-950/40",
     icon: <ArrowUp className="w-3 h-3 text-orange-400" />,
   },
   CRITICAL: {
     label: "Critical",
-    color: "text-rose-300",
+    color: "text-rose-400",
     border: "border-rose-500/40",
-    bg: "bg-rose-950/60",
-    icon: <AlertCircle className="w-3 h-3 text-rose-400 animate-pulse" />,
+    bg: "bg-rose-950/50",
+    icon: <AlertCircle className="w-3 h-3 text-rose-400" />,
   },
 };
 
 export const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority, size = "md" }) => {
   const config = priorityConfig[priority] || priorityConfig.MEDIUM;
-  const sizeClasses = size === "sm" ? "px-2 py-0.5 text-xs" : "px-2.5 py-1 text-xs font-semibold";
+  const sizeClasses = size === "sm" ? "px-2 py-0.5 text-[11px]" : "px-2.5 py-1 text-xs font-medium";
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-md border ${config.border} ${config.bg} ${config.color} ${sizeClasses}`}
+      className={`inline-flex items-center gap-1.5 rounded-md border ${config.border} ${config.bg} ${config.color} ${sizeClasses} font-mono`}
     >
       {config.icon}
       <span>{config.label}</span>

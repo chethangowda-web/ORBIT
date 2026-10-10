@@ -56,5 +56,11 @@ def build_agent_graph(checkpointer=None):
     return workflow.compile(checkpointer=cp)
 
 
-# Pre-compiled graph instance
+def get_compiled_graph(checkpointer=None):
+    """Returns a compiled StateGraph using the active or provided checkpointer."""
+    return build_agent_graph(checkpointer=checkpointer)
+
+
+# Default pre-compiled graph instance
 agent_graph = build_agent_graph()
+

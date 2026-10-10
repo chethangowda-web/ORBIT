@@ -1,7 +1,10 @@
 """Planner Agent: Synthesizes intelligent daily action plans based on deadlines and priority."""
 
+import json
 from typing import Any
+from agents.prompts import PLANNER_PROMPT
 from agents.state import AgentState
+from services.llm import call_llm
 from tools.task_tools import (
     get_overdue_tasks,
     get_tasks_due_today,
@@ -27,14 +30,14 @@ def _rank_priority_score(task: dict[str, Any], is_overdue: bool, is_today: bool)
 
 
 def _format_plan_response(ranked_items: list[tuple[dict[str, Any], str]]) -> str:
-    """Formats prioritized tasks into an actionable daily briefing."""
+    """Formats prioritized tasks into an actionable daily briefing (deterministic fallback)."""
     if not ranked_items:
         return "☀️ *Good day!* You have no pending tasks right now. Great job staying on top of everything!"
 
     lines = ["📋 *Your Daily Action Plan*", "Here is your recommended focus order for today:\n"]
     for idx, (task, reason) in enumerate(ranked_items[:5], 1):
         title = task.get("title", "Untitled")
-        priority = task.get("priority", "MEDIUM")
+        priority = str(task.get("priority", "MEDIUM")).split(".")[-1]
         due = task.get("due_date", "No due date")
         lines.append(f"*{idx}. {title}* `[{priority}]`")
         lines.append(f"   • *Why:* {reason}")
@@ -45,7 +48,7 @@ def _format_plan_response(ranked_items: list[tuple[dict[str, Any], str]]) -> str
 
 
 async def planner_agent_node(state: AgentState) -> dict[str, Any]:
-    """LangGraph node: Generates daily task plan for user."""
+    """LangGraph node: Generates daily task plan for user with LLM synthesis and factual fallback."""
     user_id = state.get("user_id", "")
     tools_used: list[str] = list(state.get("tool_calls_made", []))
 
@@ -57,6 +60,14 @@ async def planner_agent_node(state: AgentState) -> dict[str, Any]:
     today_ids = {t["id"] for t in today_res.get("data", [])}
     overdue_ids = {t["id"] for t in overdue_res.get("data", [])}
     all_tasks = all_res.get("data", [])
+
+    if not all_tasks:
+        return {
+            "response": "☀️ *Good day!* You have no pending tasks right now. Great job staying on top of everything!",
+            "response_type": "text",
+            "card_data": None,
+            "tool_calls_made": tools_used,
+        }
 
     scored_tasks: list[tuple[dict[str, Any], str, int]] = []
     for t in all_tasks:
@@ -81,10 +92,36 @@ async def planner_agent_node(state: AgentState) -> dict[str, Any]:
     scored_tasks.sort(key=lambda x: x[2], reverse=True)
     ranked = [(item[0], item[1]) for item in scored_tasks]
 
-    response_text = _format_plan_response(ranked)
+    # Attempt LLM synthesis with grounded task facts
+    task_facts = [
+        {
+            "id": t.get("id"),
+            "title": t.get("title"),
+            "priority": str(t.get("priority", "MEDIUM")).split(".")[-1],
+            "status": str(t.get("status", "TODO")).split(".")[-1],
+            "due_date": t.get("due_date"),
+            "is_overdue": t.get("id") in overdue_ids,
+            "is_due_today": t.get("id") in today_ids,
+            "preliminary_reason": reason,
+        }
+        for t, reason, _ in scored_tasks[:10]
+    ]
+
+    messages = [
+        {"role": "system", "content": PLANNER_PROMPT},
+        {
+            "role": "user",
+            "content": f"Here is the user's authentic active task data from the database:\n{json.dumps(task_facts, indent=2, default=str)}\n\nGenerate an intelligent, motivating daily action plan explaining the best order to tackle these tasks today.",
+        },
+    ]
+
+    llm_plan = await call_llm(messages=messages, temperature=0.2)
+    response_text = llm_plan.strip() if (llm_plan and isinstance(llm_plan, str) and len(llm_plan.strip()) > 20) else _format_plan_response(ranked)
+
     return {
         "response": response_text,
         "response_type": "text",
         "card_data": None,
         "tool_calls_made": tools_used,
     }
+

@@ -141,6 +141,8 @@ async def create_task(
                 resolved_user = await user_crud.get_user_by_name(db, assignee_name)
                 if resolved_user:
                     target_assignee_id = resolved_user.id
+            if not target_assignee_id:
+                target_assignee_id = creator_uuid
 
             task_in = TaskCreate(
                 title=title,
@@ -320,9 +322,11 @@ async def get_user_tasks(
         async with get_tool_session() as db:
             tasks, total = await task_crud.list_tasks(
                 db=db,
-                assignee_id=u_uuid,
+                user_id=u_uuid,
                 status=status,
                 page_size=limit,
+                sort_by="updated_at",
+                sort_dir="desc",
             )
             task_list = [TaskRead.model_validate(t).model_dump() for t in tasks]
             return tool_success(data=task_list, count=total)

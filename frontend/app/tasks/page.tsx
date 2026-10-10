@@ -68,7 +68,7 @@ export default function TasksPage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-screen">
+    <div className="flex-1 flex flex-col min-h-screen bg-[#090D13]">
       <Navbar
         title="Tasks Management"
         onCreateTask={() => setIsModalOpen(true)}
@@ -76,7 +76,7 @@ export default function TasksPage() {
 
       <div className="p-6 space-y-5 flex-1 flex flex-col">
         {/* Controls: Search and Filters */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 p-4 rounded-2xl glass-panel border border-slate-800/80">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-3 rounded-md bg-[#111821] border border-[#263241]">
           <SearchBar
             value={search}
             onChange={(val) => {

@@ -104,3 +104,61 @@ export interface SchedulerStatus {
   jobs: ScheduledJob[];
   timezone: string;
 }
+
+export interface ChatExecutionMetadata {
+  request_id?: string | null;
+  active_agent?: string | null;
+  agents_invoked?: string[];
+  intent?: string | null;
+  confidence?: number | null;
+  tool_calls_made: string[];
+  node_durations_ms?: Record<string, number>;
+  total_duration_ms?: number;
+  status?: string;
+}
+
+export interface AgentExecutionTrace {
+  id: string;
+  request_id: string;
+  user_id: string;
+  thread_id: string;
+  intent?: string | null;
+  confidence?: number | null;
+  active_agent?: string | null;
+  agents_invoked: string[];
+  tool_calls_made: string[];
+  node_durations_ms: Record<string, number>;
+  total_duration_ms: number;
+  status: string;
+  error_code?: string | null;
+  error_message?: string | null;
+  started_at: string;
+  completed_at: string;
+  created_at: string;
+}
+
+export interface ReferencedTask {
+  id: string;
+  title: string;
+  status?: string | null;
+  priority?: string | null;
+  due_date?: string | null;
+  assignee_name?: string | null;
+}
+
+export interface ChatQueryRequest {
+  message: string;
+  thread_id?: string;
+  confirmed?: boolean;
+}
+
+export interface ChatQueryResponse {
+  response: string;
+  thread_id: string;
+  message_id: string;
+  needs_confirmation: boolean;
+  referenced_task_id?: string | null;
+  referenced_tasks: ReferencedTask[];
+  suggested_actions: string[];
+  metadata: ChatExecutionMetadata;
+}

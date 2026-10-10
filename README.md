@@ -62,13 +62,13 @@ docker-compose exec backend alembic upgrade head
 
 ### 4. Seed Database
 ```bash
-docker-compose exec backend python -m backend.db.seed
+docker-compose exec backend python -m db.seed
 ```
 
 ### 5. Access
-- **API Docs**: http://localhost:8000/docs
+- **API Docs**: http://localhost:8001/docs
 - **Dashboard**: http://localhost:3000
-- **Health Check**: http://localhost:8000/api/health
+- **Health Check**: http://localhost:8001/api/health
 
 ---
 
@@ -185,14 +185,47 @@ JWT_SECRET_KEY=your-secret-key
 JWT_ALGORITHM=HS256
 
 # Google Chat
-GOOGLE_CHAT_WEBHOOK_SECRET=your-webhook-secret
-GOOGLE_SERVICE_ACCOUNT_FILE=path/to/service-account.json
-
-# LangSmith (optional)
-LANGCHAIN_TRACING_V2=true
-LANGCHAIN_API_KEY=your-langsmith-key
-LANGCHAIN_PROJECT=orbit
+GOOGLE_CHAT_VERIFY_AUTH=false
+GOOGLE_CHAT_AUDIENCE=your-google-cloud-project-number
+GOOGLE_CHAT_WEBHOOK_SECRET=your-optional-webhook-secret
+GOOGLE_SERVICE_ACCOUNT_FILE=credentials/service-account.json
 ```
+
+---
+
+## 🤖 Google Chat Setup & Live Tunnel Guide
+
+### 1. Google Cloud Project & Chat API
+1. Open the [Google Cloud Console](https://console.cloud.google.com/).
+2. Enable the **Google Chat API** (`chat.googleapis.com`).
+3. Under **Google Chat API > Configuration**:
+   - **App Name**: ORBIT AI Assistant
+   - **Avatar URL**: Provide a public URL or default avatar
+   - **Description**: Autonomous Multi-Agent Task Management System
+   - **Functionality**: Check *Receive 1:1 messages* and *Join spaces and group conversations*
+   - **Connection settings**: Select *HTTP endpoint*
+   - **Authentication Audience**: Set to *HTTP endpoint URL* or *Project number* (copy your Project Number into `GOOGLE_CHAT_AUDIENCE` in `.env`).
+
+### 2. Local Tunneling via ngrok
+Expose your local FastAPI backend (port 8001) over HTTPS:
+```bash
+ngrok http 8001
+```
+Copy the generated forwarding URL (e.g. `https://abc-123.ngrok-free.app`) and set your Google Chat **HTTP endpoint URL** to:
+```
+https://abc-123.ngrok-free.app/api/chat/webhook
+```
+
+### 3. Service Account Credentials for Outbound Messaging & DMs
+1. Create a Service Account with the **Google Chat Bot** role in Google Cloud Console.
+2. Generate and download a JSON key, saving it as `credentials/service-account.json`.
+3. Set `GOOGLE_SERVICE_ACCOUNT_FILE=credentials/service-account.json` in `.env`.
+
+### 4. Interactive Testing in Google Chat
+- **Direct Message:** Send `"Plan my day"` or `"Create a high priority task to review PR by tomorrow"`.
+- **Space Interaction:** Add `@ORBIT` to a space and ask `"@ORBIT Show my pending tasks"`.
+- **Card Click Actions:** Request task deletion to receive an interactive confirmation card with **Confirm** and **Cancel** buttons.
+
 
 ---
 

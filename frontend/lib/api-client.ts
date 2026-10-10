@@ -13,10 +13,13 @@ import {
   TaskStats,
   TeamWorkload,
   User,
+  ChatQueryRequest,
+  ChatQueryResponse,
+  AgentExecutionTrace,
 } from "@/types";
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001/api";
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -174,6 +177,22 @@ export const api = {
     },
     triggerWeekly: async (force: boolean = true): Promise<any> => {
       const { data } = await apiClient.post<APIResponse>(`/admin/trigger-weekly-summary?force=${force}`);
+      return data.data;
+    },
+  },
+
+  // AI Command Center
+  chat: {
+    query: async (payload: ChatQueryRequest): Promise<ChatQueryResponse> => {
+      const { data } = await apiClient.post<APIResponse<ChatQueryResponse>>("/chat/query", payload);
+      return data.data;
+    },
+    traces: async (params?: { limit?: number; offset?: number }): Promise<{ items: AgentExecutionTrace[]; total: number }> => {
+      const { data } = await apiClient.get<APIResponse<{ items: AgentExecutionTrace[]; total: number }>>("/chat/traces", { params });
+      return data.data;
+    },
+    trace: async (id: string): Promise<AgentExecutionTrace> => {
+      const { data } = await apiClient.get<APIResponse<AgentExecutionTrace>>(`/chat/traces/${id}`);
       return data.data;
     },
   },

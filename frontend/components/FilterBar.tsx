@@ -30,7 +30,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   return (
     <div className="flex flex-wrap items-center gap-2.5">
       <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium mr-1">
-        <Filter className="w-3.5 h-3.5 text-indigo-400" />
+        <Filter className="w-3.5 h-3.5 text-blue-400" />
         <span>Filters:</span>
       </div>
 
@@ -38,7 +38,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
       <select
         value={status}
         onChange={(e) => onStatusChange(e.target.value)}
-        className="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
+        className="px-2.5 py-1.5 rounded-md bg-[#111821] border border-[#263241] text-[#E5EAF1] text-xs focus:outline-none focus:border-blue-500 transition-colors"
       >
         <option value="">All Statuses</option>
         <option value="TODO">To Do</option>
@@ -51,7 +51,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
       <select
         value={priority}
         onChange={(e) => onPriorityChange(e.target.value)}
-        className="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
+        className="px-2.5 py-1.5 rounded-md bg-[#111821] border border-[#263241] text-[#E5EAF1] text-xs focus:outline-none focus:border-blue-500 transition-colors"
       >
         <option value="">All Priorities</option>
         <option value="LOW">Low</option>
@@ -64,7 +64,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
       <select
         value={assigneeId}
         onChange={(e) => onAssigneeChange(e.target.value)}
-        className="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
+        className="px-2.5 py-1.5 rounded-md bg-[#111821] border border-[#263241] text-[#E5EAF1] text-xs focus:outline-none focus:border-blue-500 transition-colors"
       >
         <option value="">All Assignees</option>
         {users.map((u) => (
@@ -78,7 +78,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
       {hasActiveFilters && (
         <button
           onClick={onReset}
-          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition-colors"
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-[#151F2C] hover:bg-[#1A2636] border border-[#263241] hover:border-slate-600 text-slate-300 text-xs transition-colors font-mono"
         >
           <RotateCcw className="w-3 h-3" />
           <span>Reset</span>

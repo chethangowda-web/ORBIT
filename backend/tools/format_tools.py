@@ -10,8 +10,8 @@ def format_task_card(task: Dict[str, Any]) -> Dict[str, Any]:
     """Format a task dictionary into a Google Chat Card v2 JSON structure."""
     task_id = str(task.get("id", ""))
     title = task.get("title", "Untitled Task")
-    priority = task.get("priority", "MEDIUM")
-    status = task.get("status", "TODO")
+    priority = str(task.get("priority", "MEDIUM")).split(".")[-1]
+    status = str(task.get("status", "TODO")).split(".")[-1]
     due_date = str(task.get("due_date", "No due date"))
     tags = task.get("tags", [])
     tags_str = ", ".join(tags) if tags else "None"

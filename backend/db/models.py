@@ -225,3 +225,48 @@ class NotificationLog(Base):
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="notifications")
+
+
+class AgentExecutionTrace(Base):
+    """Execution trace of LangGraph agent coordination and tool execution."""
+
+    __tablename__ = "agent_execution_traces"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    request_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    thread_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    intent: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    confidence: Mapped[Optional[float]] = mapped_column(nullable=True)
+    active_agent: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    agents_invoked: Mapped[List[str]] = mapped_column(JSON, default=list, nullable=False)
+    tool_calls_made: Mapped[List[str]] = mapped_column(JSON, default=list, nullable=False)
+    node_durations_ms: Mapped[Dict[str, float]] = mapped_column(JSON, default=dict, nullable=False)
+    total_duration_ms: Mapped[float] = mapped_column(default=0.0, nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default="SUCCESS", nullable=False)
+    error_code: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    completed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", backref="execution_traces")
+
+    __table_args__ = (
+        Index("idx_traces_user_created", "user_id", "created_at"),
+        Index("idx_traces_thread_created", "thread_id", "created_at"),
+    )

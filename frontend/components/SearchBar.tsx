@@ -36,7 +36,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         value={innerVal}
         onChange={(e) => setInnerVal(e.target.value)}
         placeholder={placeholder}
-        className="w-full pl-9 pr-8 py-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-100 placeholder-slate-500 text-xs focus:outline-none focus:border-indigo-500 transition-colors"
+        className="w-full pl-9 pr-8 py-2 rounded-md bg-[#111821] border border-[#263241] text-[#E5EAF1] placeholder-slate-500 text-xs focus:outline-none focus:border-blue-500 transition-colors"
       />
       {innerVal && (
         <button

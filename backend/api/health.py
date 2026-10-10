@@ -43,4 +43,11 @@ async def health_status(db: AsyncSession = Depends(get_db)):
         if health_data["status"] == "healthy":
             health_data["status"] = "partially_degraded"
 
+    # Check Checkpointer Status
+    from agents.memory_agent import get_checkpointer_status
+    cp_status = await get_checkpointer_status()
+    health_data["checkpoint"] = cp_status
+    if not cp_status.get("is_durable") and getattr(settings, "ENVIRONMENT", "development") == "production":
+        health_data["status"] = "degraded"
+
     return api_response(data=health_data)

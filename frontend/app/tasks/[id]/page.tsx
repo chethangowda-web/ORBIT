@@ -60,7 +60,7 @@ export default function TaskDetailPage() {
   if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center min-h-screen text-slate-400">
-        <div className="inline-block w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mr-3"></div>
+        <div className="inline-block w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mr-3"></div>
         Loading task details...
       </div>
     );
@@ -72,7 +72,7 @@ export default function TaskDetailPage() {
         <p className="text-lg font-bold text-slate-200 mb-2">Task not found</p>
         <button
           onClick={() => router.push("/tasks")}
-          className="text-indigo-400 hover:underline text-sm"
+          className="text-blue-400 hover:underline text-sm"
         >
           Return to tasks
         </button>
@@ -97,24 +97,24 @@ export default function TaskDetailPage() {
         </div>
 
         {/* Main Task Card */}
-        <div className="glass-panel rounded-2xl p-6 border border-slate-800/80 space-y-6">
+        <div className="bg-slate-900 border border-slate-800 rounded-lg p-5 space-y-5">
           {/* Header & Actions */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-800">
             <div className="space-y-2">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5">
                 <StatusBadge status={task.status} />
                 <PriorityBadge priority={task.priority} />
               </div>
-              <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+              <h1 className="text-lg sm:text-xl font-bold text-slate-100 tracking-tight">
                 {task.title}
               </h1>
             </div>
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2">
               {task.status !== "DONE" && (
                 <button
                   onClick={() => completeMutation.mutate()}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md shadow-emerald-600/20 transition-all hover:scale-[1.02]"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   <span>Mark Complete</span>
@@ -123,7 +123,7 @@ export default function TaskDetailPage() {
 
               <button
                 onClick={() => setIsEditModalOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-colors"
               >
                 <Edit3 className="w-3.5 h-3.5" />
                 <span>Edit</span>
@@ -135,7 +135,7 @@ export default function TaskDetailPage() {
                     deleteMutation.mutate();
                   }
                 }}
-                className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-950/30 transition-colors"
+                className="p-1.5 rounded-md text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 transition-colors"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -144,10 +144,10 @@ export default function TaskDetailPage() {
 
           {/* Description */}
           <div>
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+            <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
               Description
             </h3>
-            <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap bg-slate-950/60 p-4 rounded-xl border border-slate-800/80">
+            <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap bg-slate-950/80 p-3.5 rounded-md border border-slate-800">
               {task.description || "No description provided."}
             </p>
           </div>
@@ -157,8 +157,8 @@ export default function TaskDetailPage() {
             <div>
               <p className="text-[11px] text-slate-500 font-medium">Assignee</p>
               <div className="flex items-center gap-2 mt-1">
-                <div className="w-6 h-6 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs text-indigo-400 font-bold uppercase">
-                  {task.assignee?.display_name?.charAt(0) || <UserIcon className="w-3 h-3" />}
+                <div className="w-5 h-5 rounded-md bg-slate-800 border border-slate-700 flex items-center justify-center text-[10px] text-blue-400 font-bold uppercase">
+                  {task.assignee?.display_name?.charAt(0) || <UserIcon className="w-2.5 h-2.5" />}
                 </div>
                 <span className="text-xs text-slate-200 font-medium">
                   {task.assignee?.display_name || "Unassigned"}
@@ -200,15 +200,15 @@ export default function TaskDetailPage() {
 
           {/* Tags */}
           {task.tags && task.tags.length > 0 && (
-            <div className="pt-4 border-t border-slate-800">
-              <p className="text-[11px] text-slate-500 font-medium mb-2">Tags</p>
+            <div className="pt-3.5 border-t border-slate-800">
+              <p className="text-[11px] text-slate-500 font-medium mb-1.5">Tags</p>
               <div className="flex flex-wrap gap-1.5">
                 {task.tags.map((tag, idx) => (
                   <span
                     key={idx}
-                    className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg bg-indigo-950/40 text-indigo-300 border border-indigo-500/30"
+                    className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-blue-950/40 text-blue-300 border border-blue-800/50"
                   >
-                    <Tag className="w-3 h-3 text-indigo-400" />
+                    <Tag className="w-3 h-3 text-blue-400" />
                     <span>{tag}</span>
                   </span>
                 ))}
@@ -218,10 +218,10 @@ export default function TaskDetailPage() {
         </div>
 
         {/* Audit History Timeline */}
-        <div className="glass-panel rounded-2xl p-6 border border-slate-800/80">
-          <div className="flex items-center gap-2 mb-6">
-            <Activity className="w-4 h-4 text-indigo-400" />
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+        <div className="bg-slate-900 border border-slate-800 rounded-lg p-5">
+          <div className="flex items-center gap-2 mb-5">
+            <Activity className="w-4 h-4 text-blue-400" />
+            <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider">
               Audit Trail & Change History
             </h3>
           </div>
@@ -229,11 +229,11 @@ export default function TaskDetailPage() {
           {history.length === 0 ? (
             <p className="text-xs text-slate-500">No recorded audit events yet.</p>
           ) : (
-            <div className="relative pl-6 border-l border-slate-800 space-y-6">
+            <div className="relative pl-5 border-l border-slate-800 space-y-5">
               {history.map((log) => (
                 <div key={log.id} className="relative group">
                   {/* Dot */}
-                  <div className="absolute -left-[31px] top-1 w-3 h-3 rounded-full bg-indigo-500 border-2 border-slate-900 group-hover:scale-125 transition-transform" />
+                  <div className="absolute -left-[25px] top-1 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-slate-900" />
 
                   <div className="flex items-center justify-between text-xs mb-1">
                     <span className="font-semibold text-slate-200">
@@ -245,12 +245,12 @@ export default function TaskDetailPage() {
                   </div>
 
                   <p className="text-xs text-slate-400">
-                    Source: <span className="text-indigo-300 font-mono text-[11px]">{log.source}</span>
+                    Source: <span className="text-blue-300 font-mono text-[11px]">{log.source}</span>
                     {log.user && <span> • by {log.user.display_name}</span>}
                   </p>
 
                   {log.changes && Object.keys(log.changes).length > 0 && (
-                    <div className="mt-2 p-2.5 rounded-lg bg-slate-950/70 border border-slate-800 text-[11px] font-mono text-slate-300">
+                    <div className="mt-2 p-2.5 rounded-md bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-300">
                       {JSON.stringify(log.changes, null, 2)}
                     </div>
                   )}

@@ -46,6 +46,50 @@ async def supervisor_node(state: AgentState) -> dict[str, Any]:
     """LangGraph node: Classifies intent, resolves coreference, and routes."""
     raw_message = state.get("raw_message", "")
     history = state.get("messages", [])
+    confirmed = state.get("confirmed", False)
+    needs_conf = state.get("needs_confirmation", False)
+
+    pending = state.get("pending_confirmation")
+    msg_clean = raw_message.strip().lower()
+
+    # Handle Cancellation of pending actions
+    if (needs_conf or (pending and pending.get("status") == "PENDING")) and msg_clean in ("cancel", "no", "abort", "n", "stop", "nevermind"):
+        pending_updated = dict(pending) if pending else {}
+        pending_updated["status"] = "CANCELLED"
+        return {
+            "intent": Intent.UNKNOWN.value,
+            "confidence": 1.0,
+            "active_agent": "task_agent",
+            "task_context": {},
+            "referenced_task_id": None,
+            "confirmed": False,
+            "needs_confirmation": False,
+            "pending_confirmation": pending_updated,
+            "response": "❌ Action cancelled.",
+            "response_type": "text",
+            "tool_calls_made": state.get("tool_calls_made", []),
+        }
+
+    # Handle Confirmation requests
+    is_confirm_attempt = confirmed or (needs_conf and msg_clean in ("yes", "confirm", "proceed", "y", "ok", "true"))
+
+    if is_confirm_attempt:
+        target_intent = Intent.DELETE_TASK
+        task_context = dict(state.get("task_context") or {})
+        ref_id = (pending.get("task_id") if pending else None) or state.get("referenced_task_id")
+        if ref_id and not task_context.get("task_id"):
+            task_context["task_id"] = str(ref_id)
+        return {
+            "intent": target_intent.value,
+            "confidence": 1.0,
+            "active_agent": "review_agent",
+            "task_context": task_context,
+            "referenced_task_id": str(ref_id) if ref_id else None,
+            "confirmed": True,
+            "needs_confirmation": False,
+            "pending_confirmation": pending,
+            "tool_calls_made": state.get("tool_calls_made", []),
+        }
 
     referenced_id = resolve_references(raw_message, history) or state.get("referenced_task_id")
     classification = await classify_intent(raw_message)

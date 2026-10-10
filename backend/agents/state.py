@@ -29,13 +29,19 @@ class AgentState(TypedDict, total=False):
     # === CONTROL FLOW ===
     needs_confirmation: bool              # HITL — requires user confirmation
     confirmed: bool                       # User confirmed the action
+    pending_confirmation: Optional[dict[str, Any]] # Structured tamper-resistant confirmation details
 
     # === OUTPUT ===
     response: str                         # Final response text for Google Chat
     response_type: str                    # "text" | "card" | "confirmation_dialog"
     card_data: Optional[dict[str, Any]]   # Google Chat card payload
     tool_calls_made: list[str]            # Audit log of tools called in this run
+    agents_invoked: list[str]             # List of agent nodes invoked in order
+    node_durations_ms: dict[str, float]   # Milliseconds spent in each node
+    trace_metadata: Optional[dict[str, Any]] # Observability trace record
 
     # === ERROR ===
     error: Optional[str]                  # Error message if agent failed
+    error_code: Optional[str]             # Standardized error code
     retry_count: int                      # Number of retries attempted
+

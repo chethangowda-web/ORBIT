@@ -4,7 +4,7 @@ import { Providers } from "./providers";
 import { Sidebar } from "@/components/Sidebar";
 
 export const metadata: Metadata = {
-  title: "ORBIT — Multi-Agent AI Task Management System",
+  title: "ORBIT: Multi-Agent AI Task Management System",
   description: "Enterprise task management with Google Chat integration and multi-agent swarm intelligence.",
 };
 
@@ -15,10 +15,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className="bg-[#090d16] text-slate-100 min-h-screen antialiased flex flex-row selection:bg-indigo-500/30 selection:text-indigo-200">
+      <body className="bg-[#090D13] text-[#E5EAF1] min-h-screen antialiased flex flex-row selection:bg-blue-600/30 selection:text-blue-200">
         <Providers>
           <Sidebar />
-          <main className="flex-1 min-w-0 min-h-screen flex flex-col">
+          <main className="flex-1 min-w-0 min-h-screen flex flex-col bg-[#090D13]">
             {children}
           </main>
         </Providers>

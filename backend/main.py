@@ -3,10 +3,17 @@ ORBIT: Multi-Agent AI Task Management System
 FastAPI Application Entry Point
 """
 
+import logging
 from contextlib import asynccontextmanager
 from typing import Any, Dict
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+
 
 from api.admin import router as admin_router
 from api.analytics import router as analytics_router
@@ -17,17 +24,30 @@ from api.users import router as users_router
 from api.webhook import router as webhook_router
 from config import settings
 from exceptions import register_exception_handlers
+from agents.memory_agent import close_checkpointer, init_checkpointer
 from scheduler.scheduler import start_scheduler, stop_scheduler
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan event handler for startup and shutdown procedures."""
+    # 1. Initialize Redis / durable checkpointer
+    try:
+        await init_checkpointer()
+    except Exception as exc:
+        if settings.ENVIRONMENT == "production":
+            raise
+    
+    # 2. Start scheduler if enabled
     if settings.SCHEDULER_ENABLED:
         start_scheduler()
+        
     yield
+    
+    # 3. Shutdown procedures
     if settings.SCHEDULER_ENABLED:
         stop_scheduler()
+    await close_checkpointer()
 
 
 app = FastAPI(
@@ -62,6 +82,12 @@ api_router.include_router(webhook_router)
 api_router.include_router(admin_router)
 
 app.include_router(api_router)
+
+# Direct fallback routes for Google Chat webhook variations
+from api.webhook import google_chat_webhook
+app.add_api_route("/webhook", google_chat_webhook, methods=["POST"])
+app.add_api_route("/api/cha", google_chat_webhook, methods=["POST"])
+app.add_api_route("/api/chat", google_chat_webhook, methods=["POST"])
 
 
 @app.get("/", tags=["General"])
