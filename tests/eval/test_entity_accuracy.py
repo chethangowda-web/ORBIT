@@ -93,5 +93,5 @@ def test_questions_are_never_classified_as_changes(text):
 
 
 def test_unrecognised_text_is_unknown_not_a_guess():
-    for text in ["", "   ", "asdf", "tell me a joke", "thanks!", "ok"]:
+    for text in ["", "   ", "asdf", "tell me a joke", "ok"]:
         assert fallback_intent_classifier(text).intent == Intent.UNKNOWN, text

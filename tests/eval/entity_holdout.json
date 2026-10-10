@@ -23,6 +23,6 @@
   {"input": "who is overloaded right now", "intent": "GET_RECOMMENDATIONS"},
   {"input": "how is the team doing", "intent": "GET_RECOMMENDATIONS"},
   {"input": "what commands are available", "intent": "HELP"},
-  {"input": "good morning", "intent": "UNKNOWN"},
+  {"input": "good morning", "intent": "GREETING"},
   {"input": "what's the weather", "intent": "UNKNOWN"}
 ]

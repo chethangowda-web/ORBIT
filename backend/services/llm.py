@@ -142,6 +142,13 @@ def fallback_intent_classifier(user_message: str) -> IntentClassificationResult:
     if is_help:
         return IntentClassificationResult(intent=Intent.HELP, confidence=1.0, task_context=ctx)
 
+    greeting = re.match(
+        r"^\s*(?:(?:hi+|hel+o+|hey+|yo|hiya|howdy|namaste|good\s+(?:morning|afternoon|evening)|thanks?(?:\s+you)?|thx|cheers)\b[\s,!.]*)+(?:orbit|there|team|bot|everyone)?[\s!.]*$",
+        msg,
+    )
+    if greeting and len(msg.split()) <= 5:
+        return IntentClassificationResult(intent=Intent.GREETING, confidence=0.95, task_context=ctx)
+
     if re.match(READ_REQUEST_START, msg):
         if re.search(TASK_DETAIL_PHRASE, msg):
             hint = re.sub(

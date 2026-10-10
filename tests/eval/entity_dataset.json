@@ -38,5 +38,7 @@
   {"id": "E-037", "input": "what can you do?", "intent": "HELP", "ctx": {}},
   {"id": "E-038", "input": "tell me a joke", "intent": "UNKNOWN", "ctx": {}},
   {"id": "E-039", "input": "asdf qwerty", "intent": "UNKNOWN", "ctx": {}},
-  {"id": "E-040", "input": "thanks", "intent": "UNKNOWN", "ctx": {}}
+  {"id": "E-040", "input": "thanks", "intent": "GREETING", "ctx": {}},
+  {"id": "E-041", "input": "hii", "intent": "GREETING", "ctx": {}},
+  {"id": "E-042", "input": "hello orbit!", "intent": "GREETING", "ctx": {}}
 ]

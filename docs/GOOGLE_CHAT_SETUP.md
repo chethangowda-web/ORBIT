@@ -45,7 +45,7 @@ Notes:
 
 1. **Project and API**: in [Google Cloud Console](https://console.cloud.google.com) select or create a project and enable the **Google Chat API**. Note the **project number** (Dashboard, Project info).
 2. **Service account** (lets ORBIT send proactive messages): IAM, Service accounts, create one, then Keys, Add key, JSON. Save it as `credentials/service-account.json` (git-ignored) or paste the JSON into `GOOGLE_SERVICE_ACCOUNT_JSON`. Never commit it.
-3. **Public HTTPS URL** for the webhook. Local development: `ngrok http 8001`, which gives `https://abc123.ngrok-free.app`. Production: your API's HTTPS address.
+3. **Public HTTPS URL** for the webhook. Easiest on a dev machine: `cd backend && python -m scripts.dev_tunnel` (needs `cloudflared`; on Windows `winget install Cloudflare.cloudflared`). It starts a free tunnel, prints the exact endpoint URL, copies it to your clipboard and sends a test event through it. Keep it running, and paste the new URL into Google Cloud after every restart (quick-tunnel URLs change). Alternatives: Local development: `ngrok http 8001`, which gives `https://abc123.ngrok-free.app`. Production: your API's HTTPS address.
 4. **Chat app configuration** (Google Chat API, Configuration):
    - App name `ORBIT`, an avatar URL, description "Multi-agent task management".
    - Enable **Receive 1:1 messages** and **Join spaces and group conversations**.
@@ -103,7 +103,7 @@ First message from a new person creates an `employee` account from their Google 
 
 | Symptom | Cause and fix |
 |---|---|
-| ORBIT does not respond at all | Endpoint URL wrong or not public; check the ngrok tab and the backend log for `[WEBHOOK INCOMING]` |
+| Chat shows "ORBIT not responding" | Nothing is answering the endpoint URL. Most often the tunnel stopped (its URL changes when restarted) or the backend is down. Run `python -m scripts.dev_tunnel`, paste the new URL, and check the backend log for `[WEBHOOK INCOMING]` |
 | 401 in the log, "Invalid or missing Google Chat authentication token" | Verification is on and the audience in `.env` does not match the Chat app's Authentication audience (project number vs endpoint URL) |
 | 403 "Invalid Google Chat webhook signature" | `GOOGLE_CHAT_WEBHOOK_SECRET` is set; every request must be HMAC-signed, which Google does not do by itself. Leave the secret empty when relying on Google token verification |
 | Replies work but proactive DMs say `failed` | The service account is not permitted in that space, or the user never added the app; read the reason in Admin, Notifications |

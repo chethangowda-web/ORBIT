@@ -1,5 +1,6 @@
 """Task Management Agent: Handles CRUD actions, searches, updates, and card responses."""
 
+import re
 from typing import Any
 from agents.intents import Intent
 from agents.state import AgentState
@@ -26,6 +27,19 @@ Here are things you can ask me:
 • *Search:* "Search for database migration"
 • *Delete task:* "Delete the old login page task"
 """
+
+
+def greeting_reply(raw_message: str, first_name: str = "") -> str:
+    """Friendly reply to hello/thanks that points at what ORBIT can do."""
+    text = raw_message.strip().lower()
+    if re.match(r"^(thanks|thank you|thx|ty|cheers)\b", text):
+        return "You're welcome! Anything else I can help with? Try *plan my day* or */tasks*."
+    name = f", {first_name}" if first_name else ""
+    return (
+        f"👋 Hi{name}! I'm ORBIT, your task assistant.\n"
+        "Try *plan my day*, */tasks*, */overdue*, or tell me what to do, for example "
+        "*create a task to review the PR by Friday*. Type *help* for everything I can do."
+    )
 
 
 async def _handle_create_task(ctx: dict[str, Any], user_id: str, tools_used: list[str]) -> tuple[str, str, Any, Any]:
@@ -238,6 +252,8 @@ async def task_agent_node(state: AgentState) -> dict[str, Any]:
         resp_text, resp_type, card_data = await _handle_list_or_search(intent, ctx, user_id, state.get("raw_message", ""), tools_used)
     elif intent == Intent.HELP.value:
         resp_text, resp_type, card_data = HELP_TEXT, "text", None
+    elif intent == Intent.GREETING.value:
+        resp_text, resp_type, card_data = greeting_reply(state.get("raw_message", ""), state.get("user_first_name", "")), "text", None
     else:
         resp_text = "I didn't quite catch that. You can ask me to create tasks, view pending tasks, update priorities/deadlines, plan your day, or type 'help'."
         resp_type, card_data = "text", None
