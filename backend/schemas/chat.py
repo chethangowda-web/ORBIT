@@ -27,6 +27,8 @@ class GoogleChatMessage(BaseModel):
     name: Optional[str] = Field(None, description="Message resource name")
     text: str = Field(default="", description="Raw text of the user message")
     thread: Optional[Dict[str, Any]] = Field(None, description="Thread info")
+    argumentText: Optional[str] = Field(None, description="Text after a slash command or mention")
+    slashCommand: Optional[Dict[str, Any]] = Field(None, description="Present when the message is a slash command: {commandId}")
 
 
 class CardAction(BaseModel):

@@ -6,10 +6,12 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.base import utc_now
+from db.base import local_midnight_utc, local_today, utc_now
 from db.models import NotificationLog, User
 from db.session import async_session_factory
-from services.google_chat import send_dm, send_text_message
+from crud.users import get_opted_out_user_ids
+from metrics import record_notification
+from services.notifications import deliver_with_retry
 from tools.base import get_tool_session
 from tools.task_tools import get_overdue_tasks, get_tasks_due_today, get_user_tasks
 from agents.planner_agent import _format_plan_response, _rank_priority_score
@@ -19,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 async def _has_already_received_briefing(session: AsyncSession, user_id: Any) -> bool:
     """Checks if user has already received a daily briefing today (UTC)."""
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = local_midnight_utc()
     query = select(NotificationLog).where(
         NotificationLog.user_id == user_id,
         NotificationLog.type == "daily_briefing",
@@ -74,8 +76,13 @@ async def run_daily_briefing(
         result = await s.execute(select(User).where(User.is_active.is_(True)))
         users = result.scalars().all()
         summary["processed"] = len(users)
+        opted_out = await get_opted_out_user_ids(s, "daily_briefing")
 
         for user in users:
+            # Respect opt-out always, even for manual triggers.
+            if user.id in opted_out:
+                summary["skipped"] += 1
+                continue
             # Duplicate prevention check
             if not force and await _has_already_received_briefing(s, user.id):
                 summary["skipped"] += 1
@@ -86,30 +93,21 @@ async def run_daily_briefing(
                 plan_text = await _generate_user_briefing_text(user_id_str)
                 full_message = f"🌅 *Good Morning, {user.display_name}!*\n\n{plan_text}"
 
-                # Send via DM or space
-                delivered = False
-                if user.google_id:
-                    delivered = await send_dm(user.google_id, full_message)
-                elif user.google_space_id:
-                    delivered = await send_text_message(user.google_space_id, full_message)
-                else:
-                    delivered = True  # Simulated delivery when no chat handles configured
-
-                log_entry = NotificationLog(
-                    user_id=user.id,
-                    type="daily_briefing",
-                    message=full_message,
-                    google_space_id=user.google_space_id or user.google_id,
-                    status="sent" if delivered else "failed",
-                    sent_at=utc_now(),
+                delivery_status, error_msg = await deliver_with_retry(user, full_message)
+                record_notification("daily_briefing", delivery_status)
+                s.add(
+                    NotificationLog(
+                        user_id=user.id,
+                        type="daily_briefing",
+                        message=full_message,
+                        google_space_id=user.google_space_id or user.google_id,
+                        status=delivery_status,
+                        error_msg=error_msg,
+                        sent_at=utc_now(),
+                    )
                 )
-                s.add(log_entry)
                 await s.commit()
-
-                if delivered:
-                    summary["sent"] += 1
-                else:
-                    summary["failed"] += 1
+                summary[delivery_status] += 1
 
             except Exception as err:
                 logger.error("Failed to generate briefing for user %s: %s", user.id, err)

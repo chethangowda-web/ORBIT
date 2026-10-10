@@ -4,12 +4,14 @@ import asyncio
 import json
 import logging
 import re
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Type, TypeVar
 import litellm
 from pydantic import BaseModel
 
 from config import settings
+from db.base import local_now
 from agents.intents import (
     Intent,
     IntentClassificationResult,
@@ -25,7 +27,7 @@ def resolve_relative_date(relative_str: Optional[str]) -> Optional[str]:
     """Resolves relative date strings like 'Friday', 'tomorrow', 'next Monday' to ISO dates."""
     if not relative_str:
         return None
-    now = datetime.now(timezone.utc)
+    now = local_now()
     rel = relative_str.strip().lower()
 
     if "today" in rel:
@@ -50,6 +52,22 @@ def resolve_relative_date(relative_str: Optional[str]) -> Optional[str]:
     if iso_match:
         return iso_match.group(0)
     return None
+
+
+MY_TASK_PHRASES = [
+    "show my tasks", "my pending tasks", "list my tasks", "get my tasks", "my tasks", "show tasks", "view tasks",
+    "on my plate", "what do i have", "what do i need to do", "what is on my list", "what's on my list",
+    "my to-do", "my todo", "pending tasks", "open tasks", "list tasks", "assigned to me", "everything assigned",
+]
+
+# Messages that start like this ask for information; they must never create, change,
+# complete or delete anything, even if they contain words like "created" or "done".
+READ_REQUEST_START = (
+    r"^\s*(list|show|display|view|give me|tell me|what|which|who|when|where|why|how|is|are|was|were|did|does)\b"
+)
+TASK_DETAIL_PHRASE = (
+    r"\b(status of|who created|who is assigned|who's assigned|details|tell me about|info on|information about|history of)\b"
+)
 
 
 def fallback_intent_classifier(user_message: str) -> IntentClassificationResult:
@@ -105,55 +123,116 @@ def fallback_intent_classifier(user_message: str) -> IntentClassificationResult:
                 ctx.assignee_name = cand
 
     # Intent routing
-    if any(w in msg for w in ["what should i focus on", "plan my day", "daily plan", "plan for today", "priorities today", "focus today"]):
+    plan_phrases = [
+        "what should i focus on", "plan my day", "daily plan", "plan for today", "priorities today", "focus today",
+        "prioritize", "prioritise", "work on first", "work on next", "what should i work on", "what should i do",
+        "what to do first", "my plan for the day", "plan for the day", "tackle", "order my work", "by importance",
+    ]
+    if any(w in msg for w in plan_phrases):
         return IntentClassificationResult(intent=Intent.PLAN_DAY, confidence=0.95, task_context=ctx)
-    if any(w in msg for w in ["overdue", "delayed tasks"]):
+    overdue_pattern = r"\b(overdue|late|past (?:its |their |the )?(?:due|deadline)|behind schedule|behind on|slipped|missed (?:the |its )?deadline|delayed tasks)\b"
+    if re.search(overdue_pattern, msg):
         return IntentClassificationResult(intent=Intent.GET_OVERDUE_TASKS, confidence=0.95, task_context=ctx)
-    if any(w in msg for w in ["recommendation", "recommendations", "insight", "insights", "workload", "bottleneck", "bottlenecks"]):
+    if any(w in msg for w in ["recommendation", "recommendations", "insight", "insights", "workload", "bottleneck", "bottlenecks", "overloaded", "how is the team", "how's the team", "team doing"]):
         return IntentClassificationResult(intent=Intent.GET_RECOMMENDATIONS, confidence=0.95, task_context=ctx)
-    if any(w in msg for w in ["help", "what can you do", "commands"]):
+    is_help = (
+        msg.strip("?! .") in {"help", "commands", "menu"}
+        or (msg.startswith("help") and len(msg.split()) <= 2)
+        or any(w in msg for w in ["what can you do", "what you can do", "what do you do", "how do i use", "how does this work", "list commands", "commands are available", "what commands"])
+    )
+    if is_help:
         return IntentClassificationResult(intent=Intent.HELP, confidence=1.0, task_context=ctx)
 
+    greeting = re.match(
+        r"^\s*(?:(?:hi+|hel+o+|hey+|yo|hiya|howdy|namaste|good\s+(?:morning|afternoon|evening)|thanks?(?:\s+you)?|thx|cheers)\b[\s,!.]*)+(?:orbit|there|team|bot|everyone)?[\s!.]*$",
+        msg,
+    )
+    if greeting and len(msg.split()) <= 5:
+        return IntentClassificationResult(intent=Intent.GREETING, confidence=0.95, task_context=ctx)
+
+    if re.match(READ_REQUEST_START, msg):
+        if re.search(TASK_DETAIL_PHRASE, msg):
+            hint = re.sub(
+                r"(?i)^.*?\b(?:status of|who created|details (?:of|for|on)|tell me about|info on|information about|history of)\s+(?:the\s+)?",
+                "",
+                user_message,
+            ).strip(" ?.")
+            ctx.title_hint = hint or None
+            return IntentClassificationResult(intent=Intent.GET_TASK_DETAIL, confidence=0.9, task_context=ctx)
+        if any(w in msg for w in MY_TASK_PHRASES) or re.search(r"\b(tasks?|work|assigned|done|finish\w*|completed|created)\b", msg):
+            return IntentClassificationResult(intent=Intent.GET_MY_TASKS, confidence=0.85, task_context=ctx)
+        if not re.search(r"\b(search|find|look up|mentioning)\b", msg):
+            return IntentClassificationResult(intent=Intent.UNKNOWN, confidence=0.5, task_context=ctx)
+
+    remind = re.match(r"^\s*(?:please\s+)?(?:remind me to|(?:put|set|add) (?:a )?reminder to)\s+(.+)$", user_message, re.IGNORECASE)
+    if remind:
+        title = re.sub(
+            r"(?i)\s+(?:by|on|before|for)?\s*(?:today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b.*$",
+            "",
+            remind.group(1),
+        ).strip()
+        ctx.title = title.capitalize() if title else "New task"
+        return IntentClassificationResult(intent=Intent.CREATE_TASK, confidence=0.9, task_context=ctx)
+
     # CREATE_TASK (checked before completion/search to prevent "create a task to finish..." collision)
-    if any(msg.startswith(p) for p in ["create", "add task", "add a task", "new task", "schedule a task", "schedule task"]) or "create a task" in msg or "create task" in msg:
+    polite_create = re.match(r"^\s*(?:could you |can you |please |i need |i want )*(?:to )?(?:add|create|make|schedule)?\s*(?:a |an )?(?:new )?task\b", msg) and re.search(r"\b(add|create|make|schedule|need|want)\b", msg)
+    if any(msg.startswith(p) for p in ["create", "add task", "add a task", "new task", "schedule a task", "schedule task"]) or "create a task" in msg or "create task" in msg or "add a task" in msg or polite_create:
         if not ctx.title:
             clean_title = re.sub(
-                r"(?i)^\s*(create\s+a\s+(high|low|medium|critical)\s+priority\s+task\s+(to|for)|create\s+a\s+task\s+(to|for)|create\s+a\s+task|create\s+task\s+(to|for)|create\s+task|add\s+a\s+task\s+(to|for)|add\s+a\s+task|add\s+task\s+(to|for)|add\s+task|new\s+task)\b",
+                r"(?i)^\s*(create\s+a\s+(high|low|medium|critical)\s+priority\s+task\s+(to|for)|create\s+a\s+task\s+(to|for)|create\s+a\s+task|create\s+task\s+(to|for)|create\s+task|add\s+a\s+task\s+(to|for)|add\s+a\s+task|add\s+task\s+(to|for)|add\s+task|new\s+task|(?:could|can)\s+you\s+(?:please\s+)?add\s+a\s+task(?:\s+(?:to|for))?|i\s+need\s+a\s+task(?:\s+(?:to|for))?)\b",
                 "",
                 user_message,
             ).strip()
+            clean_title = re.sub(r"(?i),?\s*(low|medium|high|critical|urgent)\s+priority\b", "", clean_title).strip()
             if ctx.assignee_name:
                 clean_title = re.sub(rf"(?i)\b(?:for|to)\s+{re.escape(ctx.assignee_name)}\b", "", clean_title).strip()
             clean_title = re.sub(r"(?i)\bby\s+[A-Za-z0-9\-]+", "", clean_title).strip()
             ctx.title = clean_title.capitalize() if clean_title else "New Task"
         return IntentClassificationResult(intent=Intent.CREATE_TASK, confidence=0.95, task_context=ctx)
 
-    if any(w in msg for w in ["delete", "remove task", "trash"]):
-        clean = re.sub(r"(?i)^\s*(delete|remove|trash)\s+(the\s+)?(task\s+)?", "", user_message)
+    if any(w in msg for w in ["delete", "remove task", "trash"]) or re.match(r"^\s*(remove|drop|get rid of)\b", msg):
+        clean = re.sub(r"(?i)^\s*(delete|remove|drop|trash|get rid of)\s+(the\s+)?(task\s+)?", "", user_message)
         clean = re.sub(r"(?i)\s+task$", "", clean).strip()
         ctx.title_hint = clean if clean else user_message
         return IntentClassificationResult(intent=Intent.DELETE_TASK, confidence=0.90, task_context=ctx)
 
+    done_phrase = re.match(
+        r"(?i)^\s*(?:the\s+)?(.+?)\s+(?:task\s+)?(?:is|are|has been|have been)\s+(?:now\s+)?(?:done|complete[d]?|finished)\s*[.!]?\s*$",
+        user_message,
+    )
+    set_done = re.match(r"(?i)^\s*set\s+(?:the\s+)?(.+?)\s+(?:task\s+)?to\s+(?:done|complete[d]?)\s*[.!]?\s*$", user_message)
+    done_with = re.match(r"(?i)^\s*(?:i'?m|i am|we'?re|we are)\s+done\s+with\s+(?:the\s+)?(.+?)\s*[.!]?\s*$", user_message)
+    for matched in (set_done, done_with):
+        if matched:
+            ctx.title_hint = matched.group(1).strip()
+            return IntentClassificationResult(intent=Intent.COMPLETE_TASK, confidence=0.9, task_context=ctx)
+    if done_phrase and "?" not in user_message:
+        ctx.title_hint = done_phrase.group(1).strip()
+        return IntentClassificationResult(intent=Intent.COMPLETE_TASK, confidence=0.9, task_context=ctx)
+
     if any(w in msg for w in ["mark as done", "mark as completed", "complete the task", "finish task", "completed", "complete", "finish", "mark"]):
-        clean = re.sub(r"(?i)^\s*(mark|complete|finish)\s+(the\s+)?", "", user_message)
+        clean = re.sub(r"(?i)^\s*(?:i\s+)?(?:just\s+)?(mark|complete[d]?|finish(?:ed)?|wrapped up|done with)\s+(the\s+)?", "", user_message)
         clean = re.sub(r"(?i)\s+task\s*(as\s+completed|as\s+done)?$", "", clean)
         clean = re.sub(r"(?i)\s+(as\s+completed|as\s+done|completed|done)$", "", clean).strip()
         ctx.title_hint = clean if clean else user_message
         return IntentClassificationResult(intent=Intent.COMPLETE_TASK, confidence=0.90, task_context=ctx)
 
-    if any(w in msg for w in ["show my tasks", "my pending tasks", "list my tasks", "get my tasks", "my tasks", "show tasks", "view tasks"]):
+    if re.search(r"\b(what|which)\b.*\btasks?\b.*\b(do i have|i have|are open|is open)\b", msg):
+        return IntentClassificationResult(intent=Intent.GET_MY_TASKS, confidence=0.9, task_context=ctx)
+    if any(w in msg for w in MY_TASK_PHRASES):
         return IntentClassificationResult(intent=Intent.GET_MY_TASKS, confidence=0.95, task_context=ctx)
 
     if any(w in msg for w in ["details", "history of task", "task info", "show details"]):
         return IntentClassificationResult(intent=Intent.GET_TASK_DETAIL, confidence=0.90, task_context=ctx)
 
-    if any(w in msg for w in ["search for", "find task", "look for", "search"]):
-        clean = re.sub(r"(?i)^\s*(search for|find task|search|find)\s+(the\s+)?", "", user_message).strip()
+    if any(w in msg for w in ["search for", "find task", "look for", "look up", "search", "mentioning"]) or re.match(r"^\s*find\b", msg):
+        clean = re.sub(r"(?i)^\s*(search for|find tasks?|search|find|look up|look for)\s+(?:tasks?\s+)?(?:about\s+|mentioning\s+)?(the\s+)?", "", user_message).strip()
         ctx.title_hint = clean if clean else user_message
         return IntentClassificationResult(intent=Intent.SEARCH_TASKS, confidence=0.90, task_context=ctx)
     
     # Follow-up modifications (e.g. "make it high priority", "change its priority to critical", "move that deadline to Friday")
     followup_update_triggers = [
+        "push the deadline", "push back the deadline", "bump this to", "bump it to", "reassign",
         "make it", "set priority", "change priority", "change deadline", "move deadline",
         "move that deadline", "update deadline", "assign that to", "assign it to", "assign task",
         "reschedule", "modify", "update", "rename", "change status", "set status",
@@ -169,7 +248,7 @@ def fallback_intent_classifier(user_message: str) -> IntentClassificationResult:
         return IntentClassificationResult(intent=Intent.UPDATE_TASK, confidence=0.95, task_context=ctx)
 
 
-    if any(w in msg for w in ["create", "assign", "add task", "new task", "schedule task"]):
+    if re.match(r"^\s*assign\b", msg) or any(w in msg for w in ["create", "add task", "new task", "schedule task"]):
         if not ctx.title:
             clean_title = re.sub(r"(?i)\b(create a (high|low|medium|critical) priority task|create a task|create task|assign)\b", "", user_message)
             clean_title = re.sub(r"(?i)\b(for|to)\s+[A-Za-z0-9_]+", "", clean_title)
@@ -180,18 +259,53 @@ def fallback_intent_classifier(user_message: str) -> IntentClassificationResult:
     return IntentClassificationResult(intent=Intent.UNKNOWN, confidence=0.5, task_context=ctx)
 
 
+class LLMCircuitBreaker:
+    """Stops calling a failing provider for a cooldown, so an outage or exhausted quota costs
+    nothing per message: callers fall straight through to the offline rule-based path."""
+
+    def __init__(self) -> None:
+        self.failures = 0
+        self.opened_at: Optional[float] = None
+
+    def allow(self) -> bool:
+        if self.opened_at is None:
+            return True
+        if time.monotonic() - self.opened_at >= settings.LLM_BREAKER_COOLDOWN_SECONDS:
+            self.opened_at = None  # half-open: let one request probe the provider
+            self.failures = settings.LLM_BREAKER_FAILURES - 1
+            return True
+        return False
+
+    def record_success(self) -> None:
+        self.failures = 0
+        self.opened_at = None
+
+    def record_failure(self) -> None:
+        self.failures += 1
+        if self.failures >= settings.LLM_BREAKER_FAILURES and self.opened_at is None:
+            self.opened_at = time.monotonic()
+            logger.warning("LLM circuit opened for %.0fs after %d failures", settings.LLM_BREAKER_COOLDOWN_SECONDS, self.failures)
+
+
+llm_breaker = LLMCircuitBreaker()
+
+
 async def call_llm(
     messages: list[dict[str, str]],
     temperature: float = 0.1,
     max_tokens: int = 1000,
     response_model: Optional[Type[T]] = None,
-    retries: int = 3,
+    retries: Optional[int] = None,
 ) -> Optional[Any]:
-    """Execute LLM call via LiteLLM with structured output support and exponential backoff."""
+    """Execute LLM call via LiteLLM with structured output, a per-attempt timeout, bounded retries
+    and a circuit breaker. Returns None whenever the provider cannot answer in time."""
     api_key = getattr(settings, "GOOGLE_GEMINI_API_KEY", "") or getattr(settings, "OPENAI_API_KEY", "")
     if not api_key:
         return None
+    if not llm_breaker.allow():
+        return None
 
+    retries = retries or settings.LLM_MAX_ATTEMPTS
     for attempt in range(retries):
         try:
             kwargs: dict[str, Any] = {
@@ -204,8 +318,10 @@ async def call_llm(
             if response_model:
                 kwargs["response_format"] = response_model
 
-            response = await litellm.acompletion(**kwargs)
+            kwargs["timeout"] = settings.LLM_TIMEOUT_SECONDS
+            response = await asyncio.wait_for(litellm.acompletion(**kwargs), timeout=settings.LLM_TIMEOUT_SECONDS + 2)
             content = response.choices[0].message.content
+            llm_breaker.record_success()
             if response_model and isinstance(content, str):
                 try:
                     return response_model.model_validate_json(content)
@@ -214,7 +330,8 @@ async def call_llm(
             return content
         except Exception as err:
             logger.warning("LLM call attempt %d failed: %s", attempt + 1, err)
-            if attempt == retries - 1:
+            llm_breaker.record_failure()
+            if attempt == retries - 1 or not llm_breaker.allow():
                 return None
-            await asyncio.sleep(2 ** attempt)
+            await asyncio.sleep(1)
     return None

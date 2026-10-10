@@ -33,7 +33,7 @@ def _format_recommendations_response(stats: dict[str, Any], workload: list[dict[
     overdue = stats.get("overdue_tasks", 0)
     rate = stats.get("completion_rate", 0.0)
 
-    lines.append(f"• *Task Completion Rate:* {rate:.1f}% ({completed}/{total} tasks)")
+    lines.append(f"• *Task Completion Rate:* {rate * 100:.0f}% ({completed}/{total} tasks)")
     if overdue > 0:
         lines.append(f"• *Overdue Items:* {overdue} tasks need attention.")
 
@@ -80,8 +80,10 @@ async def recommendation_agent_node(state: AgentState) -> dict[str, Any]:
 
     else:
         tools_used.extend(["get_task_stats", "get_team_workload"])
-        stats_res = await get_task_stats.ainvoke({"user_id": user_id})
-        workload_res = await get_team_workload.ainvoke({})
+        stats_res = await get_task_stats.ainvoke({"viewer_id": user_id})
+        # Team-wide workload is manager/admin data; for everyone else the tool refuses
+        # and the insights fall back to the caller's own numbers.
+        workload_res = await get_team_workload.ainvoke({"viewer_id": user_id})
 
         stats_data = stats_res.get("data", {}) if stats_res.get("success") else {}
         workload_data = workload_res.get("data", []) if workload_res.get("success") else []

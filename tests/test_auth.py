@@ -50,7 +50,7 @@ async def test_login_invalid_password(client: AsyncClient, seed_test_user: User)
 
 
 @pytest.mark.asyncio
-async def test_register_user(client: AsyncClient):
+async def test_register_user(client: AsyncClient, allow_registration):
     """Test registering a new user succeeds and issues token."""
     response = await client.post(
         "/api/auth/register",
@@ -70,7 +70,7 @@ async def test_register_user(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_register_duplicate_email(client: AsyncClient, seed_test_user: User):
+async def test_register_duplicate_email(client: AsyncClient, seed_test_user: User, allow_registration):
     """Test registering with an existing email returns 409 conflict."""
     response = await client.post(
         "/api/auth/register",

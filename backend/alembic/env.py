@@ -17,7 +17,16 @@ if str(backend_path) not in sys.path:
 from config import settings
 from db.base import Base
 # Import all models to ensure they are registered with Base.metadata
-from db.models import User, Task, TaskAuditLog, UserPreference, NotificationLog
+from db.models import (  # noqa: F401  (registered on Base.metadata for autogenerate)
+    AgentExecutionTrace,
+    ChatEventLedger,
+    NotificationLog,
+    Task,
+    TaskAuditLog,
+    TaskComment,
+    User,
+    UserPreference,
+)
 
 config = context.config
 

@@ -22,6 +22,7 @@ ROUTING_MAP: dict[Intent, str] = {
     Intent.PLAN_DAY: "planner_agent",
     Intent.GET_RECOMMENDATIONS: "recommendation_agent",
     Intent.HELP: "task_agent",
+    Intent.GREETING: "task_agent",
     Intent.UNKNOWN: "task_agent",
 }
 

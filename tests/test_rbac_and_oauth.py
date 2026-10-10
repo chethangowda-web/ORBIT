@@ -214,7 +214,7 @@ async def test_google_link_account_with_valid_password(client: AsyncClient, db_s
 
 
 @pytest.mark.asyncio
-async def test_public_registration_cannot_create_admin(client: AsyncClient, db_session: AsyncSession):
+async def test_public_registration_cannot_create_admin(client: AsyncClient, db_session: AsyncSession, allow_registration):
     """POST /api/auth/register ignores client-supplied 'admin' role and forces 'employee'."""
     payload = {
         "email": "hacker@orbit.dev",

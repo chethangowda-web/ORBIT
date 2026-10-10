@@ -37,15 +37,10 @@ ORBIT uses a **layered memory strategy** — short-term conversation memory in R
 
 ### 2.1 LangGraph Checkpointer
 
-ORBIT uses **LangGraph's built-in Redis checkpointer** for conversation state persistence.
+ORBIT persists conversation state with `AsyncRedisCheckpointer` (`backend/agents/memory_agent.py`), a small LangGraph `BaseCheckpointSaver` over `redis.asyncio` with a 24 hour TTL. If Redis is unreachable it falls back to the in-memory saver outside production (see `CHECKPOINTER_BACKEND` and `ALLOW_IN_MEMORY_CHECKPOINTER_FALLBACK`).
 
 ```python
-from langgraph.checkpoint.redis.aio import AsyncRedisSaver
-
-redis_client = await aioredis.from_url(REDIS_URL)
-checkpointer = AsyncRedisSaver(redis_client)
-
-# Compile graph with checkpointer
+checkpointer = AsyncRedisCheckpointer(redis_client, ttl=86400)
 graph = workflow.compile(checkpointer=checkpointer)
 ```
 
@@ -107,10 +102,12 @@ def resolve_references(message: str, state: AgentState) -> dict:
 ### 2.5 Redis Key Strategy
 
 ```
-orbit:thread:{thread_id}           → LangGraph checkpoint (JSON)
-orbit:rate:{user_id}               → Rate limit counter
-orbit:session:{jwt_jti}            → JWT blacklist (for logout)
-orbit:lock:scheduler:{job_name}    → Scheduler job lock (distributed)
+orbit:checkpoint:{thread}:{ns}:{id}   → LangGraph checkpoint
+orbit:threads:{thread}:{ns}           → index of checkpoints for a thread
+orbit:ratelimit:login:{ip}:{email}    → failed sign-in counter (expires with the window)
+orbit:lock:scheduler:{job_name}       → scheduler job lock (5 minute TTL)
+
+(No JWT blacklist exists: tokens are stateless; see OPERATIONS.md section 8.)
 ```
 
 ### 2.6 TTL Strategy

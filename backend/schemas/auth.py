@@ -4,7 +4,7 @@ Authentication Pydantic Schemas
 
 import uuid
 from typing import Optional
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class TokenRequest(BaseModel):
@@ -32,9 +32,8 @@ class UserRegisterRequest(BaseModel):
     """Payload for registering a new user."""
 
     email: EmailStr
-    password: str
-    display_name: str
-    role: str = "employee"
+    password: str = Field(..., min_length=10, max_length=128)
+    display_name: str = Field(..., min_length=1, max_length=255)
     timezone: str = "Asia/Kolkata"
 
 

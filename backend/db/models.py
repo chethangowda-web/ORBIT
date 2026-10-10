@@ -12,6 +12,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    BigInteger,
     JSON,
     String,
     Text,
@@ -31,10 +32,10 @@ class User(Base):
         Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     google_id: Mapped[Optional[str]] = mapped_column(
-        String(255), unique=True, nullable=True, index=True
+        String(255), unique=True, nullable=True
     )
     email: Mapped[str] = mapped_column(
-        String(255), unique=True, nullable=False, index=True
+        String(255), unique=True, nullable=False
     )
     hashed_password: Mapped[Optional[str]] = mapped_column(
         String(255), nullable=True
@@ -132,12 +133,85 @@ class Task(Base):
     creator: Mapped["User"] = relationship(
         "User", foreign_keys=[created_by_id], back_populates="tasks_created"
     )
+    comments: Mapped[List["TaskComment"]] = relationship(
+        "TaskComment",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        order_by="TaskComment.created_at",
+    )
+    attachments: Mapped[List["TaskAttachment"]] = relationship(
+        "TaskAttachment",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        order_by="TaskAttachment.created_at",
+    )
     audit_logs: Mapped[List["TaskAuditLog"]] = relationship(
         "TaskAuditLog",
         back_populates="task",
         cascade="all, delete-orphan",
         order_by="desc(TaskAuditLog.created_at)",
     )
+
+
+class TaskComment(Base):
+    """A discussion message on a task."""
+
+    __tablename__ = "task_comments"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    task_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("tasks.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    author_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+    task: Mapped["Task"] = relationship("Task", back_populates="comments")
+    author: Mapped[Optional["User"]] = relationship("User")
+
+
+class TaskAttachment(Base):
+    """A file attached to a task. The bytes live in UPLOAD_DIR under ``stored_name``."""
+
+    __tablename__ = "task_attachments"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    task_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("tasks.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    uploaded_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    stored_name: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    content_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+    task: Mapped["Task"] = relationship("Task", back_populates="attachments")
+    uploader: Mapped[Optional["User"]] = relationship("User")
 
 
 class TaskAuditLog(Base):
@@ -225,6 +299,30 @@ class NotificationLog(Base):
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="notifications")
+
+
+class ChatEventLedger(Base):
+    """Idempotency ledger preventing duplicate processing of retried Google Chat events."""
+
+    __tablename__ = "chat_event_ledger"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    event_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="PROCESSING", nullable=False)
+    response_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        UniqueConstraint("event_key", name="uq_chat_event_ledger_event_key"),
+    )
 
 
 class AgentExecutionTrace(Base):

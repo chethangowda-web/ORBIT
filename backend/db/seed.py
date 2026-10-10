@@ -4,15 +4,36 @@ Populates initial roles, test users, sample tasks, and audit logs.
 """
 
 import asyncio
+import os
 from datetime import date, timedelta
 from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.jwt import get_password_hash
-from db.base import Base, utc_now
+from config import settings
+from db.base import Base, local_today, utc_now
 from db.models import Task, TaskAuditLog, User
 from db.session import async_session_factory, engine
+
+
+DEV_SEED_PASSWORD = "password123"
+
+
+def resolve_seed_password() -> str:
+    """Password for seeded demo accounts.
+
+    Development and tests use a well-known password. Production refuses to seed
+    unless SEED_PASSWORD is supplied, so a default admin password can never ship.
+    """
+    configured = os.environ.get("SEED_PASSWORD", "")
+    if settings.ENVIRONMENT.lower() == "production":
+        if len(configured) < 12:
+            raise RuntimeError(
+                "Refusing to seed in production without SEED_PASSWORD (min 12 characters)."
+            )
+        return configured
+    return configured or DEV_SEED_PASSWORD
 
 
 async def populate_data(session: AsyncSession) -> None:
@@ -22,7 +43,7 @@ async def populate_data(session: AsyncSession) -> None:
     if existing_users:
         return
 
-    pwd_hash = get_password_hash("password123")
+    pwd_hash = get_password_hash(resolve_seed_password())
 
     admin = User(
         email="admin@orbit.dev",
@@ -65,7 +86,7 @@ async def populate_data(session: AsyncSession) -> None:
     await session.refresh(manager)
     await session.refresh(employee)
 
-    today = date.today()
+    today = local_today()
     tasks_to_create = [
         Task(
             title="Deploy frontend v1.0",

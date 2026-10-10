@@ -15,6 +15,7 @@ SUPERVISOR_PROMPT = """You are ORBIT's intelligent router. Analyze the user's me
 - PLAN_DAY: User asks what to focus on today, daily plan, schedule, or priorities
 - GET_RECOMMENDATIONS: User asks for productivity insights, bottlenecks, or suggestions
 - HELP: User asks for instructions on what ORBIT can do
+- GREETING: A greeting or thanks with no request (hi, hello, good morning, thanks)
 - UNKNOWN: Unrelated queries or ambiguous messages requiring clarification
 
 Extract any task context available:

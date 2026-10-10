@@ -6,11 +6,12 @@ account linking, and session identity inspection.
 
 import secrets
 from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, Response, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth import google_oauth
 from auth.jwt import create_access_token, get_password_hash, verify_password
+from auth.ratelimit import clear_login_failures, enforce_login_rate_limit, record_login_failure
 from auth.rbac import Role
 from config import settings
 from db.base import utc_now
@@ -35,22 +36,27 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 @router.post("/token", status_code=status.HTTP_200_OK)
 async def login_for_access_token(
     payload: TokenRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
     """Authenticate with email and password to receive a JWT access token."""
-    stmt = select(User).where(User.email == payload.email)
+    await enforce_login_rate_limit(request, payload.email)
+    stmt = select(User).where(func.lower(User.email) == payload.email.lower())
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
 
-    if not user or not user.hashed_password:
-        raise AuthenticationException("Invalid email or password")
-
-    if not verify_password(payload.password, user.hashed_password):
+    if (
+        not user
+        or not user.hashed_password
+        or not verify_password(payload.password, user.hashed_password)
+    ):
+        await record_login_failure(request, payload.email)
         raise AuthenticationException("Invalid email or password")
 
     if not user.is_active:
         raise AuthenticationException("Account is inactive")
 
+    await clear_login_failures(request, payload.email)
     user.last_seen_at = utc_now()
     await db.commit()
 
@@ -73,8 +79,17 @@ async def register_user(
     payload: UserRegisterRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Register a new user account with default least-privileged role (EMPLOYEE)."""
-    existing_stmt = select(User).where(User.email == payload.email)
+    """Register a new user account with default least-privileged role (EMPLOYEE).
+
+    Disabled unless ALLOW_REGISTRATION is true: accounts are normally provisioned
+    through Google sign-in, Google Chat, or an administrator.
+    """
+    if not settings.ALLOW_REGISTRATION:
+        raise OrbitException(
+            "Self-registration is disabled. Sign in with Google or ask an administrator.",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
+    existing_stmt = select(User).where(func.lower(User.email) == payload.email.lower())
     existing_res = await db.execute(existing_stmt)
     if existing_res.scalar_one_or_none():
         raise OrbitException(

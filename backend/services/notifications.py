@@ -1,0 +1,197 @@
+"""
+Task Event Notification Dispatcher
+Delivers Google Chat notifications for task assignment, updates, and completion,
+regardless of whether the mutation originated from the dashboard or Google Chat.
+Reuses the existing Google Chat service and NotificationLog audit model.
+"""
+
+import asyncio
+import logging
+from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from config import settings
+from crud.users import get_user_preferences
+from db.base import utc_now
+from db.models import NotificationLog, Task, User
+from metrics import record_notification
+from services.email import email_enabled, send_email
+from services.google_chat import send_dm, send_text_message
+
+logger = logging.getLogger(__name__)
+
+# Bounded retry policy for transient outbound delivery failures.
+MAX_ATTEMPTS = 2
+RETRY_BACKOFF_SECONDS = 1.5
+DISPATCH_TIMEOUT_SECONDS = 8.0
+
+PRIORITY_ICONS = {
+    "CRITICAL": "🔴",
+    "HIGH": "🟠",
+    "MEDIUM": "🟡",
+    "LOW": "🟢",
+}
+
+
+def _format_task_event_message(event_type: str, task: Task, actor_name: str, detail: Optional[str] = None) -> str:
+    """Builds a sanitized, recipient-safe notification message for a task event."""
+    icon = PRIORITY_ICONS.get(task.priority, "⚪")
+    due = task.due_date.isoformat() if task.due_date else "No due date"
+
+    if event_type == "task_assigned":
+        return (
+            f"📌 *New Task Assigned*\n"
+            f"{icon} *{task.title}* (Priority: {task.priority})\n"
+            f"Assigned by: {actor_name}\n"
+            f"Due: {due}"
+        )
+    if event_type == "task_updated":
+        return (
+            f"✏️ *Task Updated*\n"
+            f"{icon} *{task.title}* (Priority: {task.priority}, Status: {task.status})\n"
+            f"Updated by: {actor_name}\n"
+            f"Due: {due}"
+        )
+    if event_type == "task_commented":
+        quoted = f'\n> {detail}' if detail else ""
+        return f"💬 *New comment* on *{task.title}*\n{actor_name} wrote:{quoted}"
+    if event_type == "task_completed":
+        return (
+            f"✅ *Task Completed*\n"
+            f"*{task.title}* was marked done by {actor_name}."
+        )
+    return f"ℹ️ Task *{task.title}* changed."
+
+
+async def deliver_with_retry(recipient: User, message: str) -> tuple[str, Optional[str]]:
+    """Attempts delivery with bounded retries. Returns (status, error_msg).
+
+    Status is ``sent`` only after a successful API response, ``skipped`` when the
+    recipient has no Google Chat handle, and ``failed`` otherwise.
+    """
+    if not recipient.google_id and not recipient.google_space_id:
+        return "skipped", "Recipient has no linked Google Chat handle"
+
+    last_error: Optional[str] = None
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            if recipient.google_id:
+                delivered = await send_dm(recipient.google_id, message, space_id=recipient.google_space_id)
+            else:
+                delivered = await send_text_message(recipient.google_space_id, message)  # type: ignore[arg-type]
+
+            if delivered:
+                return "sent", None
+            last_error = "Google Chat API returned a non-success status"
+        except Exception as exc:  # pragma: no cover - defensive, send_* already catches most errors
+            last_error = str(exc)
+
+        if attempt < MAX_ATTEMPTS:
+            await asyncio.sleep(RETRY_BACKOFF_SECONDS * attempt)
+
+    return "failed", last_error
+
+
+_deliver_with_retry = deliver_with_retry  # backwards-compatible alias
+
+
+EMAIL_PREFERENCE_KEY = "email_notifications"
+EMAIL_OFF_VALUES = {"false", "0", "off", "no"}
+EMAIL_SUBJECTS = {
+    "task_assigned": "New task assigned",
+    "task_updated": "Task updated",
+    "task_commented": "New comment",
+    "task_completed": "Task completed",
+}
+
+
+def _plain(message: str) -> str:
+    """Chat markup (*bold*, > quote) read as noise in an email body."""
+    return message.replace("*", "").replace("\n> ", "\n  ")
+
+
+async def _email_wanted(session: AsyncSession, recipient_id) -> bool:
+    if not email_enabled():
+        return False
+    prefs = await get_user_preferences(session, recipient_id)
+    return prefs.get(EMAIL_PREFERENCE_KEY, "on").strip().lower() not in EMAIL_OFF_VALUES
+
+
+async def _send_email_notification(
+    session: AsyncSession, task_id, task_title: str, event_type: str, recipient_id, recipient_email: str, message: str
+) -> None:
+    """Email channel. Independent of Chat: either can fail without affecting the other."""
+    try:
+        if not await _email_wanted(session, recipient_id):
+            return
+        subject = f"[{settings.APP_NAME}] {EMAIL_SUBJECTS.get(event_type, 'Task change')}: {task_title}"
+        link = f"{settings.APP_BASE_URL.rstrip('/')}/tasks/{task_id}"
+        status, error_msg = await send_email(recipient_email, subject, _plain(message), link)
+        record_notification(f"email_{event_type}", status)
+        session.add(
+            NotificationLog(
+                user_id=recipient_id,
+                type=f"email:{event_type}",
+                message=_plain(message),
+                google_space_id=None,
+                status=status,
+                error_msg=error_msg,
+                sent_at=utc_now(),
+            )
+        )
+        await session.commit()
+    except Exception as exc:  # pragma: no cover - absolute safety net
+        logger.warning("Email notification failed for task %s: %s", task_id, exc)
+        await session.rollback()
+
+
+async def notify_task_event(
+    session: AsyncSession,
+    task: Task,
+    event_type: str,
+    recipient: Optional[User],
+    actor_name: str,
+    detail: Optional[str] = None,
+) -> None:
+    """Fire-and-forget-safe notification dispatch for a task mutation.
+
+    Never raises: the task mutation that triggered this call has already been
+    committed, so a notification failure must not roll it back or surface as
+    an error to the caller. Delivery outcome is always recorded in
+    NotificationLog so success is never claimed without API confirmation.
+    """
+    if recipient is None:
+        return
+
+    message = _format_task_event_message(event_type, task, actor_name, detail)
+    # Plain values captured now: a rollback below would expire the ORM objects.
+    task_id, task_title = task.id, task.title
+    recipient_id, recipient_email = recipient.id, recipient.email
+
+    try:
+        status, error_msg = await asyncio.wait_for(
+            _deliver_with_retry(recipient, message), timeout=DISPATCH_TIMEOUT_SECONDS
+        )
+    except asyncio.TimeoutError:
+        status, error_msg = "failed", "Notification dispatch timed out"
+    except Exception as exc:  # pragma: no cover - absolute safety net
+        status, error_msg = "failed", str(exc)
+
+    record_notification(event_type, status)
+    try:
+        log_entry = NotificationLog(
+            user_id=recipient_id,
+            type=event_type,
+            message=message,
+            google_space_id=recipient.google_space_id or recipient.google_id,
+            status=status,
+            error_msg=error_msg,
+            sent_at=utc_now(),
+        )
+        session.add(log_entry)
+        await session.commit()
+    except Exception as exc:
+        logger.warning("Failed to persist notification log for task %s: %s", task.id, exc)
+        await session.rollback()
+
+    await _send_email_notification(session, task_id, task_title, event_type, recipient_id, recipient_email, message)

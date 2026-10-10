@@ -18,6 +18,8 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+os.environ.setdefault("SCHEDULER_JOBSTORE", "memory")
+
 # Ensure backend directory is in python sys.path
 backend_path = Path(__file__).resolve().parent.parent / "backend"
 if str(backend_path) not in sys.path:
@@ -52,6 +54,60 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+
+
+from config import settings as _settings
+
+
+@pytest.fixture(autouse=True)
+def offline_llm(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Never call a real LLM provider from tests (RULES.md section 6).
+
+    Set ORBIT_LIVE_LLM=1 to opt in to live calls for manual evaluation runs.
+    """
+    if os.environ.get("ORBIT_LIVE_LLM") == "1":
+        return
+    monkeypatch.setattr(_settings, "GOOGLE_GEMINI_API_KEY", "")
+    monkeypatch.setattr(_settings, "OPENAI_API_KEY", "")
+
+
+@pytest.fixture(autouse=True)
+def block_google_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fail fast instead of calling Google's APIs, and skip retry backoff sleeps."""
+    import httpx
+    import services.notifications as notifications
+
+    real_send = httpx.AsyncClient.send
+
+    async def guarded_send(self, request, **kwargs):
+        if request.url.host.endswith("googleapis.com"):
+            raise httpx.ConnectError("Google APIs are blocked in tests")
+        return await real_send(self, request, **kwargs)
+
+    monkeypatch.setattr(httpx.AsyncClient, "send", guarded_send)
+    monkeypatch.setattr(notifications, "RETRY_BACKOFF_SECONDS", 0)
+
+
+@pytest.fixture
+def allow_registration(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Enable public self-registration for tests that exercise it."""
+    monkeypatch.setattr(_settings, "ALLOW_REGISTRATION", True)
+
+
+@pytest.fixture(autouse=True)
+def isolated_uploads(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    """Attachments land in a per-test temp directory, never in the real uploads folder."""
+    monkeypatch.setattr(_settings, "UPLOAD_DIR", str(tmp_path / "uploads"))
+    return tmp_path / "uploads"
+
+
+@pytest.fixture(autouse=True)
+def clean_rate_limits(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep login rate-limit counters in-process and isolated between tests."""
+    import auth.ratelimit as ratelimit
+
+    monkeypatch.setattr(ratelimit, "_get_redis", lambda: None)
+    ratelimit.reset_memory_limits()
 
 
 from tools.base import current_tool_session

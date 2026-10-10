@@ -1,27 +1,28 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { cookies } from "next/headers";
 import "./globals.css";
+import { parseTheme, THEME_COOKIE } from "@/lib/theme-shared";
 import { Providers } from "./providers";
-import { Sidebar } from "@/components/Sidebar";
 
 export const metadata: Metadata = {
-  title: "ORBIT: Multi-Agent AI Task Management System",
-  description: "Enterprise task management with Google Chat integration and multi-agent swarm intelligence.",
+  title: { default: "ORBIT", template: "%s | ORBIT" },
+  description: "Multi-agent task management with Google Chat integration.",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export const viewport: Viewport = {
+  colorScheme: "dark light",
+};
+
+// Nonce-based CSP needs the nonce on each response, so pages are rendered per request
+// instead of being prerendered to static HTML.
+export const dynamic = "force-dynamic";
+
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const theme = parseTheme(cookies().get(THEME_COOKIE)?.value);
   return (
-    <html lang="en" className="dark">
-      <body className="bg-[#090D13] text-[#E5EAF1] min-h-screen antialiased flex flex-row selection:bg-blue-600/30 selection:text-blue-200">
-        <Providers>
-          <Sidebar />
-          <main className="flex-1 min-w-0 min-h-screen flex flex-col bg-[#090D13]">
-            {children}
-          </main>
-        </Providers>
+    <html lang="en" data-theme={theme} suppressHydrationWarning>
+      <body className="min-h-screen bg-bg text-fg antialiased">
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

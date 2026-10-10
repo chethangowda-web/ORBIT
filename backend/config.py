@@ -4,8 +4,10 @@ Loads environment variables using Pydantic Settings
 """
 
 from typing import List
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+DEV_JWT_SECRET = "dev-secret-key-orbit-multi-agent-task-system-jwt-2026"
 
 
 class Settings(BaseSettings):
@@ -28,7 +30,6 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:8001",
-        "*",
     ]
 
     # Database Settings
@@ -39,7 +40,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # Authentication & Security
-    JWT_SECRET_KEY: str = "dev-secret-key-orbit-multi-agent-task-system-jwt-2026"
+    JWT_SECRET_KEY: str = DEV_JWT_SECRET
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
 
@@ -55,6 +56,12 @@ class Settings(BaseSettings):
     FAST_LLM_MODEL: str = "gemini/gemini-3.8-flash"
     LLM_TEMPERATURE: float = 0.1
     LLM_MAX_TOKENS: int = 2048
+    LLM_TIMEOUT_SECONDS: float = 8.0  # per attempt; a hung provider must not stall a chat reply
+    LLM_MAX_ATTEMPTS: int = 2
+    LLM_BREAKER_FAILURES: int = 3  # consecutive failures before the LLM is skipped for a while
+    LLM_BREAKER_COOLDOWN_SECONDS: float = 60.0
+    # Google Chat gives up after 30s, so the agent must answer (or apologise) before that.
+    AGENT_TIMEOUT_SECONDS: float = 22.0
 
     # Google Chat Integration
     GOOGLE_CHAT_WEBHOOK_SECRET: str = ""
@@ -63,6 +70,21 @@ class Settings(BaseSettings):
     GOOGLE_CHAT_SPACE_ID: str = ""
     GOOGLE_CHAT_AUDIENCE: str = ""
     GOOGLE_CHAT_VERIFY_AUTH: bool = False
+
+    # Email notifications (optional; off unless SMTP_HOST and EMAIL_FROM are set)
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_SECURITY: str = "starttls"  # "starttls" | "ssl" | "none"
+    SMTP_TIMEOUT: float = 10.0
+    EMAIL_FROM: str = ""
+    APP_BASE_URL: str = "http://localhost:3000"  # used for links inside emails
+
+    # Task attachments
+    UPLOAD_DIR: str = "uploads"
+    MAX_UPLOAD_MB: int = 10
+    MAX_ATTACHMENTS_PER_TASK: int = 20
 
     # Observability & Checkpointing
     LANGCHAIN_TRACING_V2: bool = False
@@ -76,6 +98,41 @@ class Settings(BaseSettings):
     # Scheduler
     SCHEDULER_ENABLED: bool = True
     SCHEDULER_INTERVAL_MINUTES: int = 5
+    SCHEDULER_JOBSTORE: str = "redis"  # "redis" | "memory"
+
+    # Product behaviour
+    APP_TIMEZONE: str = "Asia/Kolkata"  # defines "today" for due dates and digests
+    ALLOW_REGISTRATION: bool = False  # public self-registration is opt-in
+    LOG_LEVEL: str = "INFO"
+    LOG_WEBHOOK_PAYLOADS: bool = False  # raw Chat payloads contain PII
+
+    # Prometheus endpoint (/metrics). Off by default; when METRICS_TOKEN is set it must be
+    # presented as a Bearer token.
+    METRICS_ENABLED: bool = False
+    METRICS_TOKEN: str = ""
+
+    # Login brute-force protection (per client IP + email)
+    LOGIN_RATE_LIMIT_ATTEMPTS: int = 10
+    LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 300
+
+    @model_validator(mode="after")
+    def _enforce_production_safety(self) -> "Settings":
+        """Refuse to boot in production with unsafe defaults."""
+        if self.ENVIRONMENT.lower() != "production":
+            return self
+        problems: list[str] = []
+        placeholder = "change-this" in self.JWT_SECRET_KEY.lower()
+        if self.JWT_SECRET_KEY == DEV_JWT_SECRET or placeholder or len(self.JWT_SECRET_KEY) < 32:
+            problems.append("JWT_SECRET_KEY must be a unique secret of at least 32 characters")
+        if "*" in self.CORS_ORIGINS:
+            problems.append("CORS_ORIGINS must not contain '*' when credentials are allowed")
+        if not self.GOOGLE_CHAT_VERIFY_AUTH:
+            problems.append("GOOGLE_CHAT_VERIFY_AUTH must be true")
+        elif not self.GOOGLE_CHAT_AUDIENCE:
+            problems.append("GOOGLE_CHAT_AUDIENCE must be set when verification is on")
+        if problems:
+            raise ValueError("Unsafe production configuration: " + "; ".join(problems))
+        return self
 
 
 settings = Settings()

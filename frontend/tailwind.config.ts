@@ -1,32 +1,67 @@
 import type { Config } from "tailwindcss";
 
+const token = (name: string) => `rgb(var(--${name}) / <alpha-value>)`;
+
+/** Mission Control tokens (see docs/DESIGN_MISSION_CONTROL.md). */
 const config: Config = {
-  content: [
-    "./pages/**/*.{js,ts,jsx,tsx,mdx}",
-    "./components/**/*.{js,ts,jsx,tsx,mdx}",
-    "./app/**/*.{js,ts,jsx,tsx,mdx}",
-  ],
+  content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./lib/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        background: "var(--background)",
-        foreground: "var(--foreground)",
-        orbit: {
-          bg: "#090D13",
-          surface: "#111821",
-          elevated: "#151F2C",
-          border: "#263241",
-          subtle: "#1C2633",
-          accent: "#3B82F6",
-          "accent-hover": "#2563EB",
-          text: "#E5EAF1",
-          secondary: "#94A3B8",
-          muted: "#64748B",
+        bg: token("bg"),
+        surface: {
+          1: token("surface-1"),
+          2: token("surface-2"),
+          3: token("surface-3"),
         },
+        line: {
+          DEFAULT: token("line"),
+          subtle: token("line-subtle"),
+        },
+        fg: {
+          DEFAULT: token("fg"),
+          muted: token("fg-muted"),
+          faint: token("fg-faint"),
+        },
+        accent: {
+          DEFAULT: token("accent"),
+          strong: token("accent-strong"),
+        },
+        ok: token("ok"),
+        warn: token("warn"),
+        danger: token("danger"),
+        info: token("info"),
+        high: token("high"),
       },
       borderRadius: {
-        btn: "5px",
-        card: "7px",
+        control: "6px",
+        panel: "8px",
+        modal: "10px",
+      },
+      fontFamily: {
+        mono: [
+          "ui-monospace",
+          "SFMono-Regular",
+          "Menlo",
+          "Monaco",
+          "Consolas",
+          '"Liberation Mono"',
+          "monospace",
+        ],
+      },
+      transitionDuration: {
+        DEFAULT: "120ms",
+      },
+      keyframes: {
+        "fade-in": { from: { opacity: "0" }, to: { opacity: "1" } },
+        "slide-in-right": {
+          from: { transform: "translateX(12px)", opacity: "0" },
+          to: { transform: "translateX(0)", opacity: "1" },
+        },
+      },
+      animation: {
+        "fade-in": "fade-in 120ms ease-out",
+        "slide-in-right": "slide-in-right 120ms ease-out",
       },
     },
   },

@@ -19,7 +19,13 @@ from schemas.task import (
     TaskStatus,
     TaskUpdate,
 )
-from tools.base import ToolResult, get_tool_session, tool_error, tool_success
+from tools.base import (
+    ToolResult,
+    get_tool_session,
+    resolve_user_reference,
+    tool_error,
+    tool_success,
+)
 
 
 def to_uuid(val: Optional[Union[str, uuid.UUID]]) -> Optional[uuid.UUID]:
@@ -50,6 +56,9 @@ class GetTaskInput(BaseModel):
     """Input for retrieving a task by UUID."""
 
     task_id: Union[str, uuid.UUID] = Field(..., description="UUID of the task")
+    viewer_id: Optional[Union[str, uuid.UUID]] = Field(
+        None, description="User asking; when set, access is limited to tasks they may view"
+    )
 
 
 class UpdateTaskInput(BaseModel):
@@ -96,6 +105,9 @@ class SearchTasksInput(BaseModel):
     include_completed: bool = Field(default=False, description="Include DONE and CANCELLED tasks")
     limit: int = Field(default=20, description="Max results to return")
     offset: int = Field(default=0, description="Pagination offset")
+    viewer_id: Optional[Union[str, uuid.UUID]] = Field(
+        None, description="User asking; employees only see tasks they are assigned to or created"
+    )
 
 
 class GetUserTasksInput(BaseModel):
@@ -137,18 +149,21 @@ async def create_task(
 
         async with get_tool_session() as db:
             from auth.rbac import can_assign_to_others
+            calling_user = await user_crud.get_user_by_id(db, creator_uuid)
+            if not calling_user or not calling_user.is_active:
+                return tool_error("Permission denied: unknown or inactive user.")
+
             target_assignee_id = to_uuid(assignee_id)
             if not target_assignee_id and assignee_name:
-                resolved_user = await user_crud.get_user_by_name(db, assignee_name)
-                if resolved_user:
-                    target_assignee_id = resolved_user.id
+                resolved_user, problem = await resolve_user_reference(db, assignee_name)
+                if problem:
+                    return tool_error(problem)
+                target_assignee_id = resolved_user.id
             if not target_assignee_id:
                 target_assignee_id = creator_uuid
 
-            calling_user = await user_crud.get_user_by_id(db, creator_uuid)
-            if calling_user and not can_assign_to_others(calling_user):
-                if target_assignee_id and target_assignee_id != creator_uuid:
-                    return tool_error("Permission denied: Employees cannot assign tasks to other users.")
+            if not can_assign_to_others(calling_user) and target_assignee_id != creator_uuid:
+                return tool_error("Permission denied: Employees cannot assign tasks to other users.")
 
             task_in = TaskCreate(
                 title=title,
@@ -167,7 +182,9 @@ async def create_task(
 
 
 @tool(args_schema=GetTaskInput)
-async def get_task_by_id(task_id: Union[str, uuid.UUID]) -> ToolResult:
+async def get_task_by_id(
+    task_id: Union[str, uuid.UUID], viewer_id: Optional[Union[str, uuid.UUID]] = None
+) -> ToolResult:
     """Retrieve full details of a task by its UUID including its audit trail."""
     try:
         t_uuid = to_uuid(task_id)
@@ -175,6 +192,13 @@ async def get_task_by_id(task_id: Union[str, uuid.UUID]) -> ToolResult:
             task = await task_crud.get_task(db, t_uuid)
             if not task:
                 return tool_error(f"Task with ID {task_id} was not found.")
+            if viewer_id is not None:
+                from auth.rbac import TaskAction, check_task_permission
+
+                viewer = await user_crud.get_user_by_id(db, to_uuid(viewer_id))
+                if not viewer or not check_task_permission(task, viewer, TaskAction.VIEW):
+                    # Same message as "not found" so task existence is not disclosed.
+                    return tool_error(f"Task with ID {task_id} was not found.")
             return tool_success(data=TaskDetailRead.model_validate(task).model_dump())
     except Exception as e:
         return tool_error(f"Error retrieving task {task_id}: {str(e)}")
@@ -206,16 +230,19 @@ async def update_task(
                 return tool_error(f"Task with ID {task_id} was not found.")
 
             calling_user = await user_crud.get_user_by_id(db, user_uuid)
-            if calling_user and not check_task_permission(existing_task, calling_user, TaskAction.UPDATE):
+            if not calling_user or not calling_user.is_active:
+                return tool_error("Permission denied: unknown or inactive user.")
+            if not check_task_permission(existing_task, calling_user, TaskAction.UPDATE):
                 return tool_error(f"Permission denied: You cannot update task {task_id}.")
 
             target_assignee_id = to_uuid(assignee_id)
             if not target_assignee_id and assignee_name:
-                resolved_user = await user_crud.get_user_by_name(db, assignee_name)
-                if resolved_user:
-                    target_assignee_id = resolved_user.id
+                resolved_user, problem = await resolve_user_reference(db, assignee_name)
+                if problem:
+                    return tool_error(problem)
+                target_assignee_id = resolved_user.id
 
-            if calling_user and not can_assign_to_others(calling_user):
+            if not can_assign_to_others(calling_user):
                 if target_assignee_id is not None and target_assignee_id != user_uuid:
                     return tool_error("Permission denied: Employees cannot reassign tasks to other users.")
 
@@ -262,7 +289,9 @@ async def complete_task(
                 return tool_error(f"Task with ID {task_id} was not found.")
 
             calling_user = await user_crud.get_user_by_id(db, user_uuid)
-            if calling_user and not check_task_permission(existing_task, calling_user, TaskAction.COMPLETE):
+            if not calling_user or not calling_user.is_active:
+                return tool_error("Permission denied: unknown or inactive user.")
+            if not check_task_permission(existing_task, calling_user, TaskAction.COMPLETE):
                 return tool_error(f"Permission denied: You cannot complete task {task_id}.")
 
             completed = await task_crud.complete_task(
@@ -314,6 +343,7 @@ async def search_tasks(
     include_completed: bool = False,
     limit: int = 20,
     offset: int = 0,
+    viewer_id: Optional[Union[str, uuid.UUID]] = None,
 ) -> ToolResult:
     """Search tasks across titles and descriptions with multi-attribute filtering."""
     try:
@@ -324,8 +354,19 @@ async def search_tasks(
         page = (offset // limit) + 1 if limit > 0 else 1
 
         async with get_tool_session() as db:
+            scope_user_id = None
+            if viewer_id is not None:
+                from auth.rbac import Role
+
+                viewer = await user_crud.get_user_by_id(db, to_uuid(viewer_id))
+                if not viewer:
+                    return tool_error("Permission denied: unknown user.")
+                if Role.from_str(viewer.role) == Role.EMPLOYEE:
+                    scope_user_id = viewer.id
+
             tasks, total = await task_crud.list_tasks(
                 db=db,
+                user_id=scope_user_id,
                 status=status,
                 priority=priority,
                 assignee_id=parsed_assignee,

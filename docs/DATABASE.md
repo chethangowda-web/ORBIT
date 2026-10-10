@@ -1,9 +1,11 @@
 ﻿# DATABASE.md — Data Model
 # ORBIT: Multi-Agent AI Task Management System
 
-**Version:** 1.0.0  
-**Last Updated:** 2026-10-07  
+**Version:** 1.1.0  
+**Last Updated:** 2026-10-10  
 **Database:** PostgreSQL 16
+
+> The authoritative schema is the SQLAlchemy models in `backend/db/models.py` plus the Alembic migrations in `backend/alembic/versions/` (001 to 005). The SQL below is explanatory. `alembic check` (run in CI and by `tests/test_migrations.py`) fails if models and migrations disagree.
 
 ---
 
@@ -205,6 +207,98 @@ CREATE INDEX idx_notif_type ON notification_logs(type, sent_at DESC);
 ```
 
 ---
+
+### 2.6 `chat_event_ledger`
+
+Idempotency ledger preventing a redelivered Google Chat event (webhook retry)
+from double-creating a task or double-executing a confirmed destructive
+action. See `backend/crud/chat_events.py` and ARCHITECTURE.md §3.1.
+
+```sql
+CREATE TABLE chat_event_ledger (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_key     VARCHAR(512) NOT NULL UNIQUE,
+    event_type    VARCHAR(50) NOT NULL,     -- MESSAGE | CARD_CLICKED
+    status        VARCHAR(20) NOT NULL DEFAULT 'PROCESSING',
+                  -- PROCESSING | COMPLETED | FAILED
+    response_text TEXT,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at  TIMESTAMPTZ
+);
+
+CREATE INDEX ix_chat_event_ledger_event_key ON chat_event_ledger(event_key);
+```
+
+Migration: `backend/alembic/versions/003_chat_event_ledger.py`. `event_key` is covered by the named unique constraint `uq_chat_event_ledger_event_key`.
+
+---
+
+### 2.7 `agent_execution_traces`
+
+One row per agent request (chat or dashboard), written by `agents/orchestrator.py`. Powers the Agent runs screen. Readable only by the user who made the request.
+
+```sql
+CREATE TABLE agent_execution_traces (
+    id                UUID PRIMARY KEY,
+    request_id        VARCHAR(255) NOT NULL,
+    user_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    thread_id         VARCHAR(255) NOT NULL,
+    intent            VARCHAR(50),
+    confidence        FLOAT,
+    active_agent      VARCHAR(100),
+    agents_invoked    JSON NOT NULL,      -- ["supervisor", "task_agent"]
+    tool_calls_made   JSON NOT NULL,
+    node_durations_ms JSON NOT NULL,      -- {"supervisor": 120.5, ...}
+    total_duration_ms FLOAT NOT NULL,
+    status            VARCHAR(50) NOT NULL,  -- SUCCESS | NEEDS_CONFIRMATION | TIMEOUT | FAILURE
+    error_code        VARCHAR(100),
+    error_message     TEXT,
+    started_at        TIMESTAMPTZ NOT NULL,
+    completed_at      TIMESTAMPTZ NOT NULL,
+    created_at        TIMESTAMPTZ NOT NULL
+);
+-- indexes: request_id, user_id, thread_id, (user_id, created_at), (thread_id, created_at)
+```
+
+### 2.8 `task_comments`
+
+```sql
+CREATE TABLE task_comments (
+    id         UUID PRIMARY KEY,
+    task_id    UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    author_id  UUID REFERENCES users(id) ON DELETE SET NULL,
+    body       TEXT NOT NULL,                -- plain text, max 2000 enforced by the API
+    created_at TIMESTAMPTZ NOT NULL
+);
+-- indexes: task_id, author_id.  Migration: 005_task_comments
+```
+Comments are removed with their task row (tasks themselves are soft-deleted, so in practice they remain). A deleted user leaves comments attributed to "Former member".
+
+### 2.9 `task_attachments`
+
+```sql
+CREATE TABLE task_attachments (
+    id             UUID PRIMARY KEY,
+    task_id        UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    uploaded_by_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    filename       VARCHAR(255) NOT NULL,    -- display name only, sanitised
+    stored_name    VARCHAR(64) NOT NULL UNIQUE, -- random hex file name under UPLOAD_DIR
+    content_type   VARCHAR(100) NOT NULL,    -- derived from the extension allow-list
+    size_bytes     BIGINT NOT NULL,
+    created_at     TIMESTAMPTZ NOT NULL
+);
+-- indexes: task_id, uploaded_by_id.  Migration: 006_task_attachments
+```
+The bytes live on disk in `UPLOAD_DIR` (the `uploads_data` volume in Docker Compose), not in the database. Back the volume up together with the database; a record whose file is missing returns 404 on download.
+
+### 2.10 Notes that differ from the original design
+
+- `users.hashed_password` is nullable (Google and Chat users have none); `google_id` and `email` are unique.
+- `notification_logs.status` is `sent` (API success confirmed), `failed` (attempted, with `error_msg`) or `skipped` (no Google Chat account linked). Jobs never record `sent` without a successful delivery. Types: `daily_briefing`, `overdue_alert`, `weekly_summary`, `task_assigned`, `task_updated`, `task_completed`, `task_commented`; email deliveries are logged with an `email:` prefix (for example `email:task_assigned`).
+- `user_preferences` boolean keys read by the scheduler: `daily_briefing`, `overdue_alert`, `weekly_summary`. Values `false`, `0`, `off`, `no` (any case) mean opted out. `email_notifications` works the same way for the email channel (default on when SMTP is configured).
+- `users.google_space_id` is set only from a verified Chat webhook event in a DM space; it cannot be edited through the API.
+- Task `tags` is a JSON array (portable across Postgres and the SQLite used in tests), searched with a substring match. Partial indexes and a `tsvector` column from the first design were not implemented; see OPERATIONS.md section 8 if the table grows very large.
+- Single-column indexes use the `ix_<table>_<column>` names from the models. Migration 004 aligned the earlier `idx_*` names and dropped three indexes that duplicated unique constraints.
 
 ## 3. SQLAlchemy Models
 

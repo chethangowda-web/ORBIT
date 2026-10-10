@@ -205,3 +205,96 @@ class IntentClassification(BaseModel):
 supervisor_chain = llm.with_structured_output(IntentClassification)
 result = await supervisor_chain.ainvoke(messages)
 ```
+
+
+---
+
+## ADR-011: Enforce authorization inside agent tools, not only in the REST layer
+
+**Date**: 2026-10-10  **Status**: Accepted
+
+**Context**: Chat reaches the same data as the API. Tools were unscoped, so an employee could search every task, read any task by id, or see team workload simply by asking the bot.
+
+**Decision**: Tools take the caller's identity and apply `auth/rbac.py`; unknown callers fail closed. Tasks the caller cannot see report "not found".
+
+**Consequences**: One rule set for both channels, covered by `tests/test_chat_rbac.py`. System callers (scheduler) omit the identity deliberately.
+
+---
+
+## ADR-012: Never guess a person or a task
+
+**Date**: 2026-10-10  **Status**: Accepted
+
+**Context**: Unknown assignees fell back to the requester, partial name matches took the first hit, and "complete it" completed the user's first active task, all while reporting success.
+
+**Decision**: Ambiguity and absence produce a clarifying question with candidates. Exact matches win over partial ones.
+
+**Consequences**: Occasionally one extra turn; no silent wrong-person assignments or wrong-task completions.
+
+---
+
+## ADR-013: Notification logs record only what really happened
+
+**Date**: 2026-10-10  **Status**: Accepted
+
+**Decision**: `sent` only after a successful Chat API response; `skipped` when the user has no Google Chat account; `failed` with a reason otherwise. All jobs and event notifications share `services.notifications.deliver_with_retry`. DMs use a known DM space or `spaces:findDirectMessage` (the Chat API has no `users/*/messages` endpoint).
+
+---
+
+## ADR-014: Migrations run at container start; models and migrations must not drift
+
+**Date**: 2026-10-10  **Status**: Accepted
+
+**Decision**: The backend entrypoint runs `alembic upgrade head` (RULES 3.1). CI runs `alembic check`; migration 004 aligned historical index names with the models.
+
+---
+
+## ADR-015: Fail closed in production
+
+**Date**: 2026-10-10  **Status**: Accepted
+
+**Decision**: With `ENVIRONMENT=production` the app will not start with a weak or placeholder JWT secret, wildcard CORS, Chat verification off, or verification without an audience. Public registration is off by default and the seed requires an explicit password.
+
+---
+
+## ADR-016: Mission Control dashboard
+
+**Date**: 2026-10-10  **Status**: Accepted
+
+**Context**: The first dashboard mixed two styling systems, hid the agents behind a floating widget on one page, and had no real-time or keyboard story.
+
+**Decision**: Rebuild the frontend on shared design tokens and a small UI kit (docs/DESIGN_MISSION_CONTROL.md): app shell with navigation rail, command palette (`Ctrl+K`), an agent panel available on every page with live run traces, drag-and-drop board with optimistic updates, URL-synced filters, readable audit trail. Server state stays in TanStack Query; the REST contract is unchanged apart from additions.
+
+**Consequences**: Routes changed (`/analytics` is now `/insights`, `/settings` is split into `/admin` and `/profile`). Dashboard behaviour is covered by Vitest and Playwright suites.
+
+---
+
+## ADR-017: Live updates are hints over SSE, published from a commit hook
+
+**Date**: 2026-10-11  **Status**: Accepted
+
+**Context**: Tasks change from the dashboard, Google Chat and the scheduler; the dashboard only polled every 15 seconds.
+
+**Decision**: A SQLAlchemy `after_commit` hook publishes `{topic, task_id}` for any committed change to tasks, comments or attachments, so no code path can forget to publish and rolled-back work never publishes. The stream carries no task data; clients invalidate TanStack Query caches and refetch through the authorised REST API. The stream is authenticated with the bearer token and does not hold a database connection while open. SSE was chosen over WebSockets because traffic is one-way, it works through ordinary proxies, and reconnection is trivial.
+
+**Consequences**: One process per deployment is exact; multiple workers need a shared bus (documented). Polling stays as the fallback, so a broken stream degrades to slower updates.
+
+## ADR-018: Attachments on local disk with an allow-list
+
+**Date**: 2026-10-11  **Status**: Accepted
+
+**Context**: Users need to attach documents. Uploads are a classic source of vulnerabilities.
+
+**Decision**: Files are stored under random names on a volume; the client's file name is display metadata only. Only an extension allow-list is accepted (no HTML, SVG, scripts or executables) and the content type is derived from it, never trusted from the client. Size is enforced while streaming and partial files are removed. Downloads are always `attachment` with `nosniff`, authorised by the task's view permission; uploads need edit permission.
+
+**Consequences**: No virus scanning and no object storage yet; both are documented upgrade paths. Backups must include the volume.
+
+## ADR-019: Fail soft around the LLM and Google's 30 second limit
+
+**Date**: 2026-10-11  **Status**: Accepted
+
+**Context**: Google Chat shows "not responding" if the webhook takes over 30 seconds. LLM calls had no per-call timeout, and a quota outage would make every message slow before falling back.
+
+**Decision**: Per-attempt LLM timeout, two attempts, a circuit breaker that skips the provider for a cooldown after repeated failures, and an agent deadline (22 seconds) shorter than Google's limit that returns an apology instead of silence.
+
+**Consequences**: During an LLM outage the bot answers from the rule-based classifier immediately rather than slowly; behaviour is covered by `tests/test_resilience.py`.

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.jwt import get_password_hash
 from db.models import User, UserPreference
-from schemas.user import UserCreate, UserUpdate
+from schemas.user import AdminUserUpdate, UserCreate, UserUpdate
 
 
 async def get_user_by_id(db: AsyncSession, user_id: uuid.UUID) -> Optional[User]:
@@ -51,6 +51,38 @@ async def get_user_by_name(db: AsyncSession, name_query: str) -> Optional[User]:
     return result.scalars().first()
 
 
+async def find_users_by_name(db: AsyncSession, name_query: str, limit: int = 10) -> List[User]:
+    """Active users matching a name, best matches first.
+
+    Ranking: exact full-name or email match, then exact first-name match, then
+    partial matches. Callers use this to detect ambiguity instead of silently
+    taking the first partial hit.
+    """
+    clean = name_query.strip().lower()
+    if not clean:
+        return []
+    pattern = f"%{clean}%"
+    stmt = select(User).where(
+        or_(
+            func.lower(User.display_name).like(pattern),
+            func.lower(User.first_name).like(pattern),
+            func.lower(User.last_name).like(pattern),
+            func.lower(User.email).like(pattern),
+        ),
+        User.is_active.is_(True),
+    )
+    matches = list((await db.execute(stmt)).scalars().all())
+
+    def rank(user: User) -> tuple[int, str]:
+        if clean in (user.display_name.lower(), user.email.lower()):
+            return (0, user.display_name)
+        if clean == (user.first_name or "").lower() or clean == user.display_name.split(" ")[0].lower():
+            return (1, user.display_name)
+        return (2, user.display_name)
+
+    return sorted(matches, key=rank)[:limit]
+
+
 async def get_all_users(
     db: AsyncSession,
     q: Optional[str] = None,
@@ -77,6 +109,66 @@ async def get_all_users(
     stmt = stmt.order_by(User.display_name.asc()).offset(skip).limit(limit)
     result = await db.execute(stmt)
     return list(result.scalars().all())
+
+
+async def list_users(
+    db: AsyncSession,
+    q: Optional[str] = None,
+    role: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    page: int = 1,
+    page_size: int = 100,
+) -> tuple[List[User], int]:
+    """Paginated user directory with search and filters; returns (rows, total)."""
+    stmt = select(User)
+    if q:
+        pattern = f"%{q.strip().lower()}%"
+        stmt = stmt.where(
+            or_(
+                func.lower(User.display_name).like(pattern),
+                func.lower(User.email).like(pattern),
+            )
+        )
+    if role:
+        stmt = stmt.where(User.role == role.strip().lower())
+    if is_active is not None:
+        stmt = stmt.where(User.is_active == is_active)
+
+    total = (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
+    stmt = stmt.order_by(User.display_name.asc()).offset((page - 1) * page_size).limit(page_size)
+    rows = list((await db.execute(stmt)).scalars().all())
+    return rows, total
+
+
+OPT_OUT_VALUES = ("false", "0", "off", "no")
+
+
+async def get_opted_out_user_ids(db: AsyncSession, key: str) -> set[uuid.UUID]:
+    """Ids of users who switched a boolean preference (e.g. daily_briefing) off."""
+    rows = await db.execute(
+        select(UserPreference.user_id).where(
+            UserPreference.key == key,
+            func.lower(UserPreference.value).in_(OPT_OUT_VALUES),
+        )
+    )
+    return set(rows.scalars().all())
+
+
+async def get_user_preferences(db: AsyncSession, user_id: uuid.UUID) -> Dict[str, str]:
+    """Return a user's stored preferences as a key/value mapping."""
+    rows = await db.execute(select(UserPreference).where(UserPreference.user_id == user_id))
+    return {p.key: p.value for p in rows.scalars().all()}
+
+
+async def admin_update_user(db: AsyncSession, user: User, changes: AdminUserUpdate) -> User:
+    """Apply administrator-only changes (role, active flag)."""
+    data = changes.model_dump(exclude_unset=True)
+    for field, value in data.items():
+        if value is not None:
+            setattr(user, field, value)
+    await db.commit()
+    await db.refresh(user)
+    return user
 
 
 async def create_user(db: AsyncSession, user_in: UserCreate) -> User:

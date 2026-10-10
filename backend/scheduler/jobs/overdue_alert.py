@@ -7,9 +7,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from db.base import utc_now
+from db.base import local_midnight_utc, local_today, utc_now
 from db.models import NotificationLog, Task, User
-from services.google_chat import send_dm, send_text_message
+from crud.users import get_opted_out_user_ids
+from metrics import record_notification
+from services.notifications import deliver_with_retry
 from tools.base import get_tool_session
 
 logger = logging.getLogger(__name__)
@@ -24,7 +26,7 @@ PRIORITY_ICONS = {
 
 async def _has_already_received_overdue_alert(session: AsyncSession, user_id: Any) -> bool:
     """Checks if a user has already received an overdue alert today (UTC)."""
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = local_midnight_utc()
     query = select(NotificationLog).where(
         NotificationLog.user_id == user_id,
         NotificationLog.type == "overdue_alert",
@@ -56,29 +58,24 @@ async def _dispatch_user_overdue_alert(
     session: AsyncSession,
     user: User,
     tasks: List[Task],
-) -> bool:
-    """Dispatches overdue alert message and writes notification log."""
+) -> str:
+    """Dispatches the overdue alert, logs the real outcome, and returns its status."""
     msg = _format_overdue_message(user.display_name, tasks)
-    delivered = False
-
-    if user.google_id:
-        delivered = await send_dm(user.google_id, msg)
-    elif user.google_space_id:
-        delivered = await send_text_message(user.google_space_id, msg)
-    else:
-        delivered = True  # Simulated delivery when no chat handles configured
-
-    log_entry = NotificationLog(
-        user_id=user.id,
-        type="overdue_alert",
-        message=msg,
-        google_space_id=user.google_space_id or user.google_id,
-        status="sent" if delivered else "failed",
-        sent_at=utc_now(),
+    delivery_status, error_msg = await deliver_with_retry(user, msg)
+    record_notification("overdue_alert", delivery_status)
+    session.add(
+        NotificationLog(
+            user_id=user.id,
+            type="overdue_alert",
+            message=msg,
+            google_space_id=user.google_space_id or user.google_id,
+            status=delivery_status,
+            error_msg=error_msg,
+            sent_at=utc_now(),
+        )
     )
-    session.add(log_entry)
     await session.commit()
-    return delivered
+    return delivery_status
 
 
 async def run_overdue_alerts(
@@ -95,12 +92,12 @@ async def run_overdue_alerts(
     }
 
     async with get_tool_session(session) as s:
-        today = date.today()
+        today = local_today()
         stmt = (
             select(Task)
             .where(
                 Task.deleted_at.is_(None),
-                Task.status != "DONE",
+                Task.status.not_in(["DONE", "CANCELLED"]),
                 Task.due_date.is_not(None),
                 Task.due_date < today,
             )
@@ -120,18 +117,19 @@ async def run_overdue_alerts(
                 user_map.setdefault(task.assignee, []).append(task)
 
         summary["users_evaluated"] = len(user_map)
+        opted_out = await get_opted_out_user_ids(s, "overdue_alert")
 
         for user, tasks in user_map.items():
+            if user.id in opted_out:
+                summary["skipped"] += 1
+                continue
             if not force and await _has_already_received_overdue_alert(s, user.id):
                 summary["skipped"] += 1
                 continue
 
             try:
-                delivered = await _dispatch_user_overdue_alert(s, user, tasks)
-                if delivered:
-                    summary["sent"] += 1
-                else:
-                    summary["failed"] += 1
+                outcome = await _dispatch_user_overdue_alert(s, user, tasks)
+                summary[outcome] += 1
             except Exception as err:
                 logger.error("Failed to dispatch overdue alert for %s: %s", user.id, err)
                 summary["failed"] += 1

@@ -266,6 +266,75 @@ async def test_webhook_malformed_json_payload(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_webhook_duplicate_message_event_not_reprocessed(client: AsyncClient, db_session: AsyncSession):
+    """A redelivered MESSAGE event (same message resource name) must not re-run the agent twice."""
+    event_payload = {
+        "type": "MESSAGE",
+        "eventTime": "2026-10-07T12:20:00Z",
+        "space": {"name": "spaces/DEDUPSPACE", "type": "ROOM"},
+        "user": {
+            "name": "users/dedup001",
+            "displayName": "Dana Dedup",
+            "email": "dana@orbit.dev",
+        },
+        "message": {
+            "name": "spaces/DEDUPSPACE/messages/msg-dedup-001",
+            "text": "Create a task to renew SSL certs",
+            "thread": {"name": "spaces/DEDUPSPACE/threads/th001"},
+        },
+    }
+
+    fake_state = {"response": "Task created.", "response_type": "text", "needs_confirmation": False}
+    with patch("api.webhook.process_message", new_callable=AsyncMock) as mock_process:
+        mock_process.return_value = fake_state
+
+        res1 = await client.post("/api/chat/webhook", json=event_payload)
+        assert res1.status_code == 200
+        assert mock_process.await_count == 1
+
+        # Redelivery of the exact same event (identical message.name)
+        res2 = await client.post("/api/chat/webhook", json=event_payload)
+        assert res2.status_code == 200
+        assert mock_process.await_count == 1  # not re-invoked
+        assert res2.json().get("text") == "Task created."
+
+
+@pytest.mark.asyncio
+async def test_webhook_duplicate_card_click_not_reprocessed(client: AsyncClient, db_session: AsyncSession):
+    """A redelivered CARD_CLICKED event must not re-execute the confirmed action twice."""
+    event_payload = {
+        "type": "CARD_CLICKED",
+        "eventTime": "2026-10-07T12:25:00Z",
+        "space": {"name": "spaces/DEDUPSPACE2", "type": "ROOM"},
+        "user": {
+            "name": "users/dedup002",
+            "displayName": "Dana Dedup Two",
+            "email": "dana2@orbit.dev",
+        },
+        "action": {
+            "actionMethodName": "confirm_delete_task",
+            "parameters": [
+                {"key": "task_id", "value": "999"},
+                {"key": "thread_id", "value": "spaces/DEDUPSPACE2:users/dedup002"},
+            ],
+        },
+    }
+
+    fake_state = {"response": "Task deleted."}
+    with patch("api.webhook.process_message", new_callable=AsyncMock) as mock_process:
+        mock_process.return_value = fake_state
+
+        res1 = await client.post("/api/chat/webhook", json=event_payload)
+        assert res1.status_code == 200
+        assert mock_process.await_count == 1
+
+        res2 = await client.post("/api/chat/webhook", json=event_payload)
+        assert res2.status_code == 200
+        assert mock_process.await_count == 1
+        assert res2.json().get("text") == "Task deleted."
+
+
+@pytest.mark.asyncio
 async def test_outbound_service_messaging_mocked():
     """Test outbound send_text_message, send_card_message, and send_dm with mocked HTTP client."""
     mock_resp = MagicMock()
@@ -282,7 +351,12 @@ async def test_outbound_service_messaging_mocked():
         success = await send_card_message("spaces/TEST1234", card)
         assert success is True
 
-    # 3. Direct message (DM)
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_resp):
+    # 3. Direct message (DM): look up the DM space, then post into it
+    lookup = MagicMock()
+    lookup.status_code = 200
+    lookup.json.return_value = {"name": "spaces/DM_SPACE_1"}
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=lookup) as get_mock,          patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_resp) as post_mock:
         success = await send_dm("users/10001", "Your morning briefing is ready!")
         assert success is True
+        assert get_mock.call_args.kwargs["params"] == {"name": "users/10001"}
+        assert "spaces/DM_SPACE_1/messages" in post_mock.call_args.args[0]

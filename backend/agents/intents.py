@@ -19,6 +19,7 @@ class Intent(str, Enum):
     PLAN_DAY = "PLAN_DAY"
     GET_RECOMMENDATIONS = "GET_RECOMMENDATIONS"
     HELP = "HELP"
+    GREETING = "GREETING"
     UNKNOWN = "UNKNOWN"
 
 

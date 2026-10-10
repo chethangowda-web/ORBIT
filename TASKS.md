@@ -1,8 +1,8 @@
 # TASKS.md — Implementation Phases
 # ORBIT: Multi-Agent AI Task Management System
 
-**Deadline:** Monday, June 15, 12:00 PM IST  
-**Total Estimated Time:** ~42 hours  
+**Status:** Phases 0 to 9 complete; Phase 10 (design) and Phase 11 (hardening and rebuild) complete. Only the demo video (8.6) remains.  
+**Original estimate:** ~42 hours  
 **Status Legend:** ⬜ Not Started | 🔄 In Progress | ✅ Done | ❌ Blocked | ⏭️ Skipped
 
 ---
@@ -650,3 +650,29 @@ scheduler = AsyncIOScheduler(
 | 8 | Docker + README | 2h | MUST |
 | 9 | Testing | 3h | OPTIONAL |
 | | **TOTAL** | **43h** | |
+
+
+---
+
+## ✅ Phase 10: Design system
+Delivered the Mission Control design system (docs/DESIGN_MISSION_CONTROL.md) and a consistent token-based UI.
+
+## ✅ Phase 11: Hardening and rebuild (2026-10)
+
+| # | Area | Outcome |
+|---|---|---|
+| 11.1 | Test suite | Runs fully offline (was calling a live LLM, ~5 minutes); 190+ backend tests |
+| 11.2 | Authorization | RBAC enforced in agent tools; chat can no longer exceed REST permissions |
+| 11.3 | Agent correctness | Ambiguous or unknown names and unclear targets are asked about, never guessed |
+| 11.4 | Webhook | Strict Google token identity, mandatory HMAC when configured, idempotent, no PII logging, generic errors |
+| 11.5 | Security | Registration gated, login throttled, production config guards, health endpoint no longer leaks errors |
+| 11.6 | Data | Real SQL analytics (average completion time was a hardcoded 2.5), timezone-aware dates, single-query workload |
+| 11.7 | Notifications | Honest delivery status, valid DM API usage, opt-outs honoured, cancelled tasks excluded from overdue alerts |
+| 11.8 | Schema | Migration 004 removes drift; `alembic check` in CI |
+| 11.9 | Infra | Multi-stage non-root image, migrate-on-start, correct frontend build args, dockerignores, CI workflow |
+| 11.10 | Frontend | Full rebuild: UI kit, shell, command palette, agent panel, board with drag and drop, tasks, insights, runs, admin, profile; 79 unit/component tests and 14 Playwright tests |
+| 11.12 | Google Chat | Slash commands, task-list cards with one-click Done, local simulator, setup guide; fixed conversation memory leaking between users in shared threads |
+| 11.13 | Collaboration | Task comments (with notifications and audit entries), bulk actions with per-task authorisation |
+| 11.14 | Browser security | Nonce-based Content-Security-Policy with zero-violation e2e check; verified Docker images build and run (non-root, migrate-on-start, healthy) |
+| 11.15 | Agent safety and quality | Questions can never trigger changes (fixed 5 real misclassifications); offline classifier measured on a regression and a holdout set |
+| 11.11 | Docs | README, OPERATIONS runbook, API, schema, agents, tools and decisions brought in line with the code |
