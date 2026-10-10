@@ -10,6 +10,7 @@ import litellm
 from pydantic import BaseModel
 
 from config import settings
+from db.base import local_now
 from agents.intents import (
     Intent,
     IntentClassificationResult,
@@ -25,7 +26,7 @@ def resolve_relative_date(relative_str: Optional[str]) -> Optional[str]:
     """Resolves relative date strings like 'Friday', 'tomorrow', 'next Monday' to ISO dates."""
     if not relative_str:
         return None
-    now = datetime.now(timezone.utc)
+    now = local_now()
     rel = relative_str.strip().lower()
 
     if "today" in rel:

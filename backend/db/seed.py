@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.jwt import get_password_hash
-from db.base import Base, utc_now
+from db.base import Base, local_today, utc_now
 from db.models import Task, TaskAuditLog, User
 from db.session import async_session_factory, engine
 
@@ -65,7 +65,7 @@ async def populate_data(session: AsyncSession) -> None:
     await session.refresh(manager)
     await session.refresh(employee)
 
-    today = date.today()
+    today = local_today()
     tasks_to_create = [
         Task(
             title="Deploy frontend v1.0",

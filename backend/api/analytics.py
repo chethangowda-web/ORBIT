@@ -27,13 +27,21 @@ async def get_task_statistics(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Retrieve aggregate task statistics and metrics scoped by role."""
-    # Policy: Employees can only view their own aggregate statistics
+    """Retrieve aggregate task statistics scoped by role.
+
+    Employees always see the tasks they are assigned to or created, matching the
+    task list. Managers and admins see everything, or one person via ``user_id``.
+    """
+    involved = None
     if Role.from_str(current_user.role) == Role.EMPLOYEE:
-        user_id = current_user.id
+        involved, user_id = current_user.id, None
 
     stats = await task_crud.get_task_stats(
-        db=db, user_id=user_id, date_from=date_from, date_to=date_to
+        db=db,
+        user_id=user_id,
+        date_from=date_from,
+        date_to=date_to,
+        involved_user_id=involved,
     )
     return api_response(data=stats.model_dump())
 

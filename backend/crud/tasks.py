@@ -4,19 +4,45 @@ Database access operations for Task entities, state transitions, and analytics.
 """
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import String, case, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from crud.audit import log_task_action
-from db.base import utc_now
+from db.base import local_today, utc_now
 from db.models import Task, TaskAuditLog, User
 from exceptions import EntityNotFoundException, OrbitException
 from schemas.analytics import DailyCount, TaskStatsResponse, TeamMemberWorkload
 from schemas.task import TaskCreate, TaskPriority, TaskStatus, TaskUpdate
 from services.notifications import notify_task_event
+
+
+SORTABLE_COLUMNS = {
+    "due_date": Task.due_date,
+    "created_at": Task.created_at,
+    "updated_at": Task.updated_at,
+    "priority": Task.priority,
+    "status": Task.status,
+    "title": Task.title,
+}
+
+CLOSED_STATUSES = ("DONE", "CANCELLED")
+LIKE_ESCAPE = "\\"
+
+
+def case_when(condition):
+    """1 when the condition holds else 0, for conditional aggregation."""
+    return case((condition, 1), else_=0)
+
+
+def _like_pattern(raw: str) -> str:
+    """Build a case-insensitive contains pattern with LIKE wildcards escaped."""
+    cleaned = raw.strip().lower()
+    cleaned = cleaned.replace(LIKE_ESCAPE, LIKE_ESCAPE * 2)
+    cleaned = cleaned.replace("%", LIKE_ESCAPE + "%").replace("_", LIKE_ESCAPE + "_")
+    return f"%{cleaned}%"
 
 
 async def _get_actor_name(db: AsyncSession, user_id: Optional[uuid.UUID]) -> str:
@@ -31,7 +57,7 @@ async def _get_actor_name(db: AsyncSession, user_id: Optional[uuid.UUID]) -> str
 def enrich_task_metadata(task: Task) -> Task:
     """Compute virtual properties like days_overdue on a Task model."""
     if task.due_date and task.status not in ["DONE", "CANCELLED"]:
-        today = date.today()
+        today = local_today()
         if task.due_date < today:
             setattr(task, "days_overdue", (today - task.due_date).days)
         else:
@@ -143,8 +169,12 @@ async def update_task(
             }
             setattr(task, field, new_val)
 
-    if "status" in update_dict and update_dict["status"] == "DONE" and not task.completed_at:
-        task.completed_at = utc_now()
+    if "status" in changes:
+        if task.status == TaskStatus.DONE.value and not task.completed_at:
+            task.completed_at = utc_now()
+        elif task.status != TaskStatus.DONE.value and task.completed_at:
+            task.completed_at = None
+            changes["completed_at"] = {"old": "set", "new": None}
 
     if "assignee_id" in changes:
         # Setting the FK column directly does not refresh the `assignee`
@@ -217,6 +247,14 @@ async def complete_task(
     task = await get_task(db, task_id)
     if not task:
         raise EntityNotFoundException("Task", task_id)
+
+    if task.status == TaskStatus.DONE.value:
+        return task
+    if task.status == TaskStatus.CANCELLED.value:
+        raise OrbitException(
+            "Cancelled tasks cannot be completed. Reopen the task first.",
+            status_code=409,
+        )
 
     old_status = task.status
     task.status = TaskStatus.DONE.value
@@ -295,12 +333,13 @@ async def list_tasks(
         stmt = stmt.where(Task.due_date <= due_before)
     if due_after:
         stmt = stmt.where(Task.due_date >= due_after)
-    if q:
-        query_pattern = f"%{q.strip().lower()}%"
+    if q and q.strip():
+        pattern = _like_pattern(q)
         stmt = stmt.where(
             or_(
-                func.lower(Task.title).like(query_pattern),
-                func.lower(Task.description).like(query_pattern),
+                func.lower(Task.title).like(pattern, escape=LIKE_ESCAPE),
+                func.lower(func.coalesce(Task.description, "")).like(pattern, escape=LIKE_ESCAPE),
+                func.lower(cast(Task.tags, String)).like(pattern, escape=LIKE_ESCAPE),
             )
         )
 
@@ -309,11 +348,11 @@ async def list_tasks(
     total_count = (await db.execute(count_stmt)).scalar() or 0
 
     # Sorting
-    sort_col = getattr(Task, sort_by, Task.due_date)
+    sort_col = SORTABLE_COLUMNS.get(sort_by, Task.due_date)
     if sort_dir.lower() == "desc":
-        stmt = stmt.order_by(sort_col.desc().nullslast())
+        stmt = stmt.order_by(sort_col.desc().nullslast(), Task.id)
     else:
-        stmt = stmt.order_by(sort_col.asc().nullslast())
+        stmt = stmt.order_by(sort_col.asc().nullslast(), Task.id)
 
     # Pagination
     offset = (page - 1) * page_size
@@ -328,7 +367,7 @@ async def get_overdue_tasks(
     db: AsyncSession, user_id: Optional[uuid.UUID] = None
 ) -> List[Task]:
     """Return all incomplete tasks whose due date has passed."""
-    today = date.today()
+    today = local_today()
     stmt = (
         select(Task)
         .options(selectinload(Task.assignee), selectinload(Task.creator))
@@ -350,7 +389,7 @@ async def get_tasks_due_today(
     db: AsyncSession, user_id: Optional[uuid.UUID] = None
 ) -> List[Task]:
     """Return all incomplete tasks due today."""
-    today = date.today()
+    today = local_today()
     stmt = (
         select(Task)
         .options(selectinload(Task.assignee), selectinload(Task.creator))
@@ -372,82 +411,119 @@ async def get_task_stats(
     user_id: Optional[uuid.UUID] = None,
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
+    involved_user_id: Optional[uuid.UUID] = None,
+    trend_days: int = 14,
 ) -> TaskStatsResponse:
-    """Compute aggregate task metrics for dashboard."""
-    stmt = select(Task).where(Task.deleted_at.is_(None))
+    """Aggregate task metrics computed in SQL.
+
+    ``user_id`` limits to tasks assigned to that user; ``involved_user_id``
+    limits to tasks assigned to or created by them (the employee visibility
+    scope used by the task list). Every figure comes from the database.
+    """
+    scope = [Task.deleted_at.is_(None)]
     if user_id:
-        stmt = stmt.where(Task.assignee_id == user_id)
+        scope.append(Task.assignee_id == user_id)
+    if involved_user_id:
+        scope.append(or_(Task.assignee_id == involved_user_id, Task.created_by_id == involved_user_id))
     if date_from:
-        stmt = stmt.where(Task.created_at >= datetime.combine(date_from, datetime.min.time()))
+        scope.append(Task.created_at >= datetime.combine(date_from, datetime.min.time()))
     if date_to:
-        stmt = stmt.where(Task.created_at <= datetime.combine(date_to, datetime.max.time()))
+        scope.append(Task.created_at <= datetime.combine(date_to, datetime.max.time()))
 
-    res = await db.execute(stmt)
-    all_tasks = res.scalars().all()
-
-    total = len(all_tasks)
-    completed = sum(1 for t in all_tasks if t.status == "DONE")
-    today = date.today()
-    overdue = sum(
-        1 for t in all_tasks if t.due_date and t.due_date < today and t.status not in ["DONE", "CANCELLED"]
-    )
-    completion_rate = round(completed / total, 2) if total > 0 else 0.0
-
-    # Priorities & Status counts
-    priorities = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+    status_rows = await db.execute(select(Task.status, func.count()).where(*scope).group_by(Task.status))
+    priority_rows = await db.execute(select(Task.priority, func.count()).where(*scope).group_by(Task.priority))
     statuses = {"TODO": 0, "IN_PROGRESS": 0, "REVIEW": 0, "DONE": 0, "CANCELLED": 0}
-    for t in all_tasks:
-        if t.priority in priorities:
-            priorities[t.priority] += 1
-        if t.status in statuses:
-            statuses[t.status] += 1
+    priorities = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+    statuses.update({k: v for k, v in status_rows.all() if k in statuses})
+    priorities.update({k: v for k, v in priority_rows.all() if k in priorities})
+
+    total = sum(statuses.values())
+    completed = statuses["DONE"]
+    overdue = (
+        await db.execute(
+            select(func.count()).where(
+                *scope,
+                Task.due_date < local_today(),
+                Task.status.not_in(CLOSED_STATUSES),
+            )
+        )
+    ).scalar_one()
+
+    durations = await db.execute(
+        select(Task.created_at, Task.completed_at).where(
+            *scope, Task.status == "DONE", Task.completed_at.is_not(None)
+        )
+    )
+    spans = [
+        (done - created).total_seconds() / 86400
+        for created, done in durations.all()
+        if created and done
+    ]
+    avg_days = round(sum(spans) / len(spans), 1) if spans else 0.0
+
+    since = local_today() - timedelta(days=trend_days - 1)
+    created_rows = await db.execute(
+        select(func.date(Task.created_at), func.count())
+        .where(*scope, Task.created_at >= datetime.combine(since, datetime.min.time()))
+        .group_by(func.date(Task.created_at))
+    )
+    by_day = {str(day): count for day, count in created_rows.all()}
+    per_day = [
+        DailyCount(
+            date=str(since + timedelta(days=i)),
+            count=by_day.get(str(since + timedelta(days=i)), 0),
+        )
+        for i in range(trend_days)
+    ]
 
     return TaskStatsResponse(
         total_tasks=total,
         completed_tasks=completed,
-        in_progress_tasks=sum(1 for t in all_tasks if t.status == "IN_PROGRESS"),
+        in_progress_tasks=statuses["IN_PROGRESS"],
         overdue_tasks=overdue,
-        completion_rate=completion_rate,
-        avg_completion_days=2.5,
+        completion_rate=round(completed / total, 2) if total else 0.0,
+        avg_completion_days=avg_days,
         tasks_by_priority=priorities,
         tasks_by_status=statuses,
         by_priority=priorities,
         by_status=statuses,
-        tasks_created_per_day=[],
+        tasks_created_per_day=per_day,
     )
 
 
 async def get_team_workload(db: AsyncSession) -> List[TeamMemberWorkload]:
-    """Calculate workload distribution across active team members."""
-    users_stmt = select(User).where(User.is_active.is_(True))
-    users = (await db.execute(users_stmt)).scalars().all()
-    today = date.today()
-
-    workloads = []
-    for u in users:
-        tasks_stmt = select(Task).where(Task.assignee_id == u.id, Task.deleted_at.is_(None))
-        t_res = await db.execute(tasks_stmt)
-        user_tasks = t_res.scalars().all()
-
-        total = len(user_tasks)
-        completed = sum(1 for t in user_tasks if t.status == "DONE")
-        overdue = sum(
-            1 for t in user_tasks if t.due_date and t.due_date < today and t.status not in ["DONE", "CANCELLED"]
+    """Per-member workload from a single grouped query (no per-user round trips)."""
+    today = local_today()
+    open_overdue = (Task.due_date < today) & Task.status.not_in(CLOSED_STATUSES)
+    stmt = (
+        select(
+            User.id,
+            User.display_name,
+            User.email,
+            User.role,
+            func.count(Task.id),
+            func.coalesce(func.sum(case_when(Task.status == "DONE")), 0),
+            func.coalesce(func.sum(case_when(open_overdue)), 0),
+            func.coalesce(func.sum(case_when(Task.priority.in_(["HIGH", "CRITICAL"]))), 0),
         )
-        high_prio = sum(1 for t in user_tasks if t.priority in ["HIGH", "CRITICAL"])
-        rate = round(completed / total, 2) if total > 0 else 0.0
-
-        workloads.append(
-            TeamMemberWorkload(
-                user_id=str(u.id),
-                display_name=u.display_name,
-                email=u.email,
-                role=u.role,
-                assigned_tasks=total,
-                completed_tasks=completed,
-                overdue_tasks=overdue,
-                high_priority_tasks=high_prio,
-                completion_rate=rate,
-            )
+        .select_from(User)
+        .outerjoin(Task, (Task.assignee_id == User.id) & Task.deleted_at.is_(None))
+        .where(User.is_active.is_(True))
+        .group_by(User.id, User.display_name, User.email, User.role)
+        .order_by(User.display_name)
+    )
+    rows = (await db.execute(stmt)).all()
+    return [
+        TeamMemberWorkload(
+            user_id=str(uid),
+            display_name=name,
+            email=email,
+            role=role,
+            assigned_tasks=total,
+            completed_tasks=int(done),
+            overdue_tasks=int(late),
+            high_priority_tasks=int(high),
+            completion_rate=round(int(done) / total, 2) if total else 0.0,
         )
-    return workloads
+        for uid, name, email, role, total, done, late, high in rows
+    ]

@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
-from db.base import utc_now
+from db.base import local_midnight_utc, local_today, utc_now
 from db.models import NotificationLog, User
 from services.google_chat import send_dm, send_text_message
 from tools.analytics_tools import get_task_stats
@@ -21,7 +21,7 @@ async def _has_already_received_weekly_summary(
     user_id: Any,
 ) -> bool:
     """Checks if a user has already received a weekly summary within the last 5 days."""
-    cutoff = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    cutoff = local_midnight_utc()
     query = select(NotificationLog).where(
         NotificationLog.user_id == user_id,
         NotificationLog.type == "weekly_summary",

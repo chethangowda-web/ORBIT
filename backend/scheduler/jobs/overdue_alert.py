@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from db.base import utc_now
+from db.base import local_midnight_utc, local_today, utc_now
 from db.models import NotificationLog, Task, User
 from services.google_chat import send_dm, send_text_message
 from tools.base import get_tool_session
@@ -24,7 +24,7 @@ PRIORITY_ICONS = {
 
 async def _has_already_received_overdue_alert(session: AsyncSession, user_id: Any) -> bool:
     """Checks if a user has already received an overdue alert today (UTC)."""
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = local_midnight_utc()
     query = select(NotificationLog).where(
         NotificationLog.user_id == user_id,
         NotificationLog.type == "overdue_alert",
@@ -95,7 +95,7 @@ async def run_overdue_alerts(
     }
 
     async with get_tool_session(session) as s:
-        today = date.today()
+        today = local_today()
         stmt = (
             select(Task)
             .where(
