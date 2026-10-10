@@ -85,11 +85,12 @@ api_router.include_router(admin_router)
 
 app.include_router(api_router)
 
-# Direct fallback routes for Google Chat webhook variations
+# Legacy aliases for bots configured before the canonical /api/chat/webhook URL.
+# Hidden from the schema; new setups should use /api/chat/webhook.
 from api.webhook import google_chat_webhook
-app.add_api_route("/webhook", google_chat_webhook, methods=["POST"])
-app.add_api_route("/api/cha", google_chat_webhook, methods=["POST"])
-app.add_api_route("/api/chat", google_chat_webhook, methods=["POST"])
+
+for _legacy_path in ("/webhook", "/api/cha"):
+    app.add_api_route(_legacy_path, google_chat_webhook, methods=["POST"], include_in_schema=False)
 
 
 @app.get("/", tags=["General"])

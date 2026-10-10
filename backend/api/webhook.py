@@ -2,7 +2,7 @@ import json
 import logging
 import uuid
 from typing import Any, Optional
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Header, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -93,108 +93,6 @@ async def get_or_create_google_user(session: AsyncSession, chat_user: GoogleChat
     await session.commit()
     await session.refresh(new_user)
     return new_user
-
-
-async def handle_chat_event(event: GoogleChatEvent) -> None:
-    """Asynchronous background processor for Google Chat events."""
-    if not event.user:
-        logger.warning("Event received without user profile")
-        return
-
-    space_id = event.space.name
-
-    async with get_tool_session() as session:
-        user = await get_or_create_google_user(session, event.user)
-        user_id_str = str(user.id)
-
-        if event.type == "ADDED_TO_SPACE":
-            welcome_card = build_welcome_card_v2()
-            await send_card_message(space_id, welcome_card, fallback_text=WELCOME_TEXT)
-            return
-
-        if event.type == "MESSAGE" and event.message:
-            raw_msg = normalize_chat_message(event.message.text)
-            thread_name = (event.message.thread or {}).get("name") if event.message.thread else None
-            is_dm = event.space.type == "DM" or getattr(event.space, "singleUserBotDm", False) or getattr(event.space, "spaceType", "") == "DIRECT_MESSAGE"
-            effective_thread_id = space_id if is_dm else (thread_name or space_id)
-
-            agent_state = await process_message(
-                user_id=user_id_str,
-                space_id=space_id,
-                message=raw_msg,
-                thread_id=effective_thread_id,
-                session=session,
-            )
-
-            resp_text = agent_state.get("response", "No response generated.")
-            resp_type = agent_state.get("response_type", "text")
-            card_data = agent_state.get("card_data")
-            needs_conf = agent_state.get("needs_confirmation", False)
-
-            if needs_conf and agent_state.get("referenced_task_id"):
-                ref_id = str(agent_state.get("referenced_task_id"))
-                conf_card = build_confirmation_card_v2(
-                    task_id=ref_id,
-                    task_title="Task",
-                    thread_id=thread_name or space_id,
-                    prompt_text=resp_text,
-                )
-                await send_card_message(space_id, conf_card, fallback_text=resp_text, thread_id=thread_name)
-            elif resp_type == "card" and card_data:
-                if isinstance(card_data, dict) and "cardsV2" in card_data and card_data["cardsV2"]:
-                    card_v2 = card_data["cardsV2"][0]
-                elif isinstance(card_data, dict) and "card" in card_data:
-                    card_v2 = card_data
-                else:
-                    card_v2 = build_task_card_v2(card_data)
-                await send_card_message(space_id, card_v2, fallback_text=resp_text, thread_id=thread_name)
-            else:
-                await send_text_message(space_id, resp_text, thread_id=thread_name)
-
-        elif event.type == "CARD_CLICKED" and event.action:
-            # Handle interactive card button clicks (Confirm / Cancel / Complete)
-            action_name = event.action.actionMethodName or ""
-            params = {p.get("key"): p.get("value") for p in (event.action.parameters or []) if p.get("key")}
-            task_id = params.get("task_id", "")
-            target_thread = params.get("thread_id") or space_id
-
-            if action_name in ("confirm_delete_task", "confirm_action"):
-                agent_state = await process_message(
-                    user_id=user_id_str,
-                    space_id=space_id,
-                    message="yes",
-                    thread_id=target_thread,
-                    confirmed=True,
-                    session=session,
-                )
-            elif action_name in ("cancel_action", "cancel"):
-                agent_state = await process_message(
-                    user_id=user_id_str,
-                    space_id=space_id,
-                    message="cancel",
-                    thread_id=target_thread,
-                    confirmed=False,
-                    session=session,
-                )
-            elif action_name == "complete_task" and task_id:
-                agent_state = await process_message(
-                    user_id=user_id_str,
-                    space_id=space_id,
-                    message=f"Mark Task #{task_id} as completed",
-                    thread_id=target_thread,
-                    session=session,
-                )
-            else:
-                agent_state = await process_message(
-                    user_id=user_id_str,
-                    space_id=space_id,
-                    message=action_name or "confirm",
-                    thread_id=target_thread,
-                    session=session,
-                )
-
-            resp_text = agent_state.get("response", "Action processed.")
-            await send_text_message(space_id, resp_text, thread_id=target_thread)
 
 
 def format_chat_response(
@@ -314,209 +212,227 @@ def parse_chat_event_payload(body_bytes: bytes) -> GoogleChatEvent:
     )
 
 
-@router.post("/webhook", status_code=status.HTTP_200_OK)
-@router.post("", status_code=status.HTTP_200_OK)
-@router.post("/", status_code=status.HTTP_200_OK)
-async def google_chat_webhook(
-    request: Request,
-    background_tasks: BackgroundTasks,
-    authorization: Optional[str] = Header(None, alias="Authorization"),
-    x_goog_signature: Optional[str] = Header(None, alias="X-Goog-Signature"),
-) -> dict[str, Any]:
-    """HTTP Webhook endpoint for receiving Google Chat POST events with Bearer & signature verification."""
-    body = await request.body()
-    logger.info("[WEBHOOK INCOMING] Payload size: %d bytes | Raw: %s", len(body), body.decode("utf-8", errors="replace"))
+CONFIRM_ACTIONS = {"confirm_delete_task", "confirm_action"}
+CANCEL_ACTIONS = {"cancel_action", "cancel"}
+GENERIC_ERROR_TEXT = "ORBIT hit an internal error and could not finish that. Please try again."
 
-    # 1. Enforce Google native Bearer verification if configured
-    if settings.GOOGLE_CHAT_VERIFY_AUTH:
-        is_valid_bearer = verify_google_chat_bearer_token(authorization)
-        is_valid_hmac = verify_webhook_signature(body, x_goog_signature or "") if settings.GOOGLE_CHAT_WEBHOOK_SECRET else False
-        if not (is_valid_bearer or is_valid_hmac):
-            logger.warning("[WEBHOOK AUTH FAILED] Missing or invalid authorization token")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or missing Google Chat authentication token",
-            )
-    elif settings.GOOGLE_CHAT_WEBHOOK_SECRET and x_goog_signature:
-        if not verify_webhook_signature(body, x_goog_signature):
-            logger.warning("[WEBHOOK AUTH FAILED] Invalid webhook signature")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Invalid Google Chat webhook signature",
-            )
 
-    try:
-        event = parse_chat_event_payload(body)
-        logger.info("[WEBHOOK] Parsed event: type=%s user=%s space=%s message=%s",
-                    event.type,
-                    event.user.displayName if event.user else "None",
-                    event.space.name,
-                    event.message.text if event.message else "None")
-    except Exception as err:
-        logger.exception("Failed to parse Google Chat event: %s", err)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid event schema: {err}",
-        )
+def _is_dm(space: GoogleChatSpace) -> bool:
+    """True for one-to-one bot conversations."""
+    return (
+        space.type == "DM"
+        or bool(getattr(space, "singleUserBotDm", False))
+        or getattr(space, "spaceType", "") == "DIRECT_MESSAGE"
+    )
 
-    is_addon = bool(event.commonEventObject is not None)
 
-    # 1. App Home & Added to Space onboarding
-    if event.type in ("APP_HOME", "ADDED_TO_SPACE"):
-        if event.user:
-            async with get_tool_session() as session:
-                await get_or_create_google_user(session, event.user)
-        welcome_card = build_welcome_card_v2()
-        response = format_chat_response(WELCOME_TEXT, cards_v2=[welcome_card], is_addon=is_addon, is_app_home=True)
-        logger.info("[WEBHOOK OUTGOING] Responding to %s with welcome card", event.type)
-        return response
+def _card_params(event: GoogleChatEvent) -> dict[str, str]:
+    """Flatten card button parameters into a key/value mapping."""
+    if not event.action:
+        return {}
+    return {p.get("key"): p.get("value") for p in (event.action.parameters or []) if p.get("key")}
 
-    if not event.user:
-        return format_chat_response("Event received without user profile.", is_addon=is_addon)
 
+def _compute_event_key(event: GoogleChatEvent) -> Optional[str]:
+    """Stable idempotency key for side-effecting events; None for harmless ones."""
     space_id = event.space.name
-
-    # Idempotency: dedupe retried deliveries of the same side-effecting event
-    # (message send or button click) so retries can never double-create a task
-    # or double-execute a confirmed destructive action.
-    event_key: Optional[str] = None
     if event.type == "MESSAGE" and event.message:
-        discriminator = event.message.name or f"text:{event.message.text}"
-        event_key = compute_event_key(
+        return compute_event_key(
             event_type="MESSAGE",
             space_name=space_id,
             user_name=event.user.name,
             event_time=event.eventTime,
-            discriminator=discriminator,
+            discriminator=event.message.name or f"text:{event.message.text}",
         )
-    elif event.type == "CARD_CLICKED" and event.action:
-        params = {p.get("key"): p.get("value") for p in (event.action.parameters or []) if p.get("key")}
-        discriminator = f"{event.action.actionMethodName}:{json.dumps(params, sort_keys=True)}"
-        event_key = compute_event_key(
+    if event.type == "CARD_CLICKED" and event.action:
+        discriminator = f"{event.action.actionMethodName}:{json.dumps(_card_params(event), sort_keys=True)}"
+        return compute_event_key(
             event_type="CARD_CLICKED",
             space_name=space_id,
             user_name=event.user.name,
             event_time=event.eventTime,
             discriminator=discriminator,
         )
+    return None
 
+
+def _authenticate_request(body: bytes, authorization: Optional[str], signature: Optional[str]) -> None:
+    """Reject requests that fail Google Bearer verification or the optional HMAC check."""
+    if settings.GOOGLE_CHAT_VERIFY_AUTH:
+        valid_bearer = verify_google_chat_bearer_token(authorization)
+        valid_hmac = (
+            verify_webhook_signature(body, signature or "")
+            if settings.GOOGLE_CHAT_WEBHOOK_SECRET
+            else False
+        )
+        if not (valid_bearer or valid_hmac):
+            logger.warning("[WEBHOOK AUTH FAILED] Missing or invalid authorization token")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or missing Google Chat authentication token",
+            )
+    elif settings.GOOGLE_CHAT_WEBHOOK_SECRET and not verify_webhook_signature(body, signature or ""):
+        # A configured secret makes the signature mandatory: omitting the header is not a bypass.
+        logger.warning("[WEBHOOK AUTH FAILED] Missing or invalid webhook signature")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid Google Chat webhook signature",
+        )
+
+
+def _message_response(agent_state: dict[str, Any], thread_id: str, is_addon: bool) -> dict[str, Any]:
+    """Turn an agent result into a Chat response, using cards where the agent asked for one."""
+    text = agent_state.get("response", "No response generated.")
+    card_data = agent_state.get("card_data")
+    pending = agent_state.get("pending_confirmation") or {}
+
+    if agent_state.get("needs_confirmation") and agent_state.get("referenced_task_id"):
+        card = build_confirmation_card_v2(
+            task_id=str(agent_state["referenced_task_id"]),
+            task_title=pending.get("task_title", "Task"),
+            thread_id=thread_id,
+            prompt_text=text,
+        )
+        return format_chat_response(text, cards_v2=[card], is_addon=is_addon)
+
+    if agent_state.get("response_type") == "card" and card_data:
+        if isinstance(card_data, dict) and card_data.get("cardsV2"):
+            card = card_data["cardsV2"][0]
+        elif isinstance(card_data, dict) and "card" in card_data:
+            card = card_data
+        else:
+            card = build_task_card_v2(card_data)
+        return format_chat_response(text, cards_v2=[card], is_addon=is_addon)
+
+    return format_chat_response(text, is_addon=is_addon)
+
+
+async def _handle_message(
+    event: GoogleChatEvent, session: AsyncSession, user_id: str, is_addon: bool
+) -> dict[str, Any]:
+    """Run a typed chat message through the agent graph."""
+    space_id = event.space.name
+    thread_name = (event.message.thread or {}).get("name") if event.message.thread else None
+    thread_id = space_id if _is_dm(event.space) else (thread_name or space_id)
+
+    agent_state = await process_message(
+        user_id=user_id,
+        space_id=space_id,
+        message=normalize_chat_message(event.message.text),
+        thread_id=thread_id,
+        session=session,
+    )
+    logger.info(
+        "[WEBHOOK] message handled intent=%s agent=%s",
+        agent_state.get("intent"),
+        agent_state.get("active_agent"),
+    )
+    return _message_response(agent_state, thread_id, is_addon)
+
+
+async def _handle_card_click(
+    event: GoogleChatEvent, session: AsyncSession, user_id: str, is_addon: bool
+) -> dict[str, Any]:
+    """Translate a card button press into the matching agent action."""
+    space_id = event.space.name
+    action = event.action.actionMethodName or ""
+    params = _card_params(event)
+    thread_id = space_id if _is_dm(event.space) else (params.get("thread_id") or space_id)
+
+    if action in CONFIRM_ACTIONS:
+        message, confirmed = "yes", True
+    elif action in CANCEL_ACTIONS:
+        message, confirmed = "cancel", False
+    elif action == "complete_task" and params.get("task_id"):
+        message, confirmed = f"Mark Task #{params['task_id']} as completed", False
+    else:
+        # Never forward unknown button ids to the agent as free text: a crafted
+        # action could otherwise be read as "confirm" against a pending delete.
+        logger.warning("[WEBHOOK] Ignoring unsupported card action %r", action)
+        return format_chat_response("That action is no longer available.", is_addon=is_addon)
+
+    agent_state = await process_message(
+        user_id=user_id,
+        space_id=space_id,
+        message=message,
+        thread_id=thread_id,
+        confirmed=confirmed,
+        session=session,
+    )
+    return format_chat_response(agent_state.get("response", "Action processed."), is_addon=is_addon)
+
+
+@router.post("/webhook", status_code=status.HTTP_200_OK)
+@router.post("", status_code=status.HTTP_200_OK, include_in_schema=False)
+@router.post("/", status_code=status.HTTP_200_OK, include_in_schema=False)
+async def google_chat_webhook(
+    request: Request,
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    x_goog_signature: Optional[str] = Header(None, alias="X-Goog-Signature"),
+) -> dict[str, Any]:
+    """Receive Google Chat events (Bearer/HMAC verified, idempotent, PII-safe logging)."""
+    body = await request.body()
+    logger.info("[WEBHOOK INCOMING] %d bytes", len(body))
+    if settings.LOG_WEBHOOK_PAYLOADS:
+        logger.debug("[WEBHOOK PAYLOAD] %s", body.decode("utf-8", errors="replace"))
+
+    _authenticate_request(body, authorization, x_goog_signature)
+
+    try:
+        event = parse_chat_event_payload(body)
+    except Exception as err:
+        logger.warning("Failed to parse Google Chat event: %s", err)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid event schema.",
+        )
+    logger.info("[WEBHOOK] parsed type=%s space=%s", event.type, event.space.name)
+
+    is_addon = event.commonEventObject is not None
+
+    if event.type in ("APP_HOME", "ADDED_TO_SPACE"):
+        if event.user:
+            async with get_tool_session() as session:
+                await get_or_create_google_user(session, event.user)
+        return format_chat_response(
+            WELCOME_TEXT, cards_v2=[build_welcome_card_v2()], is_addon=is_addon, is_app_home=True
+        )
+
+    if not event.user:
+        return format_chat_response("Event received without user profile.", is_addon=is_addon)
+
+    # Idempotency: a redelivered message or button click must never re-run its tools.
+    event_key = _compute_event_key(event)
     if event_key:
         is_duplicate, cached_response = await claim_event(event_key, event.type)
         if is_duplicate:
-            logger.info("[WEBHOOK DEDUP] Duplicate event ignored: key=%s", event_key)
+            logger.info("[WEBHOOK DEDUP] Duplicate event ignored")
             return format_chat_response(
-                cached_response or "This action was already processed.",
-                is_addon=is_addon,
+                cached_response or "This action was already processed.", is_addon=is_addon
             )
 
-    result_response: dict[str, Any] = format_chat_response("Action processed.", is_addon=is_addon)
-    processing_failed = False
+    result = format_chat_response("Action processed.", is_addon=is_addon)
+    failed = False
     try:
         async with get_tool_session() as session:
             user = await get_or_create_google_user(session, event.user)
-            user_id_str = str(user.id)
-
-            is_dm = event.space.type == "DM" or getattr(event.space, "singleUserBotDm", False) or getattr(event.space, "spaceType", "") == "DIRECT_MESSAGE"
-
             if event.type == "MESSAGE" and event.message:
-                raw_msg = normalize_chat_message(event.message.text)
-                thread_name = (event.message.thread or {}).get("name") if event.message.thread else None
-                effective_thread_id = space_id if is_dm else (thread_name or space_id)
-
-                agent_state = await process_message(
-                    user_id=user_id_str,
-                    space_id=space_id,
-                    message=raw_msg,
-                    thread_id=effective_thread_id,
-                    session=session,
-                )
-
-                resp_text = agent_state.get("response", "No response generated.")
-                resp_type = agent_state.get("response_type", "text")
-                card_data = agent_state.get("card_data")
-                needs_conf = agent_state.get("needs_confirmation", False)
-
-                logger.info("[WEBHOOK OUTGOING] Agent response preview: type=%s text=%r", resp_type, resp_text[:80])
-
-                if needs_conf and agent_state.get("referenced_task_id"):
-                    ref_id = str(agent_state.get("referenced_task_id"))
-                    conf_card = build_confirmation_card_v2(
-                        task_id=ref_id,
-                        task_title="Task",
-                        thread_id=effective_thread_id,
-                        prompt_text=resp_text,
-                    )
-                    result_response = format_chat_response(resp_text, cards_v2=[conf_card], is_addon=is_addon)
-                elif resp_type == "card" and card_data:
-                    if isinstance(card_data, dict) and "cardsV2" in card_data and card_data["cardsV2"]:
-                        card_v2 = card_data["cardsV2"][0]
-                    elif isinstance(card_data, dict) and "card" in card_data:
-                        card_v2 = card_data
-                    else:
-                        card_v2 = build_task_card_v2(card_data)
-                    result_response = format_chat_response(resp_text, cards_v2=[card_v2], is_addon=is_addon)
-                else:
-                    result_response = format_chat_response(resp_text, is_addon=is_addon)
-
+                result = await _handle_message(event, session, str(user.id), is_addon)
             elif event.type == "CARD_CLICKED" and event.action:
-                action_name = event.action.actionMethodName or ""
-                params = {p.get("key"): p.get("value") for p in (event.action.parameters or []) if p.get("key")}
-                task_id = params.get("task_id", "")
-                target_thread = space_id if is_dm else (params.get("thread_id") or space_id)
-
-                if action_name in ("confirm_delete_task", "confirm_action"):
-                    agent_state = await process_message(
-                        user_id=user_id_str,
-                        space_id=space_id,
-                        message="yes",
-                        thread_id=target_thread,
-                        confirmed=True,
-                        session=session,
-                    )
-                elif action_name in ("cancel_action", "cancel"):
-                    agent_state = await process_message(
-                        user_id=user_id_str,
-                        space_id=space_id,
-                        message="cancel",
-                        thread_id=target_thread,
-                        confirmed=False,
-                        session=session,
-                    )
-                elif action_name == "complete_task" and task_id:
-                    agent_state = await process_message(
-                        user_id=user_id_str,
-                        space_id=space_id,
-                        message=f"Mark Task #{task_id} as completed",
-                        thread_id=target_thread,
-                        session=session,
-                    )
-                else:
-                    agent_state = await process_message(
-                        user_id=user_id_str,
-                        space_id=space_id,
-                        message=action_name or "confirm",
-                        thread_id=target_thread,
-                        session=session,
-                    )
-
-                resp_text = agent_state.get("response", "Action processed.")
-                logger.info("[WEBHOOK OUTGOING] Card click response: %r", resp_text[:80])
-                result_response = format_chat_response(resp_text, is_addon=is_addon)
-    except Exception as exc:
-        logger.exception("[WEBHOOK PROCESSING ERROR] %s", exc)
-        processing_failed = True
-        result_response = format_chat_response(
-            f"⚠️ ORBIT encountered an internal error: {str(exc)}", is_addon=is_addon
-        )
+                result = await _handle_card_click(event, session, str(user.id), is_addon)
+    except Exception:
+        error_id = uuid.uuid4().hex[:12]
+        logger.exception("[WEBHOOK PROCESSING ERROR] ref=%s", error_id)
+        failed = True
+        result = format_chat_response(f"{GENERIC_ERROR_TEXT} (ref {error_id})", is_addon=is_addon)
 
     if event_key:
         await finalize_event(
             event_key,
-            response_text=_extract_response_text(result_response),
-            status="FAILED" if processing_failed else "COMPLETED",
+            response_text=_extract_response_text(result),
+            status="FAILED" if failed else "COMPLETED",
         )
-
-    return result_response
+    return result
 
 
 SUGGESTED_ACTIONS_BY_INTENT = {
