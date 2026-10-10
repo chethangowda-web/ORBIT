@@ -226,10 +226,10 @@ async def test_users_api(
 
 @pytest.mark.asyncio
 async def test_analytics_api(
-    client: AsyncClient, seed_test_user: User, user_auth_headers: dict
+    client: AsyncClient, seed_test_user: User, user_auth_headers: dict, manager_auth_headers: dict
 ):
-    """Test GET /api/analytics/stats and GET /api/analytics/team-workload."""
-    # Task stats
+    """Test GET /api/analytics/stats and GET /api/analytics/team-workload with RBAC."""
+    # Task stats (accessible by employee, scoped to self)
     stats_res = await client.get("/api/analytics/stats", headers=user_auth_headers)
     assert stats_res.status_code == 200
     stats = stats_res.json()["data"]
@@ -238,9 +238,15 @@ async def test_analytics_api(
     assert "completion_rate" in stats
     assert "tasks_by_priority" in stats
 
-    # Team workload
-    workload_res = await client.get(
+    # Team workload: Employee is forbidden (403)
+    emp_workload_res = await client.get(
         "/api/analytics/team-workload", headers=user_auth_headers
+    )
+    assert emp_workload_res.status_code == 403
+
+    # Team workload: Manager is authorized (200)
+    workload_res = await client.get(
+        "/api/analytics/team-workload", headers=manager_auth_headers
     )
     assert workload_res.status_code == 200
     workload = workload_res.json()["data"]

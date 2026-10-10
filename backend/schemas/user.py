@@ -46,6 +46,12 @@ class UserPreferenceUpdate(BaseModel):
     preferences: Dict[str, str]
 
 
+class UserRoleUpdate(BaseModel):
+    """Administrative role update request."""
+
+    role: str
+
+
 class UserSummary(BaseModel):
     """Minimal user summary model for references and lists."""
 

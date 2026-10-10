@@ -11,18 +11,19 @@ import {
   Settings,
   LogOut,
   Bot,
-  Sparkles,
 } from "lucide-react";
 
 export const Sidebar: React.FC = () => {
   const pathname = usePathname();
   const { user, logout } = useAuth();
 
+  const isEmployee = user?.role?.toLowerCase() === "employee";
+
   const navItems = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
     { href: "/tasks", label: "Tasks", icon: CheckSquare },
-    { href: "/analytics", label: "Analytics", icon: BarChart3 },
-    { href: "/settings", label: "Settings & System", icon: Settings },
+    ...(!isEmployee ? [{ href: "/analytics", label: "Analytics", icon: BarChart3 }] : []),
+    ...(!isEmployee ? [{ href: "/settings", label: "Settings & System", icon: Settings }] : []),
   ];
 
   if (pathname === "/login") {

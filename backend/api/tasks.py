@@ -1,6 +1,6 @@
-"""
-ORBIT Task Management Endpoints
-Provides task CRUD, state transitions, filtering, and audit history.
+"""ORBIT Task Management Endpoints.
+
+Provides task CRUD, state transitions, filtering, audit history, and object-level RBAC enforcement.
 """
 
 import math
@@ -10,12 +10,13 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from auth.rbac import Role, TaskAction, get_authorized_task
 from crud import audit as audit_crud
 from crud import tasks as task_crud
 from db.models import User
 from db.session import get_db
 from dependencies import get_current_user, require_role
-from exceptions import EntityNotFoundException
+from exceptions import EntityNotFoundException, PermissionDeniedException
 from schemas.common import PaginationMeta, api_response
 from schemas.task import (
     TaskAuditRead,
@@ -46,13 +47,18 @@ async def list_tasks(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List tasks with dynamic filtering, sorting, and pagination."""
+    """List tasks with dynamic filtering, sorting, pagination, and employee scope isolation."""
+    # Scope query by role: Employees can only view tasks assigned to or created by them
+    is_employee = Role.from_str(current_user.role) == Role.EMPLOYEE
+    user_filter = current_user.id if is_employee else None
+
     tasks, total = await task_crud.list_tasks(
         db=db,
         status=status,
         priority=priority,
         assignee_id=assignee_id,
         created_by_id=created_by_id,
+        user_id=user_filter,
         due_before=due_before,
         due_after=due_after,
         q=q,
@@ -81,6 +87,11 @@ async def create_new_task(
     current_user: User = Depends(get_current_user),
 ):
     """Create a new task and record creation in audit trail."""
+    # Policy: Employees cannot assign tasks to other users
+    is_employee = Role.from_str(current_user.role) == Role.EMPLOYEE
+    if is_employee and payload.assignee_id and payload.assignee_id != current_user.id:
+        raise PermissionDeniedException("Employees cannot assign tasks to other users.")
+
     task = await task_crud.create_task(
         db=db,
         task_in=payload,
@@ -95,8 +106,11 @@ async def get_overdue_tasks(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return all incomplete overdue tasks."""
-    tasks = await task_crud.get_overdue_tasks(db=db)
+    """Return all incomplete overdue tasks scoped to user permissions."""
+    is_employee = Role.from_str(current_user.role) == Role.EMPLOYEE
+    user_filter = current_user.id if is_employee else None
+
+    tasks = await task_crud.get_overdue_tasks(db=db, user_id=user_filter)
     task_reads = [TaskRead.model_validate(t).model_dump() for t in tasks]
     return api_response(data=task_reads)
 
@@ -107,11 +121,10 @@ async def get_task_details(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get single task details including its full audit trail."""
-    task = await task_crud.get_task(db=db, task_id=task_id)
-    if not task:
-        raise EntityNotFoundException("Task", task_id)
-
+    """Get single task details with object-level authorization."""
+    task = await get_authorized_task(
+        db=db, task_id=task_id, user=current_user, action=TaskAction.VIEW
+    )
     return api_response(data=TaskDetailRead.model_validate(task).model_dump())
 
 
@@ -122,7 +135,16 @@ async def update_task_details(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Partially update task fields and log changed attributes."""
+    """Partially update task fields after object-level authorization check."""
+    await get_authorized_task(
+        db=db, task_id=task_id, user=current_user, action=TaskAction.UPDATE
+    )
+
+    # Policy: Employees cannot reassign tasks to other users
+    is_employee = Role.from_str(current_user.role) == Role.EMPLOYEE
+    if is_employee and payload.assignee_id is not None and payload.assignee_id != current_user.id:
+        raise PermissionDeniedException("Employees cannot reassign tasks to other users.")
+
     task = await task_crud.update_task(
         db=db,
         task_id=task_id,
@@ -140,6 +162,9 @@ async def delete_task(
     current_user: User = Depends(require_role("manager", "admin")),
 ):
     """Soft-delete a task (restricted to managers and admins)."""
+    await get_authorized_task(
+        db=db, task_id=task_id, user=current_user, action=TaskAction.DELETE
+    )
     await task_crud.soft_delete_task(
         db=db,
         task_id=task_id,
@@ -156,7 +181,10 @@ async def mark_task_complete(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Mark a task as completed."""
+    """Mark a task as completed after checking permissions."""
+    await get_authorized_task(
+        db=db, task_id=task_id, user=current_user, action=TaskAction.COMPLETE
+    )
     task = await task_crud.complete_task(
         db=db,
         task_id=task_id,
@@ -173,7 +201,10 @@ async def get_task_history(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get full chronological audit trail for a task."""
+    """Get full chronological audit trail for an authorized task."""
+    await get_authorized_task(
+        db=db, task_id=task_id, user=current_user, action=TaskAction.VIEW
+    )
     history = await audit_crud.get_task_audit_history(db=db, task_id=task_id)
     history_reads = [TaskAuditRead.model_validate(h).model_dump() for h in history]
     return api_response(data=history_reads)

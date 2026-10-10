@@ -71,6 +71,31 @@ export const api = {
       );
       return data.data;
     },
+    googleUrl: async (): Promise<{ authorization_url: string; state: string }> => {
+      const { data } = await apiClient.get<APIResponse<{ authorization_url: string; state: string }>>(
+        "/auth/google/url",
+        { withCredentials: true }
+      );
+      return data.data;
+    },
+    googleCallback: async (code: string, state: string): Promise<{ access_token: string; token_type: string; user: User }> => {
+      const { data } = await apiClient.post<APIResponse<{ access_token: string; token_type: string; user: User }>>(
+        "/auth/google/callback",
+        { code, state },
+        { withCredentials: true }
+      );
+      return data.data;
+    },
+    googleLink: async (link_token: string, password: string): Promise<{ access_token: string; token_type: string; user: User }> => {
+      const { data } = await apiClient.post<APIResponse<{ access_token: string; token_type: string; user: User }>>(
+        "/auth/google/link",
+        { link_token, password }
+      );
+      return data.data;
+    },
+    logout: async (): Promise<void> => {
+      await apiClient.post("/auth/logout", {}, { withCredentials: true });
+    },
     me: async (): Promise<User> => {
       const { data } = await apiClient.get<APIResponse<User>>("/auth/me");
       return data.data;

@@ -14,6 +14,7 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  setSession: (token: string, user: User) => void;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -64,7 +65,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(false);
   };
 
+  const setSession = (token: string, user: User) => {
+    localStorage.setItem("orbit_token", token);
+    localStorage.setItem("orbit_user", JSON.stringify(user));
+    document.cookie = `orbit_token=${token}; path=/; max-age=86400`;
+    setToken(token);
+    setUser(user);
+    router.push("/");
+  };
+
   const logout = () => {
+    try {
+      api.auth.logout().catch(() => {});
+    } catch {}
     localStorage.removeItem("orbit_token");
     localStorage.removeItem("orbit_user");
     document.cookie = "orbit_token=; path=/; max-age=0";
@@ -90,6 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         token,
         isLoading,
         login,
+        setSession,
         logout,
         refreshUser,
       }}

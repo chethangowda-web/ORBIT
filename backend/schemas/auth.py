@@ -36,3 +36,24 @@ class UserRegisterRequest(BaseModel):
     display_name: str
     role: str = "employee"
     timezone: str = "Asia/Kolkata"
+
+
+class GoogleAuthUrlResponse(BaseModel):
+    """Response containing Google OAuth authorization URL."""
+
+    authorization_url: str
+    state: str
+
+
+class GoogleCallbackRequest(BaseModel):
+    """Payload for exchanging Google OAuth authorization code."""
+
+    code: str
+    state: str
+
+
+class GoogleAccountLinkRequest(BaseModel):
+    """Payload for linking an existing password-authenticated account to Google."""
+
+    link_token: str
+    password: str

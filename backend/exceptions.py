@@ -43,18 +43,44 @@ class PermissionDeniedException(OrbitException):
         super().__init__(message, status_code=status.HTTP_403_FORBIDDEN)
 
 
+class AccountLinkRequiredException(OrbitException):
+    """Raised when an existing email requires password verification before linking Google sub."""
+
+    def __init__(self, message: str, link_token: str, email: str):
+        super().__init__(message, status_code=status.HTTP_409_CONFLICT)
+        self.link_token = link_token
+        self.email = email
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Register uniform envelope exception handlers on FastAPI instance."""
 
     @app.exception_handler(OrbitException)
     async def orbit_exception_handler(request: Request, exc: OrbitException) -> JSONResponse:
+        meta = None
+        if isinstance(exc, AccountLinkRequiredException):
+            meta = {
+                "code": "ACCOUNT_LINK_REQUIRED",
+                "link_token": exc.link_token,
+                "email": exc.email,
+            }
         return JSONResponse(
             status_code=exc.status_code,
-            content=api_response(data=None, error=exc.message, success=False),
+            content=api_response(data=None, error=exc.message, meta=meta, success=False),
         )
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+        if isinstance(exc.detail, dict):
+            return JSONResponse(
+                status_code=exc.status_code,
+                content=api_response(
+                    data=None,
+                    error=exc.detail.get("message", "Error"),
+                    meta=exc.detail,
+                    success=False,
+                ),
+            )
         return JSONResponse(
             status_code=exc.status_code,
             content=api_response(data=None, error=str(exc.detail), success=False),

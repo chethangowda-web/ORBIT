@@ -1,6 +1,7 @@
-"""
-ORBIT User Management Endpoints
-Provides user discovery, profile retrieval, preference updating, and assigned task queries.
+"""ORBIT User Management Endpoints.
+
+Provides user discovery, profile retrieval, preference updating, assigned task queries,
+and administrative role management.
 """
 
 import uuid
@@ -8,15 +9,16 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from auth.rbac import Role
 from crud import tasks as task_crud
 from crud import users as user_crud
 from db.models import User
 from db.session import get_db
-from dependencies import get_current_user
-from exceptions import EntityNotFoundException
+from dependencies import get_current_user, require_role
+from exceptions import EntityNotFoundException, PermissionDeniedException
 from schemas.common import api_response
 from schemas.task import TaskRead
-from schemas.user import UserPreferenceUpdate, UserRead, UserUpdate
+from schemas.user import UserPreferenceUpdate, UserRead, UserRoleUpdate, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -86,6 +88,25 @@ async def get_user_by_id(
     return api_response(data=UserRead.model_validate(user).model_dump())
 
 
+@router.patch("/{user_id}/role", status_code=status.HTTP_200_OK)
+async def update_user_role(
+    user_id: uuid.UUID,
+    payload: UserRoleUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """Update user role (restricted strictly to Admins)."""
+    target_user = await user_crud.get_user_by_id(db=db, user_id=user_id)
+    if not target_user:
+        raise EntityNotFoundException("User", user_id)
+
+    normalized_role = Role.from_str(payload.role).value
+    target_user.role = normalized_role
+    await db.commit()
+    await db.refresh(target_user)
+    return api_response(data=UserRead.model_validate(target_user).model_dump())
+
+
 @router.get("/{user_id}/tasks", status_code=status.HTTP_200_OK)
 async def get_tasks_for_user(
     user_id: uuid.UUID,
@@ -93,7 +114,11 @@ async def get_tasks_for_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Retrieve tasks assigned to a specific user."""
+    """Retrieve tasks assigned to a specific user with role authorization check."""
+    # Policy: Employees cannot view other users' task lists
+    if Role.from_str(current_user.role) == Role.EMPLOYEE and user_id != current_user.id:
+        raise PermissionDeniedException("Employees cannot view tasks assigned to other users.")
+
     tasks, _ = await task_crud.list_tasks(
         db=db,
         assignee_id=user_id,

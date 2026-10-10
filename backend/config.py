@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
 
+    # Google OAuth 2.0 / OpenID Connect
+    GOOGLE_OAUTH_CLIENT_ID: str = ""
+    GOOGLE_OAUTH_CLIENT_SECRET: str = ""
+    GOOGLE_OAUTH_REDIRECT_URI: str = "http://localhost:3000/auth/callback"
+
     # LLM & AI Settings
     GOOGLE_GEMINI_API_KEY: str = ""
     OPENAI_API_KEY: str = ""

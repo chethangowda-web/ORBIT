@@ -1,5 +1,5 @@
-"""
-ORBIT Analytics Endpoints
+"""ORBIT Analytics Endpoints.
+
 Provides system-wide and user-level task metric aggregates and team workload distributions.
 """
 
@@ -9,10 +9,11 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from auth.rbac import Role
 from crud import tasks as task_crud
 from db.models import User
 from db.session import get_db
-from dependencies import get_current_user
+from dependencies import get_current_user, require_role
 from schemas.common import api_response
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
@@ -26,7 +27,11 @@ async def get_task_statistics(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Retrieve aggregate task statistics and metrics."""
+    """Retrieve aggregate task statistics and metrics scoped by role."""
+    # Policy: Employees can only view their own aggregate statistics
+    if Role.from_str(current_user.role) == Role.EMPLOYEE:
+        user_id = current_user.id
+
     stats = await task_crud.get_task_stats(
         db=db, user_id=user_id, date_from=date_from, date_to=date_to
     )
@@ -36,8 +41,8 @@ async def get_task_statistics(
 @router.get("/team-workload", status_code=status.HTTP_200_OK)
 async def get_team_workload_distribution(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role("manager", "admin")),
 ):
-    """Retrieve current task workload and completion metrics across team members."""
+    """Retrieve current task workload and completion metrics across team members (Managers/Admins)."""
     workloads = await task_crud.get_team_workload(db=db)
     return api_response(data=[w.model_dump() for w in workloads])

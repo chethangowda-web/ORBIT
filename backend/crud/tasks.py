@@ -285,7 +285,7 @@ async def get_overdue_tasks(
         )
     )
     if user_id:
-        stmt = stmt.where(Task.assignee_id == user_id)
+        stmt = stmt.where(or_(Task.assignee_id == user_id, Task.created_by_id == user_id))
 
     stmt = stmt.order_by(Task.due_date.asc())
     result = await db.execute(stmt)

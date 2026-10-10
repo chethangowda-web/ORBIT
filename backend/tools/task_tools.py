@@ -136,6 +136,7 @@ async def create_task(
         parsed_due = date.fromisoformat(due_date) if isinstance(due_date, str) else due_date
 
         async with get_tool_session() as db:
+            from auth.rbac import can_assign_to_others
             target_assignee_id = to_uuid(assignee_id)
             if not target_assignee_id and assignee_name:
                 resolved_user = await user_crud.get_user_by_name(db, assignee_name)
@@ -143,6 +144,11 @@ async def create_task(
                     target_assignee_id = resolved_user.id
             if not target_assignee_id:
                 target_assignee_id = creator_uuid
+
+            calling_user = await user_crud.get_user_by_id(db, creator_uuid)
+            if calling_user and not can_assign_to_others(calling_user):
+                if target_assignee_id and target_assignee_id != creator_uuid:
+                    return tool_error("Permission denied: Employees cannot assign tasks to other users.")
 
             task_in = TaskCreate(
                 title=title,
@@ -194,11 +200,24 @@ async def update_task(
         parsed_due = date.fromisoformat(due_date) if isinstance(due_date, str) else due_date
 
         async with get_tool_session() as db:
+            from auth.rbac import TaskAction, can_assign_to_others, check_task_permission, is_manager
+            existing_task = await task_crud.get_task(db, t_uuid)
+            if not existing_task:
+                return tool_error(f"Task with ID {task_id} was not found.")
+
+            calling_user = await user_crud.get_user_by_id(db, user_uuid)
+            if calling_user and not check_task_permission(existing_task, calling_user, TaskAction.UPDATE):
+                return tool_error(f"Permission denied: You cannot update task {task_id}.")
+
             target_assignee_id = to_uuid(assignee_id)
             if not target_assignee_id and assignee_name:
                 resolved_user = await user_crud.get_user_by_name(db, assignee_name)
                 if resolved_user:
                     target_assignee_id = resolved_user.id
+
+            if calling_user and not can_assign_to_others(calling_user):
+                if target_assignee_id is not None and target_assignee_id != user_uuid:
+                    return tool_error("Permission denied: Employees cannot reassign tasks to other users.")
 
             update_fields: Dict[str, Any] = {}
             if title is not None:
@@ -237,6 +256,15 @@ async def complete_task(
         user_uuid = to_uuid(completed_by_id)
 
         async with get_tool_session() as db:
+            from auth.rbac import TaskAction, check_task_permission
+            existing_task = await task_crud.get_task(db, t_uuid)
+            if not existing_task:
+                return tool_error(f"Task with ID {task_id} was not found.")
+
+            calling_user = await user_crud.get_user_by_id(db, user_uuid)
+            if calling_user and not check_task_permission(existing_task, calling_user, TaskAction.COMPLETE):
+                return tool_error(f"Permission denied: You cannot complete task {task_id}.")
+
             completed = await task_crud.complete_task(
                 db=db,
                 task_id=t_uuid,
@@ -261,6 +289,11 @@ async def delete_task(
         user_uuid = to_uuid(deleted_by_id)
 
         async with get_tool_session() as db:
+            from auth.rbac import is_manager
+            calling_user = await user_crud.get_user_by_id(db, user_uuid)
+            if not calling_user or not is_manager(calling_user):
+                return tool_error("Permission denied: Only managers and admins can delete tasks.")
+
             deleted = await task_crud.soft_delete_task(
                 db=db, task_id=t_uuid, user_id=user_uuid, source="chat"
             )

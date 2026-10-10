@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { X, Loader2 } from "lucide-react";
 import { api } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth";
 import { Task, User } from "@/types";
 
 interface CreateTaskModalProps {
@@ -20,6 +21,9 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   initialTask,
   defaultStatus = "TODO",
 }) => {
+  const { user: currentUser } = useAuth();
+  const isEmployee = currentUser?.role?.toLowerCase() === "employee";
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState("TODO");
@@ -200,11 +204,13 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                 className="w-full px-3 py-2 rounded-md bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-blue-500"
               >
                 <option value="">Unassigned</option>
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.display_name} ({u.role})
-                  </option>
-                ))}
+                {users
+                  .filter((u) => !isEmployee || u.id === currentUser?.id)
+                  .map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.display_name} {u.id === currentUser?.id ? "(You)" : `(${u.role})`}
+                    </option>
+                  ))}
               </select>
             </div>
 

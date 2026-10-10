@@ -52,13 +52,16 @@ async def get_current_user(
 
 def require_role(*allowed_roles: str) -> Callable:
     """Return a dependency that enforces user role authorization."""
+    from auth.rbac import Role
 
     async def role_checker(
         current_user: User = Depends(get_current_user),
     ) -> User:
-        if current_user.role not in allowed_roles:
+        user_role = Role.from_str(current_user.role).value
+        allowed = [Role.from_str(r).value for r in allowed_roles]
+        if user_role not in allowed:
             raise PermissionDeniedException(
-                f"Role '{current_user.role}' is not authorized. Required: {', '.join(allowed_roles)}"
+                f"Role '{user_role}' is not authorized to access this resource."
             )
         return current_user
 
