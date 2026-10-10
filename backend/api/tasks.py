@@ -10,15 +10,22 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth.rbac import Role, TaskAction, get_authorized_task
+from auth.rbac import Role, TaskAction, get_authorized_task, is_manager
 from crud import audit as audit_crud
+from crud import comments as comment_crud
 from crud import tasks as task_crud
 from db.models import User
 from db.session import get_db
 from dependencies import get_current_user, require_role
-from exceptions import EntityNotFoundException, PermissionDeniedException
+from services.notifications import notify_task_event
+from exceptions import EntityNotFoundException, OrbitException, PermissionDeniedException
 from schemas.common import PaginationMeta, api_response
 from schemas.task import (
+    BulkFailure,
+    BulkTaskAction,
+    BulkTaskResult,
+    CommentCreate,
+    CommentRead,
     TaskAuditRead,
     TaskCompleteRequest,
     TaskCreate,
@@ -208,3 +215,108 @@ async def get_task_history(
     history = await audit_crud.get_task_audit_history(db=db, task_id=task_id)
     history_reads = [TaskAuditRead.model_validate(h).model_dump() for h in history]
     return api_response(data=history_reads)
+
+
+@router.get("/{task_id}/comments", status_code=status.HTTP_200_OK)
+async def list_task_comments(
+    task_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Comments on a task you may view, oldest first."""
+    await get_authorized_task(db=db, task_id=task_id, user=current_user, action=TaskAction.VIEW)
+    comments = await comment_crud.list_comments(db=db, task_id=task_id)
+    return api_response(data=[CommentRead.model_validate(c).model_dump() for c in comments])
+
+
+@router.post("/{task_id}/comments", status_code=status.HTTP_201_CREATED)
+async def add_task_comment(
+    task_id: uuid.UUID,
+    payload: CommentCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Comment on a task you may view; the assignee and creator are notified."""
+    task = await get_authorized_task(db=db, task_id=task_id, user=current_user, action=TaskAction.VIEW)
+    comment = await comment_crud.add_comment(db=db, task=task, author=current_user, body=payload.body)
+
+    recipients = {u.id: u for u in (task.assignee, task.creator) if u is not None and u.id != current_user.id}
+    for recipient in recipients.values():
+        await notify_task_event(
+            session=db,
+            task=task,
+            event_type="task_commented",
+            recipient=recipient,
+            actor_name=current_user.display_name,
+            detail=payload.body if len(payload.body) <= 200 else payload.body[:197] + "...",
+        )
+    return api_response(data=CommentRead.model_validate(comment).model_dump())
+
+
+@router.delete("/{task_id}/comments/{comment_id}", status_code=status.HTTP_200_OK)
+async def delete_task_comment(
+    task_id: uuid.UUID,
+    comment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Authors can delete their own comments; managers and admins can delete any."""
+    await get_authorized_task(db=db, task_id=task_id, user=current_user, action=TaskAction.VIEW)
+    comment = await comment_crud.get_comment(db=db, task_id=task_id, comment_id=comment_id)
+    if comment is None:
+        raise EntityNotFoundException("Comment", comment_id)
+    if comment.author_id != current_user.id and not is_manager(current_user):
+        raise PermissionDeniedException("You can only delete your own comments.")
+    await comment_crud.delete_comment(db=db, comment=comment)
+    return api_response(data={"message": "Comment deleted."})
+
+
+BULK_ACTION_PERMISSION = {
+    "complete": TaskAction.COMPLETE,
+    "set_status": TaskAction.UPDATE,
+    "set_priority": TaskAction.UPDATE,
+    # Same rule as PATCH /tasks/{id}: updating is allowed; handing work to others is checked separately.
+    "assign": TaskAction.UPDATE,
+    "delete": TaskAction.DELETE,
+}
+
+
+async def _apply_bulk_action(db: AsyncSession, user: User, payload: BulkTaskAction, task_id: uuid.UUID) -> None:
+    """Apply one bulk action to one task, raising on any permission or business-rule failure."""
+    await get_authorized_task(db=db, task_id=task_id, user=user, action=BULK_ACTION_PERMISSION[payload.action])
+
+    if payload.action == "complete":
+        await task_crud.complete_task(db=db, task_id=task_id, user_id=user.id, source="api")
+    elif payload.action == "delete":
+        await task_crud.soft_delete_task(db=db, task_id=task_id, user_id=user.id, source="api")
+    elif payload.action == "assign":
+        assignee = uuid.UUID(payload.value) if payload.value else None
+        if assignee is not None and assignee != user.id and Role.from_str(user.role) == Role.EMPLOYEE:
+            raise PermissionDeniedException("Employees cannot assign tasks to other users.")
+        await task_crud.update_task(db=db, task_id=task_id, task_update=TaskUpdate(assignee_id=assignee), user_id=user.id, source="api")
+    else:
+        field = "status" if payload.action == "set_status" else "priority"
+        await task_crud.update_task(db=db, task_id=task_id, task_update=TaskUpdate(**{field: payload.value}), user_id=user.id, source="api")
+
+
+@router.post("/bulk", status_code=status.HTTP_200_OK)
+async def bulk_task_action(
+    payload: BulkTaskAction,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Apply an action to several tasks. Every task is authorised individually and one failure
+    never aborts the rest: the response lists which succeeded and why others failed."""
+    succeeded: list[uuid.UUID] = []
+    failed: list[BulkFailure] = []
+    for task_id in dict.fromkeys(payload.task_ids):
+        try:
+            await _apply_bulk_action(db, current_user, payload, task_id)
+            succeeded.append(task_id)
+        except (OrbitException, PermissionDeniedException, EntityNotFoundException) as exc:
+            # Roll back anything half-applied, then reload the caller: rollback expires every
+            # loaded object and the next iteration needs the user's id and role.
+            await db.rollback()
+            await db.refresh(current_user)
+            failed.append(BulkFailure(id=task_id, reason=exc.message))
+    return api_response(data=BulkTaskResult(succeeded=succeeded, failed=failed).model_dump(mode="json"))

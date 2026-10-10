@@ -132,12 +132,47 @@ class Task(Base):
     creator: Mapped["User"] = relationship(
         "User", foreign_keys=[created_by_id], back_populates="tasks_created"
     )
+    comments: Mapped[List["TaskComment"]] = relationship(
+        "TaskComment",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        order_by="TaskComment.created_at",
+    )
     audit_logs: Mapped[List["TaskAuditLog"]] = relationship(
         "TaskAuditLog",
         back_populates="task",
         cascade="all, delete-orphan",
         order_by="desc(TaskAuditLog.created_at)",
     )
+
+
+class TaskComment(Base):
+    """A discussion message on a task."""
+
+    __tablename__ = "task_comments"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    task_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("tasks.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    author_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+    task: Mapped["Task"] = relationship("Task", back_populates="comments")
+    author: Mapped[Optional["User"]] = relationship("User")
 
 
 class TaskAuditLog(Base):

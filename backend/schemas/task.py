@@ -5,8 +5,8 @@ Task Pydantic Schemas
 import uuid
 from datetime import date, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Any, Dict, List, Literal, Optional
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from schemas.user import UserPublic
 
 
@@ -96,3 +96,60 @@ class TaskDetailRead(TaskRead):
     """Task schema including full audit history."""
 
     audit_logs: List[TaskAuditRead] = Field(default_factory=list)
+
+
+class CommentCreate(BaseModel):
+    """Payload to add a comment."""
+
+    body: str = Field(..., min_length=1, max_length=2000)
+
+    @field_validator("body")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Comment cannot be empty")
+        return stripped
+
+
+class CommentRead(BaseModel):
+    """Comment returned by the API."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    task_id: uuid.UUID
+    body: str
+    created_at: datetime
+    author: Optional[UserPublic] = None
+
+
+class BulkTaskAction(BaseModel):
+    """Apply one action to many tasks at once (max 50)."""
+
+    task_ids: List[uuid.UUID] = Field(..., min_length=1, max_length=50)
+    action: Literal["complete", "set_status", "set_priority", "assign", "delete"]
+    value: Optional[str] = Field(None, max_length=64, description="Status, priority or assignee id depending on action")
+
+    @model_validator(mode="after")
+    def _check_value(self) -> "BulkTaskAction":
+        if self.action == "set_status" and self.value not in {s.value for s in TaskStatus}:
+            raise ValueError("value must be a valid status for set_status")
+        if self.action == "set_priority" and self.value not in {p.value for p in TaskPriority}:
+            raise ValueError("value must be a valid priority for set_priority")
+        if self.action == "assign" and self.value:
+            try:
+                uuid.UUID(self.value)
+            except ValueError as exc:
+                raise ValueError("value must be a user id (or empty to unassign) for assign") from exc
+        return self
+
+
+class BulkFailure(BaseModel):
+    id: uuid.UUID
+    reason: str
+
+
+class BulkTaskResult(BaseModel):
+    succeeded: List[uuid.UUID]
+    failed: List[BulkFailure]

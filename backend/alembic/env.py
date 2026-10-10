@@ -23,6 +23,7 @@ from db.models import (  # noqa: F401  (registered on Base.metadata for autogene
     NotificationLog,
     Task,
     TaskAuditLog,
+    TaskComment,
     User,
     UserPreference,
 )

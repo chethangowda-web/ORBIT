@@ -30,7 +30,7 @@ PRIORITY_ICONS = {
 }
 
 
-def _format_task_event_message(event_type: str, task: Task, actor_name: str) -> str:
+def _format_task_event_message(event_type: str, task: Task, actor_name: str, detail: Optional[str] = None) -> str:
     """Builds a sanitized, recipient-safe notification message for a task event."""
     icon = PRIORITY_ICONS.get(task.priority, "⚪")
     due = task.due_date.isoformat() if task.due_date else "No due date"
@@ -49,6 +49,9 @@ def _format_task_event_message(event_type: str, task: Task, actor_name: str) -> 
             f"Updated by: {actor_name}\n"
             f"Due: {due}"
         )
+    if event_type == "task_commented":
+        quoted = f'\n> {detail}' if detail else ""
+        return f"💬 *New comment* on *{task.title}*\n{actor_name} wrote:{quoted}"
     if event_type == "task_completed":
         return (
             f"✅ *Task Completed*\n"
@@ -95,6 +98,7 @@ async def notify_task_event(
     event_type: str,
     recipient: Optional[User],
     actor_name: str,
+    detail: Optional[str] = None,
 ) -> None:
     """Fire-and-forget-safe notification dispatch for a task mutation.
 
@@ -106,7 +110,7 @@ async def notify_task_event(
     if recipient is None:
         return
 
-    message = _format_task_event_message(event_type, task, actor_name)
+    message = _format_task_event_message(event_type, task, actor_name, detail)
 
     try:
         status, error_msg = await asyncio.wait_for(
