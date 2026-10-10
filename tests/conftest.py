@@ -54,6 +54,21 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
         await conn.run_sync(Base.metadata.drop_all)
 
 
+from config import settings as _settings
+
+
+@pytest.fixture(autouse=True)
+def offline_llm(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Never call a real LLM provider from tests (RULES.md section 6).
+
+    Set ORBIT_LIVE_LLM=1 to opt in to live calls for manual evaluation runs.
+    """
+    if os.environ.get("ORBIT_LIVE_LLM") == "1":
+        return
+    monkeypatch.setattr(_settings, "GOOGLE_GEMINI_API_KEY", "")
+    monkeypatch.setattr(_settings, "OPENAI_API_KEY", "")
+
+
 from tools.base import current_tool_session
 
 
