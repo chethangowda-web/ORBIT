@@ -6,7 +6,9 @@ FastAPI Application Entry Point
 import logging
 from contextlib import asynccontextmanager
 from typing import Any, Dict
-from fastapi import APIRouter, FastAPI
+import time
+
+from fastapi import APIRouter, FastAPI, Header, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings as _boot_settings
@@ -26,6 +28,7 @@ from api.users import router as users_router
 from api.webhook import router as webhook_router
 from config import settings
 from exceptions import register_exception_handlers
+from metrics import record_http, render as render_metrics
 from agents.memory_agent import close_checkpointer, init_checkpointer
 from scheduler.scheduler import start_scheduler, stop_scheduler
 
@@ -63,6 +66,21 @@ app = FastAPI(
 
 # Exception handlers
 register_exception_handlers(app)
+
+
+@app.middleware("http")
+async def collect_http_metrics(request: Request, call_next):
+    """Count and time every request, labelled by route template (never the raw URL)."""
+    started = time.perf_counter()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        route = request.scope.get("route")
+        path = getattr(route, "path", None) or "unmatched"
+        record_http(request.method, path, status_code, time.perf_counter() - started)
 
 # CORS Middleware
 app.add_middleware(
@@ -103,6 +121,17 @@ async def root() -> Dict[str, Any]:
         "docs": "/docs",
         "api": settings.API_V1_PREFIX,
     }
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics_endpoint(authorization: str | None = Header(None)) -> Response:
+    """Prometheus scrape endpoint: disabled unless METRICS_ENABLED, token-protected if METRICS_TOKEN is set."""
+    if not settings.METRICS_ENABLED:
+        raise HTTPException(status_code=404, detail="Not found")
+    if settings.METRICS_TOKEN and authorization != f"Bearer {settings.METRICS_TOKEN}":
+        raise HTTPException(status_code=401, detail="Invalid or missing metrics token")
+    body, content_type = render_metrics()
+    return Response(content=body, media_type=content_type)
 
 
 @app.get("/health", tags=["General"])

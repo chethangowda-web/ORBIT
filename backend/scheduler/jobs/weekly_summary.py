@@ -11,6 +11,7 @@ from db.base import local_midnight_utc, local_today, utc_now
 from db.models import NotificationLog, User
 from crud.users import get_opted_out_user_ids
 from services.google_chat import send_text_message
+from metrics import record_notification
 from services.notifications import deliver_with_retry
 from tools.analytics_tools import get_task_stats
 from tools.base import get_tool_session
@@ -97,6 +98,7 @@ async def run_weekly_summary(
 
             try:
                 delivery_status, error_msg = await deliver_with_retry(user, digest)
+                record_notification("weekly_summary", delivery_status)
                 s.add(
                     NotificationLog(
                         user_id=user.id,

@@ -33,6 +33,6 @@ litellm>=1.56.0
 # Background Scheduler
 apscheduler==3.10.4
 
-# Logging & Configuration
+# Configuration & Observability
 python-dotenv==1.0.1
-structlog==24.4.0
+prometheus-client>=0.20

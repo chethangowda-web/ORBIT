@@ -1,8 +1,8 @@
 ﻿# ARCHITECTURE.md — System Architecture
 # ORBIT: Multi-Agent AI Task Management System
 
-**Version:** 1.0.0  
-**Last Updated:** 2026-10-07
+**Version:** 1.1.0  
+**Last Updated:** 2026-10-10
 
 ---
 
@@ -114,7 +114,7 @@ See `AGENTS.md` for full contracts.
 
 ### 2.7 Observability Layer
 - **LangSmith**: Full LLM call tracing, agent reasoning, token usage
-- **Prometheus + Grafana**: API latency, error rate, task throughput
+- **Prometheus**: opt-in `/metrics` endpoint (`METRICS_ENABLED`): `orbit_http_requests_total` and `orbit_http_request_duration_seconds` by route template, `orbit_agent_runs_total` and `orbit_agent_run_duration_seconds`, `orbit_tool_calls_total`, `orbit_notifications_total`. Point any Prometheus-compatible stack (Grafana, etc.) at it
 - **Python logging**: Structured JSON logs
 
 ---
@@ -125,7 +125,8 @@ See `AGENTS.md` for full contracts.
 ```
 User types in Google Chat
   → Google Chat sends POST to /api/chat/webhook
-  → FastAPI verifies webhook signature (Bearer OIDC or HMAC)
+  → FastAPI authenticates the request (Google-signed Bearer token from the Chat service
+    account, or HMAC signature; see API.md). A configured HMAC secret makes the signature mandatory
   → Extracts sender, message text, space ID
   → Idempotency check: MESSAGE/CARD_CLICKED events are deduped against
     chat_event_ledger (keyed on message resource name / action+params).
@@ -155,11 +156,14 @@ the welcome card has no side effects.
 
 ### 3.2 Autonomous Flow (Scheduler → Notification)
 ```
-APScheduler fires at 9:00 AM
-  → Loads all active users from DB
-  → For each user: Planner Agent generates daily briefing
-  → Sends DM to user via Google Chat REST API
-  → Logs delivery in DB
+APScheduler fires at 9:00 (APP_TIMEZONE)
+  → Redis lock orbit:lock:scheduler:<job> so only one worker runs it
+  → Loads active users, skips anyone opted out (user_preferences)
+  → For each user: builds the ranked plan from their tasks
+  → services.notifications.deliver_with_retry:
+      no Google Chat account  → status "skipped"
+      DM space known or found → post, bounded retry → "sent" only on API success, else "failed"
+  → Logs the true outcome in notification_logs (visible in Admin, Notifications)
 ```
 
 ### 3.3 Dashboard Flow
@@ -245,9 +249,12 @@ User          GChat         FastAPI        Supervisor     TaskAgent      DB
 
 | Concern | Solution |
 |---------|---------|
-| Google Chat webhook | Verify `X-Goog-Signature` header |
-| API auth | JWT Bearer tokens (HS256) |
-| RBAC | Role check middleware (employee/manager/admin) |
-| SQL injection | SQLAlchemy ORM (parameterized queries) |
-| Rate limiting | Redis sliding window per user |
-| Secrets | Environment variables (.env), never committed |
+| Google Chat webhook | Google-signed Bearer token verified for the configured audience and the Chat service account identity (both documented audience modes), or HMAC. Production refuses to boot with verification off |
+| API auth | JWT Bearer tokens (HS256), 24 hour default; user row re-checked on every request so deactivation is immediate |
+| RBAC | `auth/rbac.py` rules used by REST routes **and** by every agent tool (the caller's id is passed to tools, which scope searches, hide foreign tasks, and refuse team data to employees) |
+| Brute force | Failed-login limiter per IP + email (Redis, in-memory fallback); successes clear the counter |
+| SQL injection | SQLAlchemy ORM parameterised queries; LIKE wildcards escaped; sort columns whitelisted |
+| Account takeover | Google sign-in requires password proof before linking to an existing email; public registration off by default |
+| Output safety | Dashboard renders agent text as React nodes (never HTML); unhandled errors return a reference id, not exception text |
+| Secrets | Environment variables only; production validates strength; seed password required in production |
+| Privacy | Webhook payloads not logged by default; directory API hides Google ids and chat spaces |

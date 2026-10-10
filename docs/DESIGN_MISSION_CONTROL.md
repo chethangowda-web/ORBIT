@@ -28,7 +28,7 @@ decorative.
 | `--line-subtle` | `#1A2330` | Inner dividers |
 | `--fg` | `#E6EBF2` | Primary text |
 | `--fg-muted` | `#97A3B6` | Secondary text |
-| `--fg-faint` | `#64718A` | Captions, disabled |
+| `--fg-faint` | `#7C8AA3` | Captions, disabled (about 5:1 on panels; the first draft's `#64718A` failed WCAG AA for small text) |
 | `--accent` | `#4C8DFF` | Focus, active nav, primary action |
 | `--accent-strong` | `#2F72EB` | Primary hover |
 | `--ok` | `#34C38F` | Done, healthy |
@@ -54,7 +54,7 @@ Each semantic color has a `-soft` variant at 12% alpha for badge backgrounds.
 ### Geometry and type
 - Radius: controls 6px, cards and panels 8px, modals 10px. No pill buttons.
 - Control height 32px (compact), 28px (dense table actions).
-- Font: Inter for UI, JetBrains Mono for numerals, ids, timings, trace data.
+- Font: the platform UI font stack for text and the platform monospace stack for numerals, ids, timings and trace data. System fonts keep builds free of network font fetches and render instantly.
 - Scale: page title 18/600, section label 11/600 uppercase +0.06em,
   body 13/400, table cell 12.5/400, caption 11/400 mono.
 - Motion: 120ms ease for color and opacity only. Respect `prefers-reduced-motion`.
@@ -75,19 +75,19 @@ Each semantic color has a `-soft` variant at 12% alpha for badge backgrounds.
   (intent, agents invoked, tools, duration). Available on every page.
 
 ## Screens
-1. **Board** (home): metric strip (open, in progress, overdue, done) bound to
+1. **Board** (home, `/`): metric strip (open, in progress, overdue, done) bound to
    `/analytics/stats`; Kanban lanes with drag and drop; quick filters.
-2. **Tasks:** dense table, saved filters, column sorting, bulk complete, inline
+2. **Tasks** (`/tasks`): dense table, saved filters, column sorting, bulk complete, inline
    status and priority edit, row detail drawer.
-3. **Task detail:** drawer or page with fields, activity timeline rendered as
+3. **Task detail** (`/tasks/[id]`): page with fields, activity timeline rendered as
    human sentences ("John changed priority MEDIUM to HIGH"), not raw JSON.
-4. **Insights:** completion, status mix, priority mix, workload by person,
+4. **Insights** (`/insights`): completion, status mix, priority mix, workload by person,
    overdue aging. Admin and manager only.
-5. **Traces:** table of agent runs with a waterfall of per-node timing, tools
+5. **Agent runs** (`/traces`): table of agent runs with a waterfall of per-node timing, tools
    called, status and error. Source: `/chat/traces`.
-6. **Admin:** scheduler jobs, manual triggers, notification delivery log, users
+6. **Admin** (`/admin`): scheduler jobs, manual triggers, notification delivery log, users
    and roles. Admin and manager only; user management admin only.
-7. **Auth:** sign in (Google plus password), account link flow.
+7. **Auth** (`/login`, `/auth/callback`): sign in (Google plus password), account link flow.
 
 ## Component kit (`frontend/components/ui`)
 Button, IconButton, Input, Select, Textarea, Checkbox, Badge, StatusBadge,

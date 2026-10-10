@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from db.base import local_midnight_utc, local_today, utc_now
 from db.models import NotificationLog, Task, User
 from crud.users import get_opted_out_user_ids
+from metrics import record_notification
 from services.notifications import deliver_with_retry
 from tools.base import get_tool_session
 
@@ -61,6 +62,7 @@ async def _dispatch_user_overdue_alert(
     """Dispatches the overdue alert, logs the real outcome, and returns its status."""
     msg = _format_overdue_message(user.display_name, tasks)
     delivery_status, error_msg = await deliver_with_retry(user, msg)
+    record_notification("overdue_alert", delivery_status)
     session.add(
         NotificationLog(
             user_id=user.id,

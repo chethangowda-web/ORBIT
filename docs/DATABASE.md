@@ -1,9 +1,11 @@
 ﻿# DATABASE.md — Data Model
 # ORBIT: Multi-Agent AI Task Management System
 
-**Version:** 1.0.0  
-**Last Updated:** 2026-10-07  
+**Version:** 1.1.0  
+**Last Updated:** 2026-10-10  
 **Database:** PostgreSQL 16
+
+> The authoritative schema is the SQLAlchemy models in `backend/db/models.py` plus the Alembic migrations in `backend/alembic/versions/` (001 to 004). The SQL below is explanatory. `alembic check` (run in CI and by `tests/test_migrations.py`) fails if models and migrations disagree.
 
 ---
 
@@ -227,9 +229,45 @@ CREATE TABLE chat_event_ledger (
 CREATE INDEX ix_chat_event_ledger_event_key ON chat_event_ledger(event_key);
 ```
 
-Migration: `backend/alembic/versions/003_chat_event_ledger.py`.
+Migration: `backend/alembic/versions/003_chat_event_ledger.py`. `event_key` is covered by the named unique constraint `uq_chat_event_ledger_event_key`.
 
 ---
+
+### 2.7 `agent_execution_traces`
+
+One row per agent request (chat or dashboard), written by `agents/orchestrator.py`. Powers the Agent runs screen. Readable only by the user who made the request.
+
+```sql
+CREATE TABLE agent_execution_traces (
+    id                UUID PRIMARY KEY,
+    request_id        VARCHAR(255) NOT NULL,
+    user_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    thread_id         VARCHAR(255) NOT NULL,
+    intent            VARCHAR(50),
+    confidence        FLOAT,
+    active_agent      VARCHAR(100),
+    agents_invoked    JSON NOT NULL,      -- ["supervisor", "task_agent"]
+    tool_calls_made   JSON NOT NULL,
+    node_durations_ms JSON NOT NULL,      -- {"supervisor": 120.5, ...}
+    total_duration_ms FLOAT NOT NULL,
+    status            VARCHAR(50) NOT NULL,  -- SUCCESS | NEEDS_CONFIRMATION | TIMEOUT | FAILURE
+    error_code        VARCHAR(100),
+    error_message     TEXT,
+    started_at        TIMESTAMPTZ NOT NULL,
+    completed_at      TIMESTAMPTZ NOT NULL,
+    created_at        TIMESTAMPTZ NOT NULL
+);
+-- indexes: request_id, user_id, thread_id, (user_id, created_at), (thread_id, created_at)
+```
+
+### 2.8 Notes that differ from the original design
+
+- `users.hashed_password` is nullable (Google and Chat users have none); `google_id` and `email` are unique.
+- `notification_logs.status` is `sent` (API success confirmed), `failed` (attempted, with `error_msg`) or `skipped` (no Google Chat account linked). Jobs never record `sent` without a successful delivery. Types: `daily_briefing`, `overdue_alert`, `weekly_summary`, `task_assigned`, `task_updated`, `task_completed`.
+- `user_preferences` boolean keys read by the scheduler: `daily_briefing`, `overdue_alert`, `weekly_summary`. Values `false`, `0`, `off`, `no` (any case) mean opted out.
+- `users.google_space_id` is set only from a verified Chat webhook event in a DM space; it cannot be edited through the API.
+- Task `tags` is a JSON array (portable across Postgres and the SQLite used in tests), searched with a substring match. Partial indexes and a `tsvector` column from the first design were not implemented; see OPERATIONS.md section 8 if the table grows very large.
+- Single-column indexes use the `ix_<table>_<column>` names from the models. Migration 004 aligned the earlier `idx_*` names and dropped three indexes that duplicated unique constraints.
 
 ## 3. SQLAlchemy Models
 

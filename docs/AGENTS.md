@@ -1,8 +1,10 @@
 ﻿# AGENTS.md — Agent Responsibilities & Contracts
 # ORBIT: Multi-Agent AI Task Management System
 
-**Version:** 1.0.0  
-**Last Updated:** 2026-10-07
+**Version:** 1.1.0  
+**Last Updated:** 2026-10-10
+
+> Source of truth: `backend/agents/`. Differences from the first design are summarised in section 7.
 
 ---
 
@@ -400,6 +402,30 @@ app = workflow.compile(checkpointer=AsyncRedisSaver(redis_client))
 ```
 
 ---
+
+## 7. As built: behaviours and safety rules
+
+**Graph.** `START -> supervisor -> {task_agent | planner_agent | recommendation_agent | review_agent} -> END`. There is no separate `memory_save` node: the Redis checkpointer persists state after every node, and the review agent performs the confirmed delete itself rather than routing back to the task agent.
+
+**Never guess.** The agents ask instead of acting when the target is unclear:
+- Unknown assignee: "I could not find a team member matching 'X'." (the task is **not** silently assigned to the requester).
+- Ambiguous assignee (two people match "Joe"): lists the candidates and asks which one. Exact name or email beats partial matches; a single clear first-name match wins.
+- "Complete it" with no referenced task, or a title matching several tasks: asks which one. It never completes "the first active task".
+
+**Caller-scoped tools.** The agents pass the caller's id to the tools:
+- `search_tasks`, `get_task_by_id`: employees only see tasks they created or are assigned. A task they cannot see reports "not found", the same as a missing one.
+- `get_team_workload`: managers and admins only. The recommendation agent falls back to the caller's own numbers for everyone else.
+- `get_task_stats`: employees get their own scope; same rules as `GET /analytics/stats`.
+- `create_task`, `update_task`, `complete_task`, `delete_task` fail closed: an unknown or inactive caller is refused, and employees cannot assign or reassign to others.
+
+**Delete flow (human-in-the-loop).**
+1. Non-managers are refused immediately ("Only managers and admins can delete tasks"), before any task title is revealed.
+2. Managers get a confirmation (card in Chat, Confirm/Cancel in the dashboard). The pending action is bound to user id and thread, marked `CONSUMED` on use, and cannot be replayed or confirmed from another session.
+3. Card buttons map only to known actions (`confirm_delete_task`, `confirm_action`, `cancel_action`, `cancel`, `complete_task`); anything else is ignored rather than forwarded to the agent as text.
+
+**Dates.** Relative dates ("Friday", "tomorrow") resolve in `APP_TIMEZONE`, not UTC.
+
+**LLM use.** With no API key the supervisor uses the deterministic classifier; with a key it uses structured output and falls back to the classifier after three failed attempts. Specialist replies are grounded in tool data and fall back to deterministic text if the model fails.
 
 ## 6. Proactive Agent Flows
 

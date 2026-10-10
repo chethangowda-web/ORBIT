@@ -1,8 +1,10 @@
 ﻿# EVALUATION.md — AI/Agent Evaluation Strategy
 # ORBIT: Multi-Agent AI Task Management System
 
-**Version:** 1.0.0  
-**Last Updated:** 2026-10-07
+**Version:** 1.1.0  
+**Last Updated:** 2026-10-10
+
+> **Status.** Implemented: `tests/eval/intent_dataset.json` (intent accuracy, offline classifier) and `tests/eval/test_agent_evaluation.py` (all core intents end to end, grounding and fallback). The entity, response-quality and tool-call datasets and the LangSmith evaluator described below are planned, not built. The backend suite runs fully offline; set `ORBIT_LIVE_LLM=1` to evaluate against a real model manually.
 
 ---
 

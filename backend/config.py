@@ -85,6 +85,11 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_WEBHOOK_PAYLOADS: bool = False  # raw Chat payloads contain PII
 
+    # Prometheus endpoint (/metrics). Off by default; when METRICS_TOKEN is set it must be
+    # presented as a Bearer token.
+    METRICS_ENABLED: bool = False
+    METRICS_TOKEN: str = ""
+
     # Login brute-force protection (per client IP + email)
     LOGIN_RATE_LIMIT_ATTEMPTS: int = 10
     LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 300
@@ -95,12 +100,15 @@ class Settings(BaseSettings):
         if self.ENVIRONMENT.lower() != "production":
             return self
         problems: list[str] = []
-        if self.JWT_SECRET_KEY == DEV_JWT_SECRET or len(self.JWT_SECRET_KEY) < 32:
+        placeholder = "change-this" in self.JWT_SECRET_KEY.lower()
+        if self.JWT_SECRET_KEY == DEV_JWT_SECRET or placeholder or len(self.JWT_SECRET_KEY) < 32:
             problems.append("JWT_SECRET_KEY must be a unique secret of at least 32 characters")
         if "*" in self.CORS_ORIGINS:
             problems.append("CORS_ORIGINS must not contain '*' when credentials are allowed")
         if not self.GOOGLE_CHAT_VERIFY_AUTH:
             problems.append("GOOGLE_CHAT_VERIFY_AUTH must be true")
+        elif not self.GOOGLE_CHAT_AUDIENCE:
+            problems.append("GOOGLE_CHAT_AUDIENCE must be set when verification is on")
         if problems:
             raise ValueError("Unsafe production configuration: " + "; ".join(problems))
         return self

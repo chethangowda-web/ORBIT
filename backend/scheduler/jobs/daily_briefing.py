@@ -10,6 +10,7 @@ from db.base import local_midnight_utc, local_today, utc_now
 from db.models import NotificationLog, User
 from db.session import async_session_factory
 from crud.users import get_opted_out_user_ids
+from metrics import record_notification
 from services.notifications import deliver_with_retry
 from tools.base import get_tool_session
 from tools.task_tools import get_overdue_tasks, get_tasks_due_today, get_user_tasks
@@ -93,6 +94,7 @@ async def run_daily_briefing(
                 full_message = f"🌅 *Good Morning, {user.display_name}!*\n\n{plan_text}"
 
                 delivery_status, error_msg = await deliver_with_retry(user, full_message)
+                record_notification("daily_briefing", delivery_status)
                 s.add(
                     NotificationLog(
                         user_id=user.id,

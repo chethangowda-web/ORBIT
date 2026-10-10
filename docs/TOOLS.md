@@ -1,14 +1,33 @@
 ﻿# TOOLS.md — Tool Contracts
 # ORBIT: Multi-Agent AI Task Management System
 
-**Version:** 1.0.0  
-**Last Updated:** 2026-10-07
+**Version:** 1.1.0  
+**Last Updated:** 2026-10-10
 
 ---
 
 ## 1. Overview
 
 Tools are Python functions decorated with `@tool` (LangChain) that agents call to perform deterministic operations. All tools interact with the database through the Deterministic Tool Gateway (SQLAlchemy async session).
+
+### Permission model (as built)
+
+Tools never raise: failures return `ToolResult(success=False, error=...)`. Tools that read or change data accept the caller's identity so chat obeys the same rules as the REST API (`auth/rbac.py`):
+
+| Tool | Identity parameter | Rule |
+|---|---|---|
+| `search_tasks` | `viewer_id` | Employees see only tasks they created or are assigned |
+| `get_task_by_id` | `viewer_id` | Not visible reports the same "not found" as a missing task |
+| `get_task_stats` | `viewer_id` | Employees get their own scope |
+| `get_team_workload` | `viewer_id` | Managers and admins only |
+| `create_task` | `created_by_id` | Unknown or inactive caller refused; employees may only assign to themselves |
+| `update_task` | `updated_by_id` | Object-level check; employees cannot reassign |
+| `complete_task` | `completed_by_id` | Object-level check; idempotent; cancelled tasks refused |
+| `delete_task` | `deleted_by_id` | Managers and admins only (and only after confirmation by the Review agent) |
+
+Omitting `viewer_id` means a trusted system caller (for example the scheduler computing team statistics); agents always pass it.
+
+Assignee names are resolved by `tools.base.resolve_user_reference`: one clear match is used, no match or several matches return an error message the agent relays as a question.
 
 ### Tool Naming Convention
 `{verb}_{noun}` — e.g., `create_task`, `get_user_tasks`, `search_tasks`

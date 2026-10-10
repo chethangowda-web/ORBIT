@@ -57,9 +57,32 @@ def test_production_accepts_safe_configuration():
         JWT_SECRET_KEY="x" * 48,
         CORS_ORIGINS=["https://orbit.example.com"],
         GOOGLE_CHAT_VERIFY_AUTH=True,
+        GOOGLE_CHAT_AUDIENCE="123456789012",
     )
     assert cfg.ENVIRONMENT == "production"
 
 
 def test_default_cors_has_no_wildcard():
     assert "*" not in Settings().CORS_ORIGINS
+
+
+def test_production_rejects_placeholder_jwt_secret():
+    with pytest.raises(ValueError, match="JWT_SECRET_KEY"):
+        Settings(
+            ENVIRONMENT="production",
+            JWT_SECRET_KEY="change-this-in-production-super-secret-jwt-key-orbit-2026",
+            CORS_ORIGINS=["https://orbit.example.com"],
+            GOOGLE_CHAT_VERIFY_AUTH=True,
+            GOOGLE_CHAT_AUDIENCE="123456789012",
+        )
+
+
+def test_production_requires_audience_when_verifying_chat():
+    with pytest.raises(ValueError, match="GOOGLE_CHAT_AUDIENCE"):
+        Settings(
+            ENVIRONMENT="production",
+            JWT_SECRET_KEY="x" * 48,
+            CORS_ORIGINS=["https://orbit.example.com"],
+            GOOGLE_CHAT_VERIFY_AUTH=True,
+            GOOGLE_CHAT_AUDIENCE="",
+        )

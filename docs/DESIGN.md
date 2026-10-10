@@ -26,8 +26,8 @@
 | Frontend State | TanStack Query | 5.x | Server state management, caching, auto-refresh |
 | Containerization | Docker + Compose | 27+ | Dev/prod parity, easy deployment |
 | Observability | LangSmith | cloud | LLM tracing, agent step visualization |
-| Metrics | Prometheus + Grafana | latest | API metrics, custom business metrics |
-| Logging | Python logging + structlog | - | JSON-structured logs |
+| Metrics | prometheus-client | 0.20+ | Opt-in `/metrics`; visualise with any Prometheus-compatible tool |
+| Logging | Python logging | - | Level via `LOG_LEVEL`; no PII in logs by default |
 | Testing | pytest + pytest-asyncio | - | Async test support |
 | API Testing | httpx | - | Async HTTP client for FastAPI tests |
 

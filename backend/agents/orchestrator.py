@@ -13,6 +13,7 @@ from agents.graph import get_compiled_graph
 from agents.memory_agent import make_thread_id
 from agents.state import AgentState
 from crud.traces import create_trace
+from metrics import record_agent_run
 from tools.base import get_tool_session
 
 logger = logging.getLogger(__name__)
@@ -100,6 +101,7 @@ async def process_message(
                 "started_at": started_at,
                 "completed_at": completed_at,
             }
+            record_agent_run(trace_dict)
 
             # Persist trace if db session and valid UUID
             if session:
@@ -135,6 +137,7 @@ async def process_message(
             "started_at": started_at,
             "completed_at": completed_at,
         }
+        record_agent_run(trace_dict)
 
         if session:
             try:
@@ -181,6 +184,7 @@ async def process_message(
             "started_at": started_at,
             "completed_at": completed_at,
         }
+        record_agent_run(trace_dict)
 
         if session:
             try:

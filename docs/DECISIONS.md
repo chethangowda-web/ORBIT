@@ -205,3 +205,64 @@ class IntentClassification(BaseModel):
 supervisor_chain = llm.with_structured_output(IntentClassification)
 result = await supervisor_chain.ainvoke(messages)
 ```
+
+
+---
+
+## ADR-011: Enforce authorization inside agent tools, not only in the REST layer
+
+**Date**: 2026-10-10  **Status**: Accepted
+
+**Context**: Chat reaches the same data as the API. Tools were unscoped, so an employee could search every task, read any task by id, or see team workload simply by asking the bot.
+
+**Decision**: Tools take the caller's identity and apply `auth/rbac.py`; unknown callers fail closed. Tasks the caller cannot see report "not found".
+
+**Consequences**: One rule set for both channels, covered by `tests/test_chat_rbac.py`. System callers (scheduler) omit the identity deliberately.
+
+---
+
+## ADR-012: Never guess a person or a task
+
+**Date**: 2026-10-10  **Status**: Accepted
+
+**Context**: Unknown assignees fell back to the requester, partial name matches took the first hit, and "complete it" completed the user's first active task, all while reporting success.
+
+**Decision**: Ambiguity and absence produce a clarifying question with candidates. Exact matches win over partial ones.
+
+**Consequences**: Occasionally one extra turn; no silent wrong-person assignments or wrong-task completions.
+
+---
+
+## ADR-013: Notification logs record only what really happened
+
+**Date**: 2026-10-10  **Status**: Accepted
+
+**Decision**: `sent` only after a successful Chat API response; `skipped` when the user has no Google Chat account; `failed` with a reason otherwise. All jobs and event notifications share `services.notifications.deliver_with_retry`. DMs use a known DM space or `spaces:findDirectMessage` (the Chat API has no `users/*/messages` endpoint).
+
+---
+
+## ADR-014: Migrations run at container start; models and migrations must not drift
+
+**Date**: 2026-10-10  **Status**: Accepted
+
+**Decision**: The backend entrypoint runs `alembic upgrade head` (RULES 3.1). CI runs `alembic check`; migration 004 aligned historical index names with the models.
+
+---
+
+## ADR-015: Fail closed in production
+
+**Date**: 2026-10-10  **Status**: Accepted
+
+**Decision**: With `ENVIRONMENT=production` the app will not start with a weak or placeholder JWT secret, wildcard CORS, Chat verification off, or verification without an audience. Public registration is off by default and the seed requires an explicit password.
+
+---
+
+## ADR-016: Mission Control dashboard
+
+**Date**: 2026-10-10  **Status**: Accepted
+
+**Context**: The first dashboard mixed two styling systems, hid the agents behind a floating widget on one page, and had no real-time or keyboard story.
+
+**Decision**: Rebuild the frontend on shared design tokens and a small UI kit (docs/DESIGN_MISSION_CONTROL.md): app shell with navigation rail, command palette (`Ctrl+K`), an agent panel available on every page with live run traces, drag-and-drop board with optimistic updates, URL-synced filters, readable audit trail. Server state stays in TanStack Query; the REST contract is unchanged apart from additions.
+
+**Consequences**: Routes changed (`/analytics` is now `/insights`, `/settings` is split into `/admin` and `/profile`). Dashboard behaviour is covered by Vitest and Playwright suites.

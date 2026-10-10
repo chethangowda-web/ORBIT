@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.base import utc_now
 from db.models import NotificationLog, Task, User
+from metrics import record_notification
 from services.google_chat import send_dm, send_text_message
 
 logger = logging.getLogger(__name__)
@@ -116,6 +117,7 @@ async def notify_task_event(
     except Exception as exc:  # pragma: no cover - absolute safety net
         status, error_msg = "failed", str(exc)
 
+    record_notification(event_type, status)
     try:
         log_entry = NotificationLog(
             user_id=recipient.id,

@@ -1,254 +1,202 @@
-# ORBIT — Multi-Agent AI Task Management System
+# ORBIT: Multi-Agent AI Task Management System
 
 > Orchestrated Resource & Business Intelligence Taskmaster
 
-A production-grade multi-agent AI system that enables employees to manage tasks through natural language in **Google Chat**, powered by **LangGraph**, **Google Gemini**, **FastAPI**, and **PostgreSQL**.
+Employees manage tasks in plain language inside **Google Chat**; managers get a **Mission Control** web dashboard. A LangGraph supervisor routes each request to a specialist agent, every change is audited, and proactive briefings keep people on track.
 
 ---
 
-## ✨ Features
+## Features
 
-- 🤖 **6 Specialized AI Agents** — Supervisor, Task Manager, Planner, Recommendation, Review, Memory
-- 💬 **Google Chat Integration** — Natural language task management inside your workspace
-- 📋 **Full Task Management** — Create, update, assign, complete, search, filter tasks
-- 🧠 **Conversation Memory** — Multi-turn context via Redis LangGraph checkpointer
-- 📅 **Proactive Assistance** — Daily briefings at 9 AM, overdue alerts at 6 PM
-- 🔒 **Human-in-the-Loop** — Confirmation dialogs for destructive actions
-- 📊 **Next.js Dashboard** — Kanban board, filters, analytics, task detail view
-- 🔍 **Observability** — LangSmith tracing + Prometheus metrics
+- **Six cooperating agents**: Supervisor, Task, Planner, Recommendation, Review (human-in-the-loop) and Memory, orchestrated with LangGraph.
+- **Google Chat bot**: natural-language task management, interactive confirmation cards, direct-message notifications, idempotent webhook handling.
+- **Mission Control dashboard** (Next.js 14): drag-and-drop board, dense task table with URL-synced filters, task detail with a readable audit trail, insights charts, agent run traces, admin console, command palette (`Ctrl+K`) and an always-available agent panel.
+- **Role-based access** (employee, manager, admin) enforced identically in the REST API *and* in the chat agents' tools.
+- **Proactive assistance**: 9:00 morning briefing, 18:00 overdue alerts, Monday weekly summary; per-user opt-outs honoured; honest delivery logging (`sent`, `failed`, `skipped`).
+- **Conversation memory**: Redis-backed LangGraph checkpoints, so "make it high priority" resolves across turns.
+- **Offline-safe**: with no LLM key configured, a deterministic classifier keeps the whole system working.
 
----
-
-## 🏗️ Tech Stack
+## Tech stack
 
 | Layer | Technology |
-|-------|-----------|
-| Backend | Python 3.11 + FastAPI |
-| Agents | LangGraph + LiteLLM |
-| LLM | Google Gemini 1.5 Pro |
-| Database | PostgreSQL 16 |
-| Cache/State | Redis 7 |
-| Scheduler | APScheduler |
-| Frontend | Next.js 14 + TypeScript + Tailwind CSS |
-| Containers | Docker + Docker Compose |
-| Observability | LangSmith + Prometheus |
+|---|---|
+| Backend | Python 3.11, FastAPI, SQLAlchemy 2 (async), Alembic |
+| Agents | LangGraph, LiteLLM (Gemini by default, OpenAI fallback) |
+| Data | PostgreSQL 16, Redis 7 |
+| Scheduler | APScheduler (Redis job store, Redis job locks) |
+| Frontend | Next.js 14 (App Router), TypeScript, Tailwind, TanStack Query, Recharts, dnd-kit |
+| Tests | pytest (backend), Vitest + Testing Library (frontend), Playwright (end to end) |
 
 ---
 
-## 🚀 Quick Start
+## Quick start (local development)
 
-### Prerequisites
-- Docker + Docker Compose
-- Google Chat API credentials (service account)
-- Google Gemini API key (or OpenAI key)
+Prerequisites: Python 3.11+, Node 20+, Docker (for Postgres and Redis).
 
-### 1. Clone & Configure
 ```bash
-git clone https://github.com/your-username/orbit.git
-cd orbit
-cp .env.example .env
-# Edit .env with your API keys
+git clone <your-fork-url> orbit && cd orbit
+cp .env.example .env              # defaults work for local development
+
+docker compose up -d postgres redis
+
+# Backend
+cd backend
+python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
+pip install -r requirements-dev.txt
+alembic upgrade head
+python -m db.seed                                       # demo users and tasks (development only)
+uvicorn main:app --port 8001
+
+# Frontend (new terminal)
+cd frontend
+npm ci
+npm run dev                                             # http://localhost:3000
 ```
 
-### 2. Start Services
+| Service | URL |
+|---|---|
+| Dashboard | http://localhost:3000 |
+| API docs (Swagger) | http://localhost:8001/docs |
+| Health | http://localhost:8001/api/health |
+
+### Everything in Docker
+
 ```bash
-docker-compose up -d
+cp .env.example .env     # set JWT_SECRET_KEY; SEED_ON_START=true for demo data
+docker compose up -d --build
 ```
 
-### 3. Run Migrations
+The backend container applies migrations on start (and seeds when `SEED_ON_START=true`). The frontend image bakes in `NEXT_PUBLIC_API_URL` at **build** time, so rebuild it if the API URL changes.
+
+### Demo accounts (development only)
+
+`python -m db.seed` creates these with the password `password123`. Production refuses to seed unless `SEED_PASSWORD` is set.
+
+| Role | Email | Can |
+|---|---|---|
+| Admin | `admin@orbit.dev` | everything, including users and roles |
+| Manager | `sarah@orbit.dev` | team tasks, delete, insights, scheduler, notification log |
+| Employee | `john@orbit.dev` | own tasks (assigned or created), own stats |
+
+---
+
+## Using ORBIT
+
+### In Google Chat
+
+```
+You:   Create a high priority task for John to deploy the frontend by Friday
+ORBIT: Created Task: Deploy the frontend  (HIGH, due Fri)
+
+You:   Show my pending tasks
+You:   What should I focus on today?
+You:   Make it critical            <- "it" resolves from the previous turn
+You:   Delete the old login task   <- managers get a Confirm / Cancel card
+```
+
+ORBIT never guesses: an unknown or ambiguous name ("Joe" matches two people) or an unclear task ("complete it" with no context) produces a clarifying question instead of an action.
+
+### In the dashboard
+
+- **Board**: drag cards between lanes (or use the arrow on a card). `Mine` / `Everyone` scope toggle.
+- **Tasks**: search title, description and tags; filter by status, priority, assignee, overdue; sort columns. Filters live in the URL so views are shareable.
+- **Agent panel** (top bar, or `Ctrl+K` then type a request): chat with the agents, confirm destructive actions, inspect which agents ran and how long each took.
+- **Insights** (managers): completion, status and priority mix, creation trend, workload per person, all computed from the database.
+- **Agent runs**: every request's route, tools and timings.
+- **Admin** (managers; users tab for admins): scheduler status and manual triggers, notification delivery log, user roles and activation.
+
+---
+
+## Google Chat setup
+
+1. In Google Cloud, enable the **Google Chat API** and create a service account with the Chat Bot role. Save its key as `credentials/service-account.json` (never commit it).
+2. Configure the Chat app: HTTP endpoint, **Receive 1:1 messages**, **Join spaces**.
+3. Expose your backend over HTTPS (for local work: `ngrok http 8001`) and set the endpoint URL to `https://<host>/api/chat/webhook`.
+4. Choose an **Authentication audience** in the Chat app configuration and mirror it in `.env`:
+   - *Project number*: `GOOGLE_CHAT_AUDIENCE=<project number>`
+   - *HTTP endpoint URL*: `GOOGLE_CHAT_AUDIENCE=https://<host>/api/chat/webhook`
+5. **Production**: set `GOOGLE_CHAT_VERIFY_AUTH=true`. ORBIT then accepts only Google-signed requests from the Chat service account; the app refuses to start in production with verification off or no audience.
+
+Proactive direct messages work by finding the bot's DM space with each user, or by using the DM space remembered from their first message. Users with no linked Google Chat account at all are logged as `skipped`; if the DM lookup or delivery fails the log says `failed` with the reason (see Admin, Notifications).
+
+---
+
+## Testing
+
 ```bash
-docker-compose exec backend alembic upgrade head
+# Backend: fully offline (no LLM or Google calls), ~1 minute
+pytest
+
+# Frontend unit and component tests
+cd frontend && npm test && npm run typecheck && npm run lint
+
+# End to end (needs the running stack with seeded data)
+cd frontend && npm run build && npm start      # in one terminal
+cd frontend && npm run test:e2e                # in another
 ```
 
-### 4. Seed Database
-```bash
-docker-compose exec backend python -m db.seed
-```
-
-### 5. Access
-- **API Docs**: http://localhost:8001/docs
-- **Dashboard**: http://localhost:3000
-- **Health Check**: http://localhost:8001/api/health
+Set `ORBIT_LIVE_LLM=1` to let backend tests call a real model (manual evaluation only). `E2E_SCREENSHOTS=1 npx playwright test e2e/screens.spec.ts` captures every screen to `frontend/test-results/screens/`.
 
 ---
 
-## 💬 Example Interactions
+## Configuration
 
-```
-You: Create a high priority task for John to deploy the frontend by Friday
-ORBIT: ✅ Task created: Deploy the frontend (Task #42)
-       Priority: HIGH | Assigned to: John Doe | Due: Fri, Oct 10
+All settings are environment variables; see [`.env.example`](.env.example) for the full annotated list. The ones that matter most:
 
-You: Show my pending tasks
-ORBIT: 📋 Your Pending Tasks (3):
-       1. [HIGH] Deploy the frontend — Due Oct 10
-       2. [MEDIUM] Review API documentation — Due Oct 12
-       3. [LOW] Update team wiki — No due date
-
-You: What should I focus on today?
-ORBIT: 🎯 Today's Focus Plan:
-       1. Deploy the frontend (DUE TODAY, HIGH priority)
-       2. Fix authentication bug (Overdue by 2 days!)
-       3. Review PR from Rahul (HIGH priority)
-
-You: Mark the CRM deployment task as completed
-ORBIT: ✅ Marked complete: CRM Deployment (Task #38)
-       Completed at: 07 Oct 2026, 3:45 PM
-```
+| Variable | Purpose |
+|---|---|
+| `ENVIRONMENT` | `production` turns on safety checks (strong JWT secret, no wildcard CORS, Chat verification on) and the app refuses to boot otherwise |
+| `JWT_SECRET_KEY` | Required in production, 32+ random characters |
+| `GOOGLE_GEMINI_API_KEY` / `OPENAI_API_KEY` | Leave empty to run on the offline classifier |
+| `APP_TIMEZONE` | Defines "today" for due dates, digests and the scheduler (default `Asia/Kolkata`) |
+| `ALLOW_REGISTRATION` | Public sign-up, off by default |
+| `GOOGLE_CHAT_VERIFY_AUTH`, `GOOGLE_CHAT_AUDIENCE`, `GOOGLE_CHAT_WEBHOOK_SECRET` | Webhook authentication |
+| `SCHEDULER_ENABLED`, `SCHEDULER_JOBSTORE` | Scheduler on/off, `redis` or `memory` |
 
 ---
 
-## 🏛️ System Architecture
-
-![ORBIT Multi-Agent System Architecture](./architecture-a2-1791376610323.png)
-
-Detailed architecture evaluation and documentation:
-- [Architecture Deep-Dive](docs/ARCHITECTURE.md)
-- [Architecture & Diagram Tool Evaluation](ARCHITECTURE_EVALUATION.md)
-- [Technical Design Decisions](docs/DESIGN.md)
+## Project layout
 
 ```
-Google Chat / Webhook ──► FastAPI Router ──► LangGraph Supervisor
-                                                    ├── Task Agent ──► PostgreSQL
-                                                    ├── Planner Agent
-                                                    ├── Recommendation Agent
-                                                    ├── Review Agent (HITL Guard)
-                                                    └── Memory Agent ──► Redis Checkpointer
+backend/
+  agents/       LangGraph supervisor, specialists, memory, orchestrator, prompts
+  api/          FastAPI routers (auth, tasks, users, analytics, admin, chat webhook)
+  auth/         JWT, Google OAuth, RBAC rules, login rate limiter
+  crud/         Database operations
+  db/           Models, session, seed
+  alembic/      Migrations (run with: alembic upgrade head)
+  schemas/      Pydantic request and response models
+  scheduler/    Cron jobs (briefing, overdue alerts, weekly summary)
+  services/     LLM client, Google Chat client, notification dispatcher
+  tools/        Agent tools (permission-checked, never raise)
+frontend/
+  app/          Routes: (auth) login and OAuth callback, (app) board, tasks, insights, traces, admin, profile
+  components/   ui/ (design-system kit), shell/, tasks/, agent/
+  lib/          API client, auth, hooks, formatting and query helpers
+  __tests__/    Vitest unit and component tests
+  e2e/          Playwright end-to-end tests
+tests/          pytest suite (API, agents, RBAC, webhook, scheduler, migrations)
+docs/           Architecture, API, data model, design system, decisions
 ```
 
 ---
 
-## 🔑 Default Test Credentials
+## Documentation
 
-All accounts seeded with password: `password123`
+| Document | Contents |
+|---|---|
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Deployment, security checklist, runbook, troubleshooting |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design and request flows |
+| [docs/AGENTS.md](docs/AGENTS.md) | Agent responsibilities, routing, safety rules |
+| [docs/TOOLS.md](docs/TOOLS.md) | Tool contracts and permission model |
+| [docs/API.md](docs/API.md) | REST API reference |
+| [docs/DATABASE.md](docs/DATABASE.md) | Schema and migrations |
+| [docs/DESIGN_MISSION_CONTROL.md](docs/DESIGN_MISSION_CONTROL.md) | Dashboard design system |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | Architecture decision records |
+| [docs/EVALUATION.md](docs/EVALUATION.md) | How agent quality is measured |
+| [docs/PRD.md](docs/PRD.md), [docs/DESIGN.md](docs/DESIGN.md) | Original product requirements and technology choices |
+| [RULES.md](RULES.md), [TASKS.md](TASKS.md), [MEMORY.md](MEMORY.md) | Engineering rules, roadmap, memory strategy |
 
-| Role | Email | Display Name | Permissions |
-|------|-------|--------------|-------------|
-| **System Admin** | `admin@orbit.dev` | System Admin | Full system administration, trigger jobs, mutate all records |
-| **Manager** | `sarah@orbit.dev` | Sarah Connor | Team workload analytics, delete tasks, manual job execution |
-| **Employee** | `john@orbit.dev` | John Doe | Linked to Google Chat (`users/1029384756`), task CRUD |
+## Author
 
----
-
-## 📁 Project Structure
-
-```
-orbit/
-├── docs/
-│   ├── PRD.md              # Product requirements
-│   ├── ARCHITECTURE.md     # System architecture
-│   ├── DESIGN.md           # Technical decisions
-│   ├── AGENTS.md           # Agent contracts
-│   ├── TOOLS.md            # Tool contracts
-│   ├── API.md              # API contracts
-│   ├── DATABASE.md         # Data model
-│   ├── EVALUATION.md       # AI evaluation strategy
-│   └── DECISIONS.md        # Architecture decision records
-│
-├── RULES.md                # Coding constraints
-├── TASKS.md                # Implementation roadmap
-├── MEMORY.md               # Memory strategy
-│
-├── backend/
-│   ├── agents/             # LangGraph agents
-│   ├── api/                # FastAPI routers
-│   ├── crud/               # Database operations
-│   ├── db/                 # Models, engine, migrations
-│   ├── schemas/            # Pydantic schemas
-│   ├── services/           # Google Chat service
-│   ├── scheduler/          # APScheduler jobs
-│   └── tools/              # Agent tools
-│
-├── frontend/               # Next.js dashboard
-├── tests/                  # pytest test suite
-├── docker-compose.yml
-└── README.md
-```
-
----
-
-## 🔧 Environment Variables
-
-```env
-# LLM
-GOOGLE_GEMINI_API_KEY=your-key
-OPENAI_API_KEY=your-key (optional fallback)
-
-# Database
-DATABASE_URL=postgresql+asyncpg://orbit:password@localhost:5432/orbit
-
-# Redis
-REDIS_URL=redis://localhost:6379/0
-
-# Auth
-JWT_SECRET_KEY=your-secret-key
-JWT_ALGORITHM=HS256
-
-# Google Chat
-GOOGLE_CHAT_VERIFY_AUTH=false
-GOOGLE_CHAT_AUDIENCE=your-google-cloud-project-number
-GOOGLE_CHAT_WEBHOOK_SECRET=your-optional-webhook-secret
-GOOGLE_SERVICE_ACCOUNT_FILE=credentials/service-account.json
-```
-
----
-
-## 🤖 Google Chat Setup & Live Tunnel Guide
-
-### 1. Google Cloud Project & Chat API
-1. Open the [Google Cloud Console](https://console.cloud.google.com/).
-2. Enable the **Google Chat API** (`chat.googleapis.com`).
-3. Under **Google Chat API > Configuration**:
-   - **App Name**: ORBIT AI Assistant
-   - **Avatar URL**: Provide a public URL or default avatar
-   - **Description**: Autonomous Multi-Agent Task Management System
-   - **Functionality**: Check *Receive 1:1 messages* and *Join spaces and group conversations*
-   - **Connection settings**: Select *HTTP endpoint*
-   - **Authentication Audience**: Set to *HTTP endpoint URL* or *Project number* (copy your Project Number into `GOOGLE_CHAT_AUDIENCE` in `.env`).
-
-### 2. Local Tunneling via ngrok
-Expose your local FastAPI backend (port 8001) over HTTPS:
-```bash
-ngrok http 8001
-```
-Copy the generated forwarding URL (e.g. `https://abc-123.ngrok-free.app`) and set your Google Chat **HTTP endpoint URL** to:
-```
-https://abc-123.ngrok-free.app/api/chat/webhook
-```
-
-### 3. Service Account Credentials for Outbound Messaging & DMs
-1. Create a Service Account with the **Google Chat Bot** role in Google Cloud Console.
-2. Generate and download a JSON key, saving it as `credentials/service-account.json`.
-3. Set `GOOGLE_SERVICE_ACCOUNT_FILE=credentials/service-account.json` in `.env`.
-
-### 4. Interactive Testing in Google Chat
-- **Direct Message:** Send `"Plan my day"` or `"Create a high priority task to review PR by tomorrow"`.
-- **Space Interaction:** Add `@ORBIT` to a space and ask `"@ORBIT Show my pending tasks"`.
-- **Card Click Actions:** Request task deletion to receive an interactive confirmation card with **Confirm** and **Cancel** buttons.
-
-
----
-
-## 📄 Documentation
-
-| Document | Description |
-|----------|-------------|
-| [PRD.md](docs/PRD.md) | Product requirements and use cases |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Full system architecture |
-| [DESIGN.md](docs/DESIGN.md) | Technology choices and design decisions |
-| [AGENTS.md](docs/AGENTS.md) | Agent responsibilities and contracts |
-| [TOOLS.md](docs/TOOLS.md) | Tool function contracts |
-| [API.md](docs/API.md) | REST API reference |
-| [DATABASE.md](docs/DATABASE.md) | Database schema and models |
-| [EVALUATION.md](docs/EVALUATION.md) | AI evaluation strategy |
-| [DECISIONS.md](docs/DECISIONS.md) | Architecture Decision Records |
-| [MEMORY.md](MEMORY.md) | State and memory strategy |
-| [RULES.md](RULES.md) | Coding and architecture rules |
-| [TASKS.md](TASKS.md) | Implementation roadmap |
-
----
-
-## 🤝 Author
-
-**Chethan Gowda S N**  
-HiDevs Intern Assignment — Multi-Agent AI Task Management System
+**Chethan Gowda S N**: HiDevs Intern Assignment, Multi-Agent AI Task Management System.
