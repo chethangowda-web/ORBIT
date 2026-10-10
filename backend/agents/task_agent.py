@@ -201,7 +201,7 @@ async def _handle_complete_task(ctx: dict[str, Any], user_id: str, state_ref_id:
         return f"❌ Failed to complete task: {c_res.get('error')}", "text", None, None
 
     task_data = c_res.get("data", {})
-    return f"🎉 Task #{task_data.get('id')} (*{task_data.get('title')}*) marked as completed!", "text", None, str(task_data.get("id")) if task_data.get("id") else None
+    return f"🎉 *{task_data.get('title')}* marked as completed!", "text", None, str(task_data.get("id")) if task_data.get("id") else None
 
 
 async def _handle_list_or_search(intent: str, ctx: dict[str, Any], user_id: str, raw_msg: str, tools_used: list[str]) -> tuple[str, str, Any]:
