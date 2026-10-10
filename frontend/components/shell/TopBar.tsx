@@ -121,7 +121,10 @@ export function TopBar({ onOpenPalette }: { onOpenPalette: () => void }) {
         className="ml-2 flex h-8 max-w-sm flex-1 items-center gap-2 rounded-control border border-line bg-surface-2 px-2.5 text-xs text-fg-faint transition-colors hover:border-fg-faint"
       >
         <Search className="h-3.5 w-3.5" aria-hidden />
-        <span className="flex-1 text-left">Search or run a command</span>
+        <span className="flex-1 truncate text-left">
+          <span className="sm:hidden">Search</span>
+          <span className="hidden sm:inline">Search or run a command</span>
+        </span>
         <span className="hidden items-center gap-1 sm:flex">
           <Kbd>Ctrl</Kbd>
           <Kbd>K</Kbd>

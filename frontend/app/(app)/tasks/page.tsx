@@ -2,7 +2,7 @@
 
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, Plus, RotateCcw, Search, X } from "lucide-react";
+import { AlertTriangle, RotateCcw, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { CompactSelect } from "@/components/ui/Field";
 import { ConfirmDialog } from "@/components/ui/Overlay";
@@ -70,11 +70,6 @@ function TasksScreen() {
       <PageHeader
         title="Tasks"
         description={isManager ? "Every task across the team." : "Tasks you created or are assigned."}
-        actions={
-          <Button variant="primary" onClick={() => openNewTask()}>
-            <Plus className="h-3.5 w-3.5" aria-hidden /> New task
-          </Button>
-        }
       />
 
       <div className="mb-3 flex flex-wrap items-center gap-2 rounded-panel border border-line bg-surface-1 p-2.5">

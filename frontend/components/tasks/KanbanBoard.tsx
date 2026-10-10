@@ -110,7 +110,7 @@ function Lane({
       ref={setNodeRef}
       aria-label={`${STATUS_LABEL[status]} lane, ${tasks.length} tasks`}
       className={cn(
-        "flex min-h-[200px] min-w-[270px] flex-1 flex-col rounded-panel border bg-surface-1 transition-colors",
+        "flex min-h-[200px] min-w-[220px] flex-1 basis-0 flex-col rounded-panel border bg-surface-1 transition-colors",
         isOver ? "border-accent bg-accent/5" : "border-line",
       )}
     >

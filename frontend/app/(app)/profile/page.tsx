@@ -12,15 +12,8 @@ import { api } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
 import { ROLE_LABEL } from "@/lib/constants";
 import { keys } from "@/lib/hooks";
+import { timezoneOptions } from "@/lib/timezones";
 import type { UserRole } from "@/types";
-
-function timezones(): string[] {
-  try {
-    return (Intl as unknown as { supportedValuesOf: (k: string) => string[] }).supportedValuesOf("timeZone");
-  } catch {
-    return ["UTC", "Asia/Kolkata", "Europe/London", "America/New_York", "America/Los_Angeles"];
-  }
-}
 
 const PREFERENCES = [
   { key: "daily_briefing", label: "Morning briefing", description: "A prioritised plan for your day, sent at 9:00.", managerOnly: false },
@@ -47,13 +40,13 @@ export default function ProfilePage() {
   const toast = useToast();
   const queryClient = useQueryClient();
   const { isManager, refreshProfile } = useAuth();
-  const zones = useMemo(timezones, []);
 
   const profile = useQuery({ queryKey: ["profile"], queryFn: api.auth.me });
   const prefs = useQuery({ queryKey: keys.preferences, queryFn: api.users.preferences });
 
   const [name, setName] = useState("");
   const [zone, setZone] = useState("");
+  const zones = useMemo(() => timezoneOptions(profile.data?.timezone), [profile.data?.timezone]);
   useEffect(() => {
     if (profile.data) {
       setName(profile.data.display_name);

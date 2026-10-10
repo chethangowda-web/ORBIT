@@ -69,7 +69,8 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
     threadRef.current = window.sessionStorage.getItem(THREAD_KEY) || newThreadId();
     window.sessionStorage.setItem(THREAD_KEY, threadRef.current);
     const stored = window.localStorage.getItem(OPEN_KEY);
-    setOpenState(stored === null ? window.innerWidth >= 1280 : stored === "1");
+    // First visit: open only where there is room beside the board.
+    setOpenState(stored === null ? window.innerWidth >= 1536 : stored === "1");
   }, []);
 
   const setOpen = useCallback((value: boolean) => {

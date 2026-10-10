@@ -50,7 +50,7 @@ function SortHeader({
       <button
         type="button"
         onClick={() => onSort(column)}
-        className={cn("inline-flex items-center gap-1 transition-colors hover:text-fg", active && "text-fg")}
+        className={cn("inline-flex items-center gap-1 font-semibold uppercase tracking-[0.05em] transition-colors hover:text-fg", active && "text-fg")}
       >
         {label}
         <Icon className={cn("h-3 w-3", !active && "opacity-50")} aria-hidden />

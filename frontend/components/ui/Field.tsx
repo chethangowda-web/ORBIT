@@ -1,9 +1,10 @@
 import React, { useId } from "react";
 import { cn } from "@/lib/cn";
 
-const CONTROL =
-  "w-full rounded-control border border-line bg-surface-2 px-3 text-[13px] text-fg placeholder:text-fg-faint " +
+const CONTROL_BASE =
+  "rounded-control border border-line bg-surface-2 px-3 text-[13px] text-fg placeholder:text-fg-faint " +
   "transition-colors hover:border-fg-faint focus:border-accent focus:outline-none disabled:opacity-50";
+const CONTROL = `w-full ${CONTROL_BASE}`;
 
 interface FieldShellProps {
   label: string;
@@ -134,7 +135,7 @@ export function CompactSelect({
       aria-label={label}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={cn(CONTROL, "h-8 w-auto pr-7", className)}
+      className={cn(CONTROL_BASE, "h-8 w-auto pr-7", className)}
     >
       {options.map((o) => (
         <option key={o.value} value={o.value}>

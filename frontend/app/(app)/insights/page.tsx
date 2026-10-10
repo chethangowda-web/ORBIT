@@ -60,7 +60,7 @@ export default function InsightsPage() {
           <ChartPanel title="Status mix" empty={statusData.length === 0}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={statusData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={80} paddingAngle={3} stroke="none">
+                <Pie data={statusData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={80} paddingAngle={3} stroke="none" isAnimationActive={false}>
                   {statusData.map((d) => <Cell key={d.key} fill={STATUS_CHART_COLOR[d.key]} />)}
                 </Pie>
                 <Tooltip {...tooltipStyle} />
@@ -76,7 +76,7 @@ export default function InsightsPage() {
                 <XAxis dataKey="name" {...axisProps} />
                 <YAxis allowDecimals={false} {...axisProps} />
                 <Tooltip {...tooltipStyle} />
-                <Bar dataKey="tasks" name="Tasks" radius={[4, 4, 0, 0]}>
+                <Bar dataKey="tasks" name="Tasks" radius={[4, 4, 0, 0]} isAnimationActive={false}>
                   {priorityData.map((d) => <Cell key={d.key} fill={PRIORITY_CHART_COLOR[d.key]} />)}
                 </Bar>
               </BarChart>
@@ -90,7 +90,7 @@ export default function InsightsPage() {
                 <XAxis dataKey="label" {...axisProps} interval="preserveStartEnd" />
                 <YAxis allowDecimals={false} {...axisProps} />
                 <Tooltip {...tooltipStyle} />
-                <Area type="monotone" dataKey="count" name="Created" stroke={CHART_COLORS.accent} fill={CHART_COLORS.accent} fillOpacity={0.15} strokeWidth={2} />
+                <Area type="monotone" dataKey="count" name="Created" stroke={CHART_COLORS.accent} fill={CHART_COLORS.accent} fillOpacity={0.15} strokeWidth={2} isAnimationActive={false} />
               </AreaChart>
             </ResponsiveContainer>
           </ChartPanel>
@@ -103,9 +103,9 @@ export default function InsightsPage() {
                 <YAxis type="category" dataKey="display_name" width={96} {...axisProps} />
                 <Tooltip {...tooltipStyle} />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: 11, color: CHART_COLORS.muted }} />
-                <Bar dataKey="assigned_tasks" name="Assigned" fill={CHART_COLORS.info} radius={[0, 3, 3, 0]} />
-                <Bar dataKey="completed_tasks" name="Done" fill={CHART_COLORS.ok} radius={[0, 3, 3, 0]} />
-                <Bar dataKey="overdue_tasks" name="Overdue" fill={CHART_COLORS.danger} radius={[0, 3, 3, 0]} />
+                <Bar dataKey="assigned_tasks" name="Assigned" fill={CHART_COLORS.info} radius={[0, 3, 3, 0]} isAnimationActive={false} />
+                <Bar dataKey="completed_tasks" name="Done" fill={CHART_COLORS.ok} radius={[0, 3, 3, 0]} isAnimationActive={false} />
+                <Bar dataKey="overdue_tasks" name="Overdue" fill={CHART_COLORS.danger} radius={[0, 3, 3, 0]} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           </ChartPanel>
