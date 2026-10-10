@@ -124,6 +124,20 @@ class CommentRead(BaseModel):
     author: Optional[UserPublic] = None
 
 
+class AttachmentRead(BaseModel):
+    """Attachment metadata. The stored file name is never exposed."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    task_id: uuid.UUID
+    filename: str
+    content_type: str
+    size_bytes: int
+    created_at: datetime
+    uploader: Optional[UserPublic] = None
+
+
 class BulkTaskAction(BaseModel):
     """Apply one action to many tasks at once (max 50)."""
 

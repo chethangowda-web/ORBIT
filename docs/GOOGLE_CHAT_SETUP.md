@@ -112,3 +112,12 @@ First message from a new person creates an `employee` account from their Google 
 | A Chat user does not match their dashboard account | Google did not include an email in the event, so ORBIT created `<id>@orbit.chat`. Ensure the Chat app can read user emails (Workspace users in your domain normally can). There is no UI to merge accounts after the fact |
 | Message processed twice | Should not happen: events are de-duplicated by message id; if you see it, check `chat_event_ledger` and the log for `[WEBHOOK DEDUP]` |
 | "Something went wrong (ref abc123)" | Search the backend log for that reference id for the stack trace |
+
+## Keeping the endpoint stable
+
+A quick tunnel (`python -m scripts.dev_tunnel`) is for testing: its address changes every time it restarts, and Chat shows "not responding" until you paste the new URL into the Chat API configuration. For anything longer-lived use one of:
+
+1. **A named Cloudflare tunnel** (free, needs a domain on Cloudflare): `cloudflared tunnel login`, `cloudflared tunnel create orbit`, route a hostname such as `orbit.example.com` to it with `cloudflared tunnel route dns orbit orbit.example.com`, then run `cloudflared tunnel run --url http://localhost:8001 orbit`. Install it as a service (`cloudflared service install`) so it survives reboots. The URL never changes.
+2. **Deploy the backend** to a host with a fixed HTTPS address (Render, Fly.io, Railway, a VM behind Caddy) and set `ENVIRONMENT=production`, `GOOGLE_CHAT_VERIFY_AUTH=true` and `GOOGLE_CHAT_AUDIENCE`.
+
+Either way, the endpoint to register is `https://<your-host>/api/chat/webhook`.

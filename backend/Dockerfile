@@ -39,7 +39,8 @@ ENV PATH="/opt/venv/bin:$PATH" \
 
 WORKDIR /app
 COPY --chown=orbit:orbit . .
-RUN chmod +x /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh \
+    && mkdir -p /app/uploads && chown orbit:orbit /app/uploads
 
 USER orbit
 EXPOSE 8000

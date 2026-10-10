@@ -71,6 +71,12 @@ export function percent(fraction: number | undefined | null): string {
   return `${Math.round((fraction ?? 0) * 100)}%`;
 }
 
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function initials(name: string | undefined | null): string {
   if (!name) return "?";
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -116,6 +122,10 @@ export function describeAudit(log: Pick<TaskAuditLog, "action" | "changes" | "us
       return `${actor} deleted the task`;
     case "COMMENTED":
       return `${actor} commented`;
+    case "ATTACHED":
+      return `${actor} attached ${log.changes?.attachment?.new ?? "a file"}`;
+    case "ATTACHMENT_REMOVED":
+      return `${actor} removed ${log.changes?.attachment?.old ?? "a file"}`;
   }
   const entries = Object.entries(log.changes ?? {}).filter(([field]) => field !== "completed_at");
   if (entries.length === 0) return `${actor} updated the task`;

@@ -56,6 +56,12 @@ class Settings(BaseSettings):
     FAST_LLM_MODEL: str = "gemini/gemini-3.8-flash"
     LLM_TEMPERATURE: float = 0.1
     LLM_MAX_TOKENS: int = 2048
+    LLM_TIMEOUT_SECONDS: float = 8.0  # per attempt; a hung provider must not stall a chat reply
+    LLM_MAX_ATTEMPTS: int = 2
+    LLM_BREAKER_FAILURES: int = 3  # consecutive failures before the LLM is skipped for a while
+    LLM_BREAKER_COOLDOWN_SECONDS: float = 60.0
+    # Google Chat gives up after 30s, so the agent must answer (or apologise) before that.
+    AGENT_TIMEOUT_SECONDS: float = 22.0
 
     # Google Chat Integration
     GOOGLE_CHAT_WEBHOOK_SECRET: str = ""
@@ -64,6 +70,21 @@ class Settings(BaseSettings):
     GOOGLE_CHAT_SPACE_ID: str = ""
     GOOGLE_CHAT_AUDIENCE: str = ""
     GOOGLE_CHAT_VERIFY_AUTH: bool = False
+
+    # Email notifications (optional; off unless SMTP_HOST and EMAIL_FROM are set)
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_SECURITY: str = "starttls"  # "starttls" | "ssl" | "none"
+    SMTP_TIMEOUT: float = 10.0
+    EMAIL_FROM: str = ""
+    APP_BASE_URL: str = "http://localhost:3000"  # used for links inside emails
+
+    # Task attachments
+    UPLOAD_DIR: str = "uploads"
+    MAX_UPLOAD_MB: int = 10
+    MAX_ATTACHMENTS_PER_TASK: int = 20
 
     # Observability & Checkpointing
     LANGCHAIN_TRACING_V2: bool = False

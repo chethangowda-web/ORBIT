@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import re
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Type, TypeVar
 import litellm
@@ -258,18 +259,53 @@ def fallback_intent_classifier(user_message: str) -> IntentClassificationResult:
     return IntentClassificationResult(intent=Intent.UNKNOWN, confidence=0.5, task_context=ctx)
 
 
+class LLMCircuitBreaker:
+    """Stops calling a failing provider for a cooldown, so an outage or exhausted quota costs
+    nothing per message: callers fall straight through to the offline rule-based path."""
+
+    def __init__(self) -> None:
+        self.failures = 0
+        self.opened_at: Optional[float] = None
+
+    def allow(self) -> bool:
+        if self.opened_at is None:
+            return True
+        if time.monotonic() - self.opened_at >= settings.LLM_BREAKER_COOLDOWN_SECONDS:
+            self.opened_at = None  # half-open: let one request probe the provider
+            self.failures = settings.LLM_BREAKER_FAILURES - 1
+            return True
+        return False
+
+    def record_success(self) -> None:
+        self.failures = 0
+        self.opened_at = None
+
+    def record_failure(self) -> None:
+        self.failures += 1
+        if self.failures >= settings.LLM_BREAKER_FAILURES and self.opened_at is None:
+            self.opened_at = time.monotonic()
+            logger.warning("LLM circuit opened for %.0fs after %d failures", settings.LLM_BREAKER_COOLDOWN_SECONDS, self.failures)
+
+
+llm_breaker = LLMCircuitBreaker()
+
+
 async def call_llm(
     messages: list[dict[str, str]],
     temperature: float = 0.1,
     max_tokens: int = 1000,
     response_model: Optional[Type[T]] = None,
-    retries: int = 3,
+    retries: Optional[int] = None,
 ) -> Optional[Any]:
-    """Execute LLM call via LiteLLM with structured output support and exponential backoff."""
+    """Execute LLM call via LiteLLM with structured output, a per-attempt timeout, bounded retries
+    and a circuit breaker. Returns None whenever the provider cannot answer in time."""
     api_key = getattr(settings, "GOOGLE_GEMINI_API_KEY", "") or getattr(settings, "OPENAI_API_KEY", "")
     if not api_key:
         return None
+    if not llm_breaker.allow():
+        return None
 
+    retries = retries or settings.LLM_MAX_ATTEMPTS
     for attempt in range(retries):
         try:
             kwargs: dict[str, Any] = {
@@ -282,8 +318,10 @@ async def call_llm(
             if response_model:
                 kwargs["response_format"] = response_model
 
-            response = await litellm.acompletion(**kwargs)
+            kwargs["timeout"] = settings.LLM_TIMEOUT_SECONDS
+            response = await asyncio.wait_for(litellm.acompletion(**kwargs), timeout=settings.LLM_TIMEOUT_SECONDS + 2)
             content = response.choices[0].message.content
+            llm_breaker.record_success()
             if response_model and isinstance(content, str):
                 try:
                     return response_model.model_validate_json(content)
@@ -292,7 +330,8 @@ async def call_llm(
             return content
         except Exception as err:
             logger.warning("LLM call attempt %d failed: %s", attempt + 1, err)
-            if attempt == retries - 1:
+            llm_breaker.record_failure()
+            if attempt == retries - 1 or not llm_breaker.allow():
                 return None
-            await asyncio.sleep(2 ** attempt)
+            await asyncio.sleep(1)
     return None

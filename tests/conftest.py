@@ -95,6 +95,13 @@ def allow_registration(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def isolated_uploads(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    """Attachments land in a per-test temp directory, never in the real uploads folder."""
+    monkeypatch.setattr(_settings, "UPLOAD_DIR", str(tmp_path / "uploads"))
+    return tmp_path / "uploads"
+
+
+@pytest.fixture(autouse=True)
 def clean_rate_limits(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep login rate-limit counters in-process and isolated between tests."""
     import auth.ratelimit as ratelimit

@@ -38,19 +38,21 @@ export const PRIORITY_TONE: Record<TaskPriority, "danger" | "high" | "warn" | "f
   LOW: "faint",
 };
 
-/** Hex values for charts (Recharts needs literal colors); mirrors the CSS tokens. */
+/** Chart colors reference the CSS tokens, so charts follow the active theme. */
+const cssColor = (token: string) => `rgb(var(--${token}))`;
 export const CHART_COLORS = {
-  accent: "#4C8DFF",
-  ok: "#34C38F",
-  warn: "#F5A524",
-  danger: "#F0546A",
-  info: "#3FB6E8",
-  high: "#F2812E",
-  muted: "#97A3B6",
-  faint: "#7C8AA3",
-  grid: "#1A2330",
-  surface: "#1D2633",
-  line: "#243040",
+  accent: cssColor("accent"),
+  ok: cssColor("ok"),
+  warn: cssColor("warn"),
+  danger: cssColor("danger"),
+  info: cssColor("info"),
+  high: cssColor("high"),
+  muted: cssColor("fg-muted"),
+  faint: cssColor("fg-faint"),
+  grid: cssColor("line-subtle"),
+  surface: cssColor("surface-3"),
+  line: cssColor("line"),
+  text: cssColor("fg"),
 } as const;
 
 export const STATUS_CHART_COLOR: Record<TaskStatus, string> = {

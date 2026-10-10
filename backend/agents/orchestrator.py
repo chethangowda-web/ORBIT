@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from agents.graph import get_compiled_graph
 from agents.memory_agent import make_thread_id
 from agents.state import AgentState
+from config import settings
 from crud.traces import create_trace
 from metrics import record_agent_run
 from tools.base import get_tool_session
@@ -27,9 +28,10 @@ async def process_message(
     google_user_id: Optional[str] = None,
     confirmed: bool = False,
     session: Optional[AsyncSession] = None,
-    timeout_seconds: float = 30.0,
+    timeout_seconds: Optional[float] = None,
 ) -> AgentState:
     """Processes a user message through the LangGraph multi-agent pipeline with real-time execution tracing."""
+    timeout_seconds = timeout_seconds if timeout_seconds is not None else settings.AGENT_TIMEOUT_SECONDS
     request_id = str(uuid.uuid4())
     tid = thread_id or make_thread_id(space_id, user_id)
     started_at = datetime.now(timezone.utc)

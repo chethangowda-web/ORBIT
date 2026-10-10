@@ -9,10 +9,10 @@ import { useStats, useWorkload } from "@/lib/hooks";
 import type { TaskPriority, TaskStatus } from "@/types";
 
 const tooltipStyle = {
-  contentStyle: { background: CHART_COLORS.surface, border: `1px solid ${CHART_COLORS.line}`, borderRadius: 6, fontSize: 12, color: "#E6EBF2" },
-  itemStyle: { color: "#E6EBF2" },
+  contentStyle: { background: CHART_COLORS.surface, border: `1px solid ${CHART_COLORS.line}`, borderRadius: 6, fontSize: 12, color: CHART_COLORS.text },
+  itemStyle: { color: CHART_COLORS.text },
   labelStyle: { color: CHART_COLORS.muted },
-  cursor: { fill: "rgba(255,255,255,0.04)" },
+  cursor: { fill: "rgb(var(--fg) / 0.06)" },
 };
 
 const axisProps = { stroke: CHART_COLORS.faint, fontSize: 11, tickLine: false, axisLine: { stroke: CHART_COLORS.line } } as const;

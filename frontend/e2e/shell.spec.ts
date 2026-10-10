@@ -39,7 +39,7 @@ test.describe("app shell", () => {
 
   test("the health indicator reflects a reachable API", async ({ page }) => {
     await signIn(page, "employee");
-    await expect(page.getByRole("status").filter({ hasText: /All systems normal|Cache offline/ })).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: /All systems normal|Cache offline|Live/ })).toBeVisible();
   });
 
   test("the profile page saves a preference", async ({ page }) => {

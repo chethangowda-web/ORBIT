@@ -274,11 +274,28 @@ CREATE TABLE task_comments (
 ```
 Comments are removed with their task row (tasks themselves are soft-deleted, so in practice they remain). A deleted user leaves comments attributed to "Former member".
 
-### 2.9 Notes that differ from the original design
+### 2.9 `task_attachments`
+
+```sql
+CREATE TABLE task_attachments (
+    id             UUID PRIMARY KEY,
+    task_id        UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    uploaded_by_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    filename       VARCHAR(255) NOT NULL,    -- display name only, sanitised
+    stored_name    VARCHAR(64) NOT NULL UNIQUE, -- random hex file name under UPLOAD_DIR
+    content_type   VARCHAR(100) NOT NULL,    -- derived from the extension allow-list
+    size_bytes     BIGINT NOT NULL,
+    created_at     TIMESTAMPTZ NOT NULL
+);
+-- indexes: task_id, uploaded_by_id.  Migration: 006_task_attachments
+```
+The bytes live on disk in `UPLOAD_DIR` (the `uploads_data` volume in Docker Compose), not in the database. Back the volume up together with the database; a record whose file is missing returns 404 on download.
+
+### 2.10 Notes that differ from the original design
 
 - `users.hashed_password` is nullable (Google and Chat users have none); `google_id` and `email` are unique.
-- `notification_logs.status` is `sent` (API success confirmed), `failed` (attempted, with `error_msg`) or `skipped` (no Google Chat account linked). Jobs never record `sent` without a successful delivery. Types: `daily_briefing`, `overdue_alert`, `weekly_summary`, `task_assigned`, `task_updated`, `task_completed`, `task_commented`.
-- `user_preferences` boolean keys read by the scheduler: `daily_briefing`, `overdue_alert`, `weekly_summary`. Values `false`, `0`, `off`, `no` (any case) mean opted out.
+- `notification_logs.status` is `sent` (API success confirmed), `failed` (attempted, with `error_msg`) or `skipped` (no Google Chat account linked). Jobs never record `sent` without a successful delivery. Types: `daily_briefing`, `overdue_alert`, `weekly_summary`, `task_assigned`, `task_updated`, `task_completed`, `task_commented`; email deliveries are logged with an `email:` prefix (for example `email:task_assigned`).
+- `user_preferences` boolean keys read by the scheduler: `daily_briefing`, `overdue_alert`, `weekly_summary`. Values `false`, `0`, `off`, `no` (any case) mean opted out. `email_notifications` works the same way for the email channel (default on when SMTP is configured).
 - `users.google_space_id` is set only from a verified Chat webhook event in a DM space; it cannot be edited through the API.
 - Task `tags` is a JSON array (portable across Postgres and the SQLite used in tests), searched with a substring match. Partial indexes and a `tsvector` column from the first design were not implemented; see OPERATIONS.md section 8 if the table grows very large.
 - Single-column indexes use the `ix_<table>_<column>` names from the models. Migration 004 aligned the earlier `idx_*` names and dropped three indexes that duplicated unique constraints.

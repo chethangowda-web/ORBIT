@@ -5,12 +5,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bot, LogOut, Plus, Search, UserCircle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { ThemeCycleButton } from "@/components/ui/ThemeSwitcher";
 import { Avatar, Kbd } from "@/components/ui/Primitives";
 import { useAgent } from "@/lib/agent-context";
 import { useAuth } from "@/lib/auth";
 import { ROLE_LABEL } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 import { useHealth } from "@/lib/hooks";
+import { useLiveUpdates } from "@/lib/live";
 import type { UserRole } from "@/types";
 import { useShell } from "./ShellContext";
 
@@ -32,6 +34,7 @@ export function titleFor(pathname: string): string {
 
 function HealthPill() {
   const { data, isError, isLoading } = useHealth();
+  const live = useLiveUpdates();
   let tone = "bg-fg-faint";
   let label = "Checking";
   if (!isLoading) {
@@ -46,7 +49,7 @@ function HealthPill() {
       label = "Cache offline";
     } else {
       tone = "bg-ok";
-      label = "All systems normal";
+      label = live ? "Live" : "All systems normal";
     }
   }
   return (
@@ -133,6 +136,7 @@ export function TopBar({ onOpenPalette }: { onOpenPalette: () => void }) {
 
       <div className="ml-auto flex items-center gap-2">
         <HealthPill />
+        <ThemeCycleButton />
         <Button size="sm" variant="primary" onClick={() => openNewTask()}>
           <Plus className="h-3.5 w-3.5" aria-hidden />
           <span className="hidden sm:inline">New task</span>

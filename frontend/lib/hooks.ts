@@ -17,6 +17,7 @@ export const keys = {
   task: (id: string) => ["tasks", "detail", id] as const,
   taskHistory: (id: string) => ["tasks", "history", id] as const,
   comments: (id: string) => ["tasks", "comments", id] as const,
+  attachments: (id: string) => ["tasks", "attachments", id] as const,
   stats: ["stats"] as const,
   workload: ["workload"] as const,
   users: ["users"] as const,
@@ -222,6 +223,36 @@ export function useDeleteComment(taskId: string) {
   return useMutation({
     mutationFn: (commentId: string) => api.tasks.deleteComment(taskId, commentId),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: keys.comments(taskId) }),
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+}
+
+export function useAttachments(taskId: string) {
+  return useQuery({ queryKey: keys.attachments(taskId), queryFn: () => api.tasks.attachments(taskId) });
+}
+
+export function useUploadAttachment(taskId: string) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  return useMutation({
+    mutationFn: (file: File) => api.tasks.uploadAttachment(taskId, file),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: keys.attachments(taskId) });
+      void queryClient.invalidateQueries({ queryKey: keys.taskHistory(taskId) });
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+}
+
+export function useDeleteAttachment(taskId: string) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  return useMutation({
+    mutationFn: (attachmentId: string) => api.tasks.deleteAttachment(taskId, attachmentId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: keys.attachments(taskId) });
+      void queryClient.invalidateQueries({ queryKey: keys.taskHistory(taskId) });
+    },
     onError: (e) => toast.error(errorMessage(e)),
   });
 }

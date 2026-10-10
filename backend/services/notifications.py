@@ -10,9 +10,12 @@ import logging
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config import settings
+from crud.users import get_user_preferences
 from db.base import utc_now
 from db.models import NotificationLog, Task, User
 from metrics import record_notification
+from services.email import email_enabled, send_email
 from services.google_chat import send_dm, send_text_message
 
 logger = logging.getLogger(__name__)
@@ -92,6 +95,56 @@ async def deliver_with_retry(recipient: User, message: str) -> tuple[str, Option
 _deliver_with_retry = deliver_with_retry  # backwards-compatible alias
 
 
+EMAIL_PREFERENCE_KEY = "email_notifications"
+EMAIL_OFF_VALUES = {"false", "0", "off", "no"}
+EMAIL_SUBJECTS = {
+    "task_assigned": "New task assigned",
+    "task_updated": "Task updated",
+    "task_commented": "New comment",
+    "task_completed": "Task completed",
+}
+
+
+def _plain(message: str) -> str:
+    """Chat markup (*bold*, > quote) read as noise in an email body."""
+    return message.replace("*", "").replace("\n> ", "\n  ")
+
+
+async def _email_wanted(session: AsyncSession, recipient_id) -> bool:
+    if not email_enabled():
+        return False
+    prefs = await get_user_preferences(session, recipient_id)
+    return prefs.get(EMAIL_PREFERENCE_KEY, "on").strip().lower() not in EMAIL_OFF_VALUES
+
+
+async def _send_email_notification(
+    session: AsyncSession, task_id, task_title: str, event_type: str, recipient_id, recipient_email: str, message: str
+) -> None:
+    """Email channel. Independent of Chat: either can fail without affecting the other."""
+    try:
+        if not await _email_wanted(session, recipient_id):
+            return
+        subject = f"[{settings.APP_NAME}] {EMAIL_SUBJECTS.get(event_type, 'Task change')}: {task_title}"
+        link = f"{settings.APP_BASE_URL.rstrip('/')}/tasks/{task_id}"
+        status, error_msg = await send_email(recipient_email, subject, _plain(message), link)
+        record_notification(f"email_{event_type}", status)
+        session.add(
+            NotificationLog(
+                user_id=recipient_id,
+                type=f"email:{event_type}",
+                message=_plain(message),
+                google_space_id=None,
+                status=status,
+                error_msg=error_msg,
+                sent_at=utc_now(),
+            )
+        )
+        await session.commit()
+    except Exception as exc:  # pragma: no cover - absolute safety net
+        logger.warning("Email notification failed for task %s: %s", task_id, exc)
+        await session.rollback()
+
+
 async def notify_task_event(
     session: AsyncSession,
     task: Task,
@@ -111,6 +164,9 @@ async def notify_task_event(
         return
 
     message = _format_task_event_message(event_type, task, actor_name, detail)
+    # Plain values captured now: a rollback below would expire the ORM objects.
+    task_id, task_title = task.id, task.title
+    recipient_id, recipient_email = recipient.id, recipient.email
 
     try:
         status, error_msg = await asyncio.wait_for(
@@ -124,7 +180,7 @@ async def notify_task_event(
     record_notification(event_type, status)
     try:
         log_entry = NotificationLog(
-            user_id=recipient.id,
+            user_id=recipient_id,
             type=event_type,
             message=message,
             google_space_id=recipient.google_space_id or recipient.google_id,
@@ -137,3 +193,5 @@ async def notify_task_event(
     except Exception as exc:
         logger.warning("Failed to persist notification log for task %s: %s", task.id, exc)
         await session.rollback()
+
+    await _send_email_notification(session, task_id, task_title, event_type, recipient_id, recipient_email, message)

@@ -77,6 +77,16 @@ export interface TaskComment {
   author?: UserPublic | null;
 }
 
+export interface TaskAttachment {
+  id: string;
+  task_id: string;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  created_at: string;
+  uploader?: UserPublic | null;
+}
+
 export type BulkAction = "complete" | "set_status" | "set_priority" | "assign" | "delete";
 
 export interface BulkResult {

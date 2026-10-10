@@ -266,3 +266,35 @@ result = await supervisor_chain.ainvoke(messages)
 **Decision**: Rebuild the frontend on shared design tokens and a small UI kit (docs/DESIGN_MISSION_CONTROL.md): app shell with navigation rail, command palette (`Ctrl+K`), an agent panel available on every page with live run traces, drag-and-drop board with optimistic updates, URL-synced filters, readable audit trail. Server state stays in TanStack Query; the REST contract is unchanged apart from additions.
 
 **Consequences**: Routes changed (`/analytics` is now `/insights`, `/settings` is split into `/admin` and `/profile`). Dashboard behaviour is covered by Vitest and Playwright suites.
+
+---
+
+## ADR-017: Live updates are hints over SSE, published from a commit hook
+
+**Date**: 2026-10-11  **Status**: Accepted
+
+**Context**: Tasks change from the dashboard, Google Chat and the scheduler; the dashboard only polled every 15 seconds.
+
+**Decision**: A SQLAlchemy `after_commit` hook publishes `{topic, task_id}` for any committed change to tasks, comments or attachments, so no code path can forget to publish and rolled-back work never publishes. The stream carries no task data; clients invalidate TanStack Query caches and refetch through the authorised REST API. The stream is authenticated with the bearer token and does not hold a database connection while open. SSE was chosen over WebSockets because traffic is one-way, it works through ordinary proxies, and reconnection is trivial.
+
+**Consequences**: One process per deployment is exact; multiple workers need a shared bus (documented). Polling stays as the fallback, so a broken stream degrades to slower updates.
+
+## ADR-018: Attachments on local disk with an allow-list
+
+**Date**: 2026-10-11  **Status**: Accepted
+
+**Context**: Users need to attach documents. Uploads are a classic source of vulnerabilities.
+
+**Decision**: Files are stored under random names on a volume; the client's file name is display metadata only. Only an extension allow-list is accepted (no HTML, SVG, scripts or executables) and the content type is derived from it, never trusted from the client. Size is enforced while streaming and partial files are removed. Downloads are always `attachment` with `nosniff`, authorised by the task's view permission; uploads need edit permission.
+
+**Consequences**: No virus scanning and no object storage yet; both are documented upgrade paths. Backups must include the volume.
+
+## ADR-019: Fail soft around the LLM and Google's 30 second limit
+
+**Date**: 2026-10-11  **Status**: Accepted
+
+**Context**: Google Chat shows "not responding" if the webhook takes over 30 seconds. LLM calls had no per-call timeout, and a quota outage would make every message slow before falling back.
+
+**Decision**: Per-attempt LLM timeout, two attempts, a circuit breaker that skips the provider for a cooldown after repeated failures, and an agent deadline (22 seconds) shorter than Google's limit that returns an apology instead of silence.
+
+**Consequences**: During an LLM outage the bot answers from the rule-based classifier immediately rather than slowly; behaviour is covered by `tests/test_resilience.py`.

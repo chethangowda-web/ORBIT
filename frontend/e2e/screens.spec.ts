@@ -8,6 +8,11 @@ import { signIn, type Who } from "./helpers";
  */
 test.skip(process.env.E2E_SCREENSHOTS !== "1", "set E2E_SCREENSHOTS=1 to capture screenshots");
 
+// E2E_THEME=light|system|dark captures the screens in that theme.
+test.beforeEach(async ({ context, baseURL }) => {
+  if (process.env.E2E_THEME) await context.addCookies([{ name: "orbit_theme", value: process.env.E2E_THEME, url: baseURL ?? "http://localhost:3000" }]);
+});
+
 const SHOTS: { who: Who; path: string; name: string; wait?: string }[] = [
   { who: "manager", path: "/", name: "board" },
   { who: "manager", path: "/tasks", name: "tasks" },
@@ -29,7 +34,8 @@ for (const shot of SHOTS) {
   test(`screen: ${shot.name}`, async ({ page }) => {
     await signIn(page, shot.who);
     await page.goto(shot.path);
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(800);
     await page.screenshot({ path: `test-results/screens/${shot.name}.png` });
   });
 }
@@ -44,7 +50,8 @@ test("command palette and mobile layout", async ({ page }) => {
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  await page.waitForLoadState("networkidle");
+  await page.waitForLoadState("load");
+    await page.waitForTimeout(800);
   await page.screenshot({ path: "test-results/screens/mobile-board.png" });
 });
 
@@ -61,7 +68,8 @@ test("task detail with comments and bulk selection", async ({ page }) => {
     await page.getByRole("button", { name: "Comment", exact: true }).click();
     await expect(page.getByLabel("Add a comment")).toHaveValue(""); // saved and the composer reset
   }
-  await page.waitForLoadState("networkidle");
+  await page.waitForLoadState("load");
+    await page.waitForTimeout(800);
   await page.screenshot({ path: "test-results/screens/task-detail.png", fullPage: true });
 
   await page.goto("/tasks");

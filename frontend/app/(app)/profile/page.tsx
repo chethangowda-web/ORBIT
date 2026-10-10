@@ -2,11 +2,12 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, CheckCircle2, UserCircle } from "lucide-react";
+import { Bell, CheckCircle2, Palette, UserCircle } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Field";
 import { Avatar, ErrorState, PageHeader, Panel, PanelHeader, Skeleton } from "@/components/ui/Primitives";
+import { ThemeSwitcher } from "@/components/ui/ThemeSwitcher";
 import { useToast } from "@/components/ui/Toast";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
@@ -18,6 +19,7 @@ import type { UserRole } from "@/types";
 const PREFERENCES = [
   { key: "daily_briefing", label: "Morning briefing", description: "A prioritised plan for your day, sent at 9:00.", managerOnly: false },
   { key: "overdue_alert", label: "Overdue alerts", description: "An evening reminder when assigned tasks are past due.", managerOnly: false },
+  { key: "email_notifications", label: "Email notifications", description: "Email copies of assignments, updates and comments. Only sent when the server has email set up.", managerOnly: false },
   { key: "weekly_summary", label: "Weekly team summary", description: "Team throughput digest on Monday mornings.", managerOnly: true },
 ] as const;
 
@@ -128,7 +130,14 @@ export default function ProfilePage() {
       </Panel>
 
       <Panel>
-        <PanelHeader title="Notifications" description="Choose what ORBIT sends you in Google Chat." icon={<Bell className="h-4 w-4" />} />
+        <PanelHeader title="Appearance" description="Applies to this browser." icon={<Palette className="h-4 w-4" />} />
+        <div className="p-4">
+          <ThemeSwitcher />
+        </div>
+      </Panel>
+
+      <Panel>
+        <PanelHeader title="Notifications" description="Choose what ORBIT sends you in Google Chat and by email." icon={<Bell className="h-4 w-4" />} />
         <div className="divide-y divide-line-subtle px-4">
           {prefs.isLoading ? (
             <Skeleton className="my-4 h-24" />

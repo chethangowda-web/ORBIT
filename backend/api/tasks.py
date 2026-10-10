@@ -7,20 +7,25 @@ import math
 import uuid
 from datetime import date
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.rbac import Role, TaskAction, get_authorized_task, is_manager
+from config import settings
+from crud import attachments as attachment_crud
 from crud import audit as audit_crud
 from crud import comments as comment_crud
 from crud import tasks as task_crud
 from db.models import User
 from db.session import get_db
 from dependencies import get_current_user, require_role
+from services import storage
 from services.notifications import notify_task_event
 from exceptions import EntityNotFoundException, OrbitException, PermissionDeniedException
 from schemas.common import PaginationMeta, api_response
 from schemas.task import (
+    AttachmentRead,
     BulkFailure,
     BulkTaskAction,
     BulkTaskResult,
@@ -269,6 +274,92 @@ async def delete_task_comment(
         raise PermissionDeniedException("You can only delete your own comments.")
     await comment_crud.delete_comment(db=db, comment=comment)
     return api_response(data={"message": "Comment deleted."})
+
+
+@router.get("/{task_id}/attachments", status_code=status.HTTP_200_OK)
+async def list_task_attachments(
+    task_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Files attached to a task you may view."""
+    await get_authorized_task(db=db, task_id=task_id, user=current_user, action=TaskAction.VIEW)
+    items = await attachment_crud.list_attachments(db=db, task_id=task_id)
+    return api_response(data=[AttachmentRead.model_validate(a).model_dump() for a in items])
+
+
+@router.post("/{task_id}/attachments", status_code=status.HTTP_201_CREATED)
+async def upload_task_attachment(
+    task_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Attach a file. Requires permission to edit the task; type and size are validated."""
+    task = await get_authorized_task(db=db, task_id=task_id, user=current_user, action=TaskAction.UPDATE)
+    filename, content_type = storage.validate_filename(file.filename)
+    if await attachment_crud.count_attachments(db=db, task_id=task_id) >= settings.MAX_ATTACHMENTS_PER_TASK:
+        raise OrbitException(f"A task can have at most {settings.MAX_ATTACHMENTS_PER_TASK} attachments.", 409)
+
+    stored_name, size = await storage.save_stream(file)
+    try:
+        attachment = await attachment_crud.add_attachment(
+            db=db,
+            task=task,
+            uploader=current_user,
+            filename=filename,
+            stored_name=stored_name,
+            content_type=content_type,
+            size_bytes=size,
+        )
+    except Exception:
+        storage.remove(stored_name)
+        raise
+    return api_response(data=AttachmentRead.model_validate(attachment).model_dump())
+
+
+@router.get("/{task_id}/attachments/{attachment_id}", status_code=status.HTTP_200_OK)
+async def download_task_attachment(
+    task_id: uuid.UUID,
+    attachment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Download as an attachment (never rendered inline) with sniffing disabled."""
+    await get_authorized_task(db=db, task_id=task_id, user=current_user, action=TaskAction.VIEW)
+    attachment = await attachment_crud.get_attachment(db=db, task_id=task_id, attachment_id=attachment_id)
+    if attachment is None:
+        raise EntityNotFoundException("Attachment", attachment_id)
+    path = storage.path_for(attachment.stored_name)
+    if not path.is_file():
+        raise EntityNotFoundException("Attachment file", attachment_id)
+    return FileResponse(
+        path,
+        media_type=attachment.content_type,
+        filename=attachment.filename,
+        content_disposition_type="attachment",
+        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"},
+    )
+
+
+@router.delete("/{task_id}/attachments/{attachment_id}", status_code=status.HTTP_200_OK)
+async def delete_task_attachment(
+    task_id: uuid.UUID,
+    attachment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The uploader, and managers or admins, can remove a file."""
+    await get_authorized_task(db=db, task_id=task_id, user=current_user, action=TaskAction.VIEW)
+    attachment = await attachment_crud.get_attachment(db=db, task_id=task_id, attachment_id=attachment_id)
+    if attachment is None:
+        raise EntityNotFoundException("Attachment", attachment_id)
+    if attachment.uploaded_by_id != current_user.id and not is_manager(current_user):
+        raise PermissionDeniedException("You can only remove files you uploaded.")
+    stored_name = attachment.stored_name
+    await attachment_crud.delete_attachment(db=db, attachment=attachment, actor=current_user)
+    storage.remove(stored_name)
+    return api_response(data={"message": "Attachment removed."})
 
 
 BULK_ACTION_PERMISSION = {

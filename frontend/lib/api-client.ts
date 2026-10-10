@@ -19,6 +19,7 @@ import type {
   SchedulerStatus,
   SessionUser,
   Task,
+  TaskAttachment,
   TaskAuditLog,
   TaskComment,
   TaskFilters,
@@ -151,6 +152,19 @@ export const api = {
       unwrap<TaskComment>(await apiClient.post(`/tasks/${id}/comments`, { body })),
     deleteComment: async (id: string, commentId: string) =>
       unwrap<{ message: string }>(await apiClient.delete(`/tasks/${id}/comments/${commentId}`)),
+    attachments: async (id: string) => (unwrap<TaskAttachment[]>(await apiClient.get(`/tasks/${id}/attachments`)) ?? []),
+    uploadAttachment: async (id: string, file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      // Let the browser set the multipart boundary; the JSON default would break it.
+      return unwrap<TaskAttachment>(
+        await apiClient.post(`/tasks/${id}/attachments`, form, { headers: { "Content-Type": undefined }, timeout: 120_000 }),
+      );
+    },
+    downloadAttachment: async (id: string, attachmentId: string) =>
+      (await apiClient.get<Blob>(`/tasks/${id}/attachments/${attachmentId}`, { responseType: "blob", timeout: 120_000 })).data,
+    deleteAttachment: async (id: string, attachmentId: string) =>
+      unwrap<{ message: string }>(await apiClient.delete(`/tasks/${id}/attachments/${attachmentId}`)),
     bulk: async (taskIds: string[], action: BulkAction, value?: string) =>
       unwrap<BulkResult>(await apiClient.post("/tasks/bulk", { task_ids: taskIds, action, value })),
   },

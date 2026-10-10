@@ -30,7 +30,7 @@ export function Comments({ taskId }: { taskId: string }) {
     <Panel>
       <PanelHeader
         title="Comments"
-        description="The assignee and creator are notified in Google Chat."
+        description="The assignee and creator are notified in Google Chat and by email."
         icon={<MessageSquare className="h-4 w-4" />}
       />
       <div className="space-y-4 p-5">

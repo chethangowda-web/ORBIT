@@ -16,7 +16,9 @@ test.describe("browser security", () => {
     await signIn(page, "admin");
     for (const path of ["/", "/tasks", "/insights", "/traces", "/admin", "/admin?tab=users", "/profile"]) {
       await page.goto(path);
-      await page.waitForLoadState("networkidle");
+      // networkidle never fires: the live-update stream is intentionally always open.
+      await page.waitForLoadState("load");
+      await page.waitForTimeout(1200);
     }
     expect(violations).toEqual([]);
   });

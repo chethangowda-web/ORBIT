@@ -123,7 +123,33 @@ The backend tests never contact an LLM or Google (`tests/conftest.py` blanks the
 | Docker build fails with `TLS handshake timeout` pulling `python` or `node` | Docker Hub is unreachable from your network. Build through a mirror: `PYTHON_IMAGE=mirror.gcr.io/library/python:3.11-slim NODE_IMAGE=mirror.gcr.io/library/node:20-alpine docker compose up -d --build` (Linux/macOS), or set those two variables in `.env`. The same two variables work as `--build-arg`s |
 | `Bind for 0.0.0.0:6379 failed: port is already allocated` | Another project uses Redis's host port. Set `REDIS_PORT=6380` in `.env` (containers talk to each other over the internal network, unaffected) |
 
+## 7a. Optional features
+
+**Email notifications.** Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_SECURITY` (`starttls`, `ssl` or `none`) and `EMAIL_FROM`; set `APP_BASE_URL` so links in emails point at the dashboard. Email is sent next to the Google Chat message for assignments, updates, completions and comments, and each delivery is logged in `notification_logs` (`email:<type>`; `sent`, `failed` or `skipped`). Users opt out with the "Email notifications" switch on their profile. A mail outage never affects the task change: the send is bounded by `SMTP_TIMEOUT` and failures are only logged.
+
+**Attachments.** Files are stored in `UPLOAD_DIR` (`/app/uploads`, the `uploads_data` volume, in Compose). Limits: `MAX_UPLOAD_MB` (10) and `MAX_ATTACHMENTS_PER_TASK` (20). Back the volume up with the database. If you put a reverse proxy in front, raise its body-size limit to at least `MAX_UPLOAD_MB` (nginx: `client_max_body_size`).
+
+**Live updates (SSE).** `GET /api/events/stream`. The hub is in-process, so it is exact with one API process. With several workers a change reaches only the dashboards connected to the worker that handled it; the dashboard still polls every 15 seconds, so it converges, and a Redis pub/sub bus is the upgrade path. If a proxy sits in front, disable response buffering for this path (the API already sends `X-Accel-Buffering: no`) and allow connections that stay open for hours.
+
+**Themes.** Dark (default), light, or follow the system; stored in the `orbit_theme` cookie and applied on the server so there is no flash.
+
+## 7b. Staying up when dependencies fail
+
+| Failure | What happens |
+|---|---|
+| LLM provider slow | Each attempt is cut off after `LLM_TIMEOUT_SECONDS` (8) |
+| LLM provider failing or out of quota | After `LLM_BREAKER_FAILURES` (3) consecutive failures the LLM is skipped for `LLM_BREAKER_COOLDOWN_SECONDS` (60); the offline classifier answers instantly, then one request probes the provider again |
+| Agent pipeline stuck | Replies "timed out, please try again" after `AGENT_TIMEOUT_SECONDS` (22), inside Google Chat's 30 second limit |
+| Unexpected error while handling a Chat event | HTTP 200 with a short apology and an error reference found in the logs |
+| Redis down | Conversation memory falls back to process memory outside production; the login limiter uses an in-process counter; the dashboard shows "Cache offline" |
+| SMTP or Google Chat delivery failing | Retried briefly, logged as `failed`; the task change is never rolled back |
+| Database connection dropped | Pool pre-ping replaces dead connections |
+| Container crash | `restart: unless-stopped` plus health checks; migrations re-run safely on start |
+
 ## 8. Known limitations
+
+- Uploaded files are not virus-scanned; the type allow-list and attachment-only downloads limit the risk but do not remove it. Add a scanner (for example ClamAV) before accepting files from untrusted users.
+- Files of a soft-deleted task stay on disk with the task row.
 
 - Conversation state lives in Redis with a 24 hour TTL; a Redis flush ends open conversations (pending delete confirmations are lost safely: nothing is deleted without a fresh confirmation).
 - Task search is substring-based (`LIKE`), fine for thousands of tasks; add a Postgres full-text index if the table grows into the hundreds of thousands.

@@ -9,6 +9,7 @@ import { PriorityBadge, StatusBadge } from "@/components/ui/Badge";
 import { ConfirmDialog } from "@/components/ui/Overlay";
 import { Avatar, EmptyState, ErrorState, Panel, PanelHeader, Skeleton } from "@/components/ui/Primitives";
 import { useShell } from "@/components/shell/ShellContext";
+import { Attachments } from "@/components/tasks/Attachments";
 import { Comments } from "@/components/tasks/Comments";
 import { DueChip } from "@/components/tasks/TaskParts";
 import { ApiError } from "@/lib/api-client";
@@ -140,6 +141,8 @@ export default function TaskDetailPage() {
           )}
         </div>
       </Panel>
+
+      <Attachments taskId={task.id} canEdit />
 
       <Comments taskId={task.id} />
 

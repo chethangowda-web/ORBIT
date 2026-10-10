@@ -12,6 +12,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    BigInteger,
     JSON,
     String,
     Text,
@@ -138,6 +139,12 @@ class Task(Base):
         cascade="all, delete-orphan",
         order_by="TaskComment.created_at",
     )
+    attachments: Mapped[List["TaskAttachment"]] = relationship(
+        "TaskAttachment",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        order_by="TaskAttachment.created_at",
+    )
     audit_logs: Mapped[List["TaskAuditLog"]] = relationship(
         "TaskAuditLog",
         back_populates="task",
@@ -173,6 +180,38 @@ class TaskComment(Base):
 
     task: Mapped["Task"] = relationship("Task", back_populates="comments")
     author: Mapped[Optional["User"]] = relationship("User")
+
+
+class TaskAttachment(Base):
+    """A file attached to a task. The bytes live in UPLOAD_DIR under ``stored_name``."""
+
+    __tablename__ = "task_attachments"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    task_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("tasks.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    uploaded_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    stored_name: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    content_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+    task: Mapped["Task"] = relationship("Task", back_populates="attachments")
+    uploader: Mapped[Optional["User"]] = relationship("User")
 
 
 class TaskAuditLog(Base):

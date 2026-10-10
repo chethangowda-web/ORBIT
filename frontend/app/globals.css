@@ -31,6 +31,53 @@
     --high: 242 129 46;
   }
 
+  /* Light theme. "system" follows the OS; the choice is stored in the orbit_theme cookie. */
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: 244 246 250;
+    --surface-1: 255 255 255;
+    --surface-2: 241 244 249;
+    --surface-3: 233 238 245;
+    --line: 208 216 228;
+    --line-subtle: 226 232 240;
+
+    --fg: 16 24 38;
+    --fg-muted: 66 80 100;
+    --fg-faint: 88 102 124;
+
+    --accent: 37 99 235;
+    --accent-strong: 29 78 216;
+    --ok: 4 120 87;
+    --warn: 180 83 9;
+    --danger: 190 30 50;
+    --info: 3 105 161;
+    --high: 194 65 12;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root[data-theme="system"] {
+      color-scheme: light;
+      --bg: 244 246 250;
+      --surface-1: 255 255 255;
+      --surface-2: 241 244 249;
+      --surface-3: 233 238 245;
+      --line: 208 216 228;
+      --line-subtle: 226 232 240;
+
+      --fg: 16 24 38;
+      --fg-muted: 66 80 100;
+      --fg-faint: 88 102 124;
+
+      --accent: 37 99 235;
+      --accent-strong: 29 78 216;
+      --ok: 4 120 87;
+      --warn: 180 83 9;
+      --danger: 190 30 50;
+      --info: 3 105 161;
+      --high: 194 65 12;
+    }
+  }
+
   html,
   body {
     background: rgb(var(--bg));

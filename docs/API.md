@@ -100,6 +100,12 @@ Every task is authorised individually and one failure never stops the rest. Resp
 - `POST /tasks/{id}/comments` (201): body `{ body }` (1 to 2000 characters, trimmed, blank rejected). Adds a `COMMENTED` entry to the task history and notifies the assignee and creator in Google Chat (never the author).
 - `DELETE /tasks/{id}/comments/{comment_id}`: the author, or any manager or admin. A comment id that belongs to a different task returns 404.
 
+### Attachments
+- `GET /tasks/{id}/attachments`: files on a task you may view, oldest first: `{ id, filename, content_type, size_bytes, created_at, uploader }`. The stored file name is never exposed.
+- `POST /tasks/{id}/attachments` (201): `multipart/form-data` with one `file` field. Requires permission to edit the task. Rejected with `415` unless the extension is on the allow-list (pdf, png, jpg, jpeg, gif, webp, txt, md, log, csv, json, doc, docx, xls, xlsx, ppt, pptx, zip), `413` over `MAX_UPLOAD_MB` (default 10), `400` for an empty file, `409` past `MAX_ATTACHMENTS_PER_TASK` (default 20). The stored content type comes from the extension, never from the client. Adds an `ATTACHED` history entry.
+- `GET /tasks/{id}/attachments/{attachment_id}`: the file, always `Content-Disposition: attachment` with `X-Content-Type-Options: nosniff` and `Cache-Control: private, no-store`.
+- `DELETE /tasks/{id}/attachments/{attachment_id}`: the uploader, or any manager or admin. Adds an `ATTACHMENT_REMOVED` history entry and deletes the file.
+
 ### `GET /tasks/{id}/history`
 Audit entries, newest first: `{ id, action, changes: { field: { old, new } }, source: "api" | "chat" | "scheduler", created_at, user }`.
 
@@ -169,6 +175,11 @@ Dashboard agent endpoint. Body `{ message (1 to 2000 chars), thread_id? (<=100),
 Your own agent runs only (another user's trace id returns 404).
 
 ---
+
+## Live updates
+
+### `GET /events/stream`
+Server-Sent Events (`text/event-stream`), authenticated with the normal `Authorization: Bearer` header (so use `fetch`, not `EventSource`). Frames: `event: change` with `data: {"topic": "tasks" | "comments" | "attachments" | "resync", "task_id": "<uuid>" | null}`; a `: keep-alive` comment every 15 seconds. Frames deliberately carry no task data: clients refetch through the authorised REST endpoints, so the stream cannot leak anything. `resync` means "you fell behind, refetch everything". `503` when the server is at its connection cap (200).
 
 ## Health
 
