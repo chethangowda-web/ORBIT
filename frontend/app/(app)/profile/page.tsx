@@ -64,20 +64,24 @@ export default function ProfilePage() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Could not save your profile."),
   });
 
+  // The switch flips immediately from local state, then the server value takes over.
+  const [pending, setPending] = useState<Record<string, boolean>>({});
   const setPref = useMutation({
     mutationFn: ({ key, on }: { key: string; on: boolean }) => api.users.updatePreferences({ [key]: on ? "true" : "false" }),
-    onMutate: async ({ key, on }) => {
-      await queryClient.cancelQueries({ queryKey: keys.preferences });
-      const previous = queryClient.getQueryData<Record<string, string>>(keys.preferences);
-      queryClient.setQueryData(keys.preferences, { ...(previous ?? {}), [key]: on ? "true" : "false" });
-      return { previous };
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not save that preference."),
+    onSettled: async (_data, _error, { key }) => {
+      await queryClient.invalidateQueries({ queryKey: keys.preferences });
+      setPending((p) => {
+        const next = { ...p };
+        delete next[key];
+        return next;
+      });
     },
-    onError: (e, _vars, ctx) => {
-      queryClient.setQueryData(keys.preferences, ctx?.previous);
-      toast.error(e instanceof Error ? e.message : "Could not save that preference.");
-    },
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: keys.preferences }),
   });
+  const toggle = (key: string, on: boolean) => {
+    setPending((p) => ({ ...p, [key]: on }));
+    setPref.mutate({ key, on });
+  };
 
   if (profile.error) return <ErrorState title="Could not load your profile" error={profile.error} onRetry={() => void profile.refetch()} />;
   const me = profile.data;
@@ -130,7 +134,7 @@ export default function ProfilePage() {
             <Skeleton className="my-4 h-24" />
           ) : (
             PREFERENCES.filter((p) => !p.managerOnly || isManager).map((p) => (
-              <Switch key={p.key} label={p.label} description={p.description} checked={isOn(prefs.data?.[p.key])} onChange={(on) => setPref.mutate({ key: p.key, on })} />
+              <Switch key={p.key} label={p.label} description={p.description} checked={pending[p.key] ?? isOn(prefs.data?.[p.key])} onChange={(on) => toggle(p.key, on)} />
             ))
           )}
         </div>

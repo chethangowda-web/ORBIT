@@ -7,6 +7,7 @@ import { Avatar, Skeleton } from "@/components/ui/Primitives";
 import { IconButton } from "@/components/ui/Button";
 import { PriorityBadge, StatusBadge } from "@/components/ui/Badge";
 import { cn } from "@/lib/cn";
+import { pageSelectionState } from "@/lib/bulk";
 import { DueChip, TagList } from "./TaskParts";
 import type { Task, TaskFilters } from "@/types";
 
@@ -22,6 +23,9 @@ interface Props {
   onEdit: (task: Task) => void;
   /** Omit to hide the delete action (employees cannot delete). */
   onDelete?: (task: Task) => void;
+  selected: ReadonlySet<string>;
+  onToggle: (id: string) => void;
+  onTogglePage: () => void;
 }
 
 function SortHeader({
@@ -59,13 +63,27 @@ function SortHeader({
   );
 }
 
-export function TaskTable({ tasks, loading, sortBy, sortDir, onSort, onComplete, onEdit, onDelete }: Props) {
+export function TaskTable({ tasks, loading, sortBy, sortDir, onSort, onComplete, onEdit, onDelete, selected, onToggle, onTogglePage }: Props) {
   const sortProps = { sortBy, sortDir, onSort };
+  const pageState = pageSelectionState(selected, tasks.map((t) => t.id));
   return (
     <div className="overflow-x-auto rounded-panel border border-line bg-surface-1">
-      <table className="w-full min-w-[820px] text-left text-[12.5px]">
+      <table className="w-full min-w-[860px] text-left text-[12.5px]">
         <thead className="border-b border-line bg-surface-2/50 text-[11px] font-semibold uppercase tracking-[0.05em] text-fg-faint">
           <tr>
+            <th scope="col" className="w-9 py-2 pl-3">
+              <input
+                type="checkbox"
+                aria-label="Select all tasks on this page"
+                checked={pageState === "all"}
+                ref={(el) => {
+                  if (el) el.indeterminate = pageState === "some";
+                }}
+                onChange={onTogglePage}
+                disabled={loading || tasks.length === 0}
+                className="h-3.5 w-3.5 cursor-pointer accent-[rgb(var(--accent))]"
+              />
+            </th>
             <SortHeader label="Task" column="title" {...sortProps} />
             <SortHeader label="Status" column="status" {...sortProps} />
             <SortHeader label="Priority" column="priority" {...sortProps} />
@@ -82,7 +100,7 @@ export function TaskTable({ tasks, loading, sortBy, sortDir, onSort, onComplete,
           {loading
             ? Array.from({ length: 6 }).map((_, i) => (
                 <tr key={i}>
-                  {Array.from({ length: 6 }).map((__, j) => (
+                  {Array.from({ length: 7 }).map((__, j) => (
                     <td key={j} className="px-3 py-3">
                       <Skeleton className="h-4 w-full max-w-[140px]" />
                     </td>
@@ -90,7 +108,16 @@ export function TaskTable({ tasks, loading, sortBy, sortDir, onSort, onComplete,
                 </tr>
               ))
             : tasks.map((task) => (
-                <tr key={task.id} className="group transition-colors hover:bg-surface-2/60">
+                <tr key={task.id} className={cn("group transition-colors hover:bg-surface-2/60", selected.has(task.id) && "bg-accent/5")}>
+                  <td className="w-9 py-2.5 pl-3">
+                    <input
+                      type="checkbox"
+                      aria-label={`Select "${task.title}"`}
+                      checked={selected.has(task.id)}
+                      onChange={() => onToggle(task.id)}
+                      className="h-3.5 w-3.5 cursor-pointer accent-[rgb(var(--accent))]"
+                    />
+                  </td>
                   <td className="max-w-[360px] px-3 py-2.5">
                     <Link href={`/tasks/${task.id}`} className="line-clamp-1 font-medium text-fg hover:text-accent">
                       {task.title}

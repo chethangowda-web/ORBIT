@@ -47,9 +47,14 @@ test.describe("app shell", () => {
     await page.goto("/profile");
     const toggle = page.getByRole("switch", { name: /Morning briefing/ });
     const before = await toggle.isChecked();
-    await toggle.setChecked(!before, { force: true });
+
+    // Wait for the save to finish before reloading, otherwise the reload aborts it.
+    const saved = () => page.waitForResponse((r) => r.url().includes("/users/me/preferences") && r.request().method() === "PATCH");
+    await Promise.all([saved(), toggle.setChecked(!before, { force: true })]);
+
     await page.reload();
     await expect(page.getByRole("switch", { name: /Morning briefing/ })).toBeChecked({ checked: !before });
-    await page.getByRole("switch", { name: /Morning briefing/ }).setChecked(before, { force: true });
+
+    await Promise.all([saved(), page.getByRole("switch", { name: /Morning briefing/ }).setChecked(before, { force: true })]);
   });
 });

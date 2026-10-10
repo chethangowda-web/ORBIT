@@ -9,6 +9,7 @@ import { PriorityBadge, StatusBadge } from "@/components/ui/Badge";
 import { ConfirmDialog } from "@/components/ui/Overlay";
 import { Avatar, EmptyState, ErrorState, Panel, PanelHeader, Skeleton } from "@/components/ui/Primitives";
 import { useShell } from "@/components/shell/ShellContext";
+import { Comments } from "@/components/tasks/Comments";
 import { DueChip } from "@/components/tasks/TaskParts";
 import { ApiError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
@@ -139,6 +140,8 @@ export default function TaskDetailPage() {
           )}
         </div>
       </Panel>
+
+      <Comments taskId={task.id} />
 
       <Panel>
         <PanelHeader title="Activity" description="Every change is recorded with who made it and where." icon={<Activity className="h-4 w-4" />} />

@@ -5,7 +5,7 @@
 **Last Updated:** 2026-10-10  
 **Database:** PostgreSQL 16
 
-> The authoritative schema is the SQLAlchemy models in `backend/db/models.py` plus the Alembic migrations in `backend/alembic/versions/` (001 to 004). The SQL below is explanatory. `alembic check` (run in CI and by `tests/test_migrations.py`) fails if models and migrations disagree.
+> The authoritative schema is the SQLAlchemy models in `backend/db/models.py` plus the Alembic migrations in `backend/alembic/versions/` (001 to 005). The SQL below is explanatory. `alembic check` (run in CI and by `tests/test_migrations.py`) fails if models and migrations disagree.
 
 ---
 
@@ -260,10 +260,24 @@ CREATE TABLE agent_execution_traces (
 -- indexes: request_id, user_id, thread_id, (user_id, created_at), (thread_id, created_at)
 ```
 
-### 2.8 Notes that differ from the original design
+### 2.8 `task_comments`
+
+```sql
+CREATE TABLE task_comments (
+    id         UUID PRIMARY KEY,
+    task_id    UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    author_id  UUID REFERENCES users(id) ON DELETE SET NULL,
+    body       TEXT NOT NULL,                -- plain text, max 2000 enforced by the API
+    created_at TIMESTAMPTZ NOT NULL
+);
+-- indexes: task_id, author_id.  Migration: 005_task_comments
+```
+Comments are removed with their task row (tasks themselves are soft-deleted, so in practice they remain). A deleted user leaves comments attributed to "Former member".
+
+### 2.9 Notes that differ from the original design
 
 - `users.hashed_password` is nullable (Google and Chat users have none); `google_id` and `email` are unique.
-- `notification_logs.status` is `sent` (API success confirmed), `failed` (attempted, with `error_msg`) or `skipped` (no Google Chat account linked). Jobs never record `sent` without a successful delivery. Types: `daily_briefing`, `overdue_alert`, `weekly_summary`, `task_assigned`, `task_updated`, `task_completed`.
+- `notification_logs.status` is `sent` (API success confirmed), `failed` (attempted, with `error_msg`) or `skipped` (no Google Chat account linked). Jobs never record `sent` without a successful delivery. Types: `daily_briefing`, `overdue_alert`, `weekly_summary`, `task_assigned`, `task_updated`, `task_completed`, `task_commented`.
 - `user_preferences` boolean keys read by the scheduler: `daily_briefing`, `overdue_alert`, `weekly_summary`. Values `false`, `0`, `off`, `no` (any case) mean opted out.
 - `users.google_space_id` is set only from a verified Chat webhook event in a DM space; it cannot be edited through the API.
 - Task `tags` is a JSON array (portable across Postgres and the SQLite used in tests), searched with a substring match. Partial indexes and a `tsvector` column from the first design were not implemented; see OPERATIONS.md section 8 if the table grows very large.

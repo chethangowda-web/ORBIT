@@ -114,6 +114,8 @@ export function describeAudit(log: Pick<TaskAuditLog, "action" | "changes" | "us
       return `${actor} marked the task done`;
     case "DELETED":
       return `${actor} deleted the task`;
+    case "COMMENTED":
+      return `${actor} commented`;
   }
   const entries = Object.entries(log.changes ?? {}).filter(([field]) => field !== "completed_at");
   if (entries.length === 0) return `${actor} updated the task`;

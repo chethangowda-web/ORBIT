@@ -6,7 +6,8 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { api } from "./api-client";
 import { useAuth } from "./auth";
 import { useToast } from "@/components/ui/Toast";
-import type { Task, TaskFilters, TaskStatus } from "@/types";
+import { summarizeBulk } from "./bulk";
+import type { BulkAction, Task, TaskFilters, TaskStatus } from "@/types";
 
 export const POLL_MS = 15_000;
 
@@ -15,6 +16,7 @@ export const keys = {
   taskList: (filters: TaskFilters) => ["tasks", "list", filters] as const,
   task: (id: string) => ["tasks", "detail", id] as const,
   taskHistory: (id: string) => ["tasks", "history", id] as const,
+  comments: (id: string) => ["tasks", "comments", id] as const,
   stats: ["stats"] as const,
   workload: ["workload"] as const,
   users: ["users"] as const,
@@ -194,4 +196,50 @@ export function useDeleteTask(onDone?: () => void) {
 /** True when the signed-in user may delete tasks (mirrors the backend rule). */
 export function useCanDelete(): boolean {
   return useAuth().isManager;
+}
+
+
+export function useComments(taskId: string) {
+  return useQuery({ queryKey: keys.comments(taskId), queryFn: () => api.tasks.comments(taskId) });
+}
+
+export function useAddComment(taskId: string) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  return useMutation({
+    mutationFn: (body: string) => api.tasks.addComment(taskId, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: keys.comments(taskId) });
+      void queryClient.invalidateQueries({ queryKey: keys.taskHistory(taskId) });
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+}
+
+export function useDeleteComment(taskId: string) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  return useMutation({
+    mutationFn: (commentId: string) => api.tasks.deleteComment(taskId, commentId),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: keys.comments(taskId) }),
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+}
+
+/** Apply one action to many tasks; reports partial failures instead of hiding them. */
+export function useBulkAction(onDone?: () => void) {
+  const invalidate = useInvalidateTaskData();
+  const toast = useToast();
+  return useMutation({
+    mutationFn: ({ ids, action, value }: { ids: string[]; action: BulkAction; value?: string }) =>
+      api.tasks.bulk(ids, action, value),
+    onSuccess: (result, vars) => {
+      invalidate();
+      const summary = summarizeBulk(vars.action, result);
+      if (result.failed.length > 0) toast.error(summary);
+      else toast.success(summary);
+      onDone?.();
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
 }

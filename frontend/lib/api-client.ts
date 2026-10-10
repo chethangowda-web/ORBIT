@@ -9,6 +9,8 @@ import axios, { AxiosError } from "axios";
 import type {
   AgentExecutionTrace,
   APIResponse,
+  BulkAction,
+  BulkResult,
   ChatQueryRequest,
   ChatQueryResponse,
   HealthStatus,
@@ -18,6 +20,7 @@ import type {
   SessionUser,
   Task,
   TaskAuditLog,
+  TaskComment,
   TaskFilters,
   TaskStats,
   TeamWorkload,
@@ -143,6 +146,13 @@ export const api = {
     complete: async (id: string) => unwrap<Task>(await apiClient.post(`/tasks/${id}/complete`)),
     remove: async (id: string) => unwrap<{ message: string }>(await apiClient.delete(`/tasks/${id}`)),
     history: async (id: string) => (unwrap<TaskAuditLog[]>(await apiClient.get(`/tasks/${id}/history`)) ?? []),
+    comments: async (id: string) => (unwrap<TaskComment[]>(await apiClient.get(`/tasks/${id}/comments`)) ?? []),
+    addComment: async (id: string, body: string) =>
+      unwrap<TaskComment>(await apiClient.post(`/tasks/${id}/comments`, { body })),
+    deleteComment: async (id: string, commentId: string) =>
+      unwrap<{ message: string }>(await apiClient.delete(`/tasks/${id}/comments/${commentId}`)),
+    bulk: async (taskIds: string[], action: BulkAction, value?: string) =>
+      unwrap<BulkResult>(await apiClient.post("/tasks/bulk", { task_ids: taskIds, action, value })),
   },
 
   users: {

@@ -1,4 +1,4 @@
-import { test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { signIn, type Who } from "./helpers";
 
 /**
@@ -46,4 +46,29 @@ test("command palette and mobile layout", async ({ page }) => {
   await page.goto("/");
   await page.waitForLoadState("networkidle");
   await page.screenshot({ path: "test-results/screens/mobile-board.png" });
+});
+
+test("task detail with comments and bulk selection", async ({ page }) => {
+  const { apiCreateTask, apiDeleteTask, uniqueTitle } = await import("./helpers");
+  await signIn(page, "manager");
+  const title = uniqueTitle("Review release notes");
+  const id = await apiCreateTask(page, title);
+  const other = await apiCreateTask(page, uniqueTitle("Update runbook"));
+
+  await page.goto(`/tasks/${id}`);
+  for (const text of ["Draft is ready for review.", "Please double check the migration notes before we ship."]) {
+    await page.getByLabel("Add a comment").fill(text);
+    await page.getByRole("button", { name: "Comment", exact: true }).click();
+    await expect(page.getByLabel("Add a comment")).toHaveValue(""); // saved and the composer reset
+  }
+  await page.waitForLoadState("networkidle");
+  await page.screenshot({ path: "test-results/screens/task-detail.png", fullPage: true });
+
+  await page.goto("/tasks");
+  await page.getByRole("checkbox", { name: /^Select "/ }).nth(0).check();
+  await page.getByRole("checkbox", { name: /^Select "/ }).nth(1).check();
+  await page.screenshot({ path: "test-results/screens/bulk-selection.png" });
+
+  await apiDeleteTask(page, id);
+  await apiDeleteTask(page, other);
 });

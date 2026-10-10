@@ -82,6 +82,24 @@ Body `{ completion_note? }`. Idempotent (completing a DONE task returns it uncha
 ### `DELETE /tasks/{id}` (manager, admin)
 Soft delete. Recorded in the audit log.
 
+### `POST /tasks/bulk`
+Apply one action to up to 50 tasks. Body `{ task_ids: [uuid], action, value? }` where `action` is one of:
+
+| action | `value` | Rule |
+|---|---|---|
+| `complete` | none | Same as `POST /tasks/{id}/complete` per task |
+| `set_status` | a status | Same as `PATCH` |
+| `set_priority` | a priority | Same as `PATCH` |
+| `assign` | user id, or empty to unassign | Employees may only assign to themselves |
+| `delete` | none | Managers and admins only |
+
+Every task is authorised individually and one failure never stops the rest. Response (always 200 for a valid request): `{ succeeded: [ids], failed: [{ id, reason }] }`. Duplicate ids are processed once; unknown ids, cancelled tasks being completed, and forbidden tasks appear in `failed` with the reason.
+
+### Comments
+- `GET /tasks/{id}/comments`: oldest first, with `author` (directory view). Requires permission to view the task.
+- `POST /tasks/{id}/comments` (201): body `{ body }` (1 to 2000 characters, trimmed, blank rejected). Adds a `COMMENTED` entry to the task history and notifies the assignee and creator in Google Chat (never the author).
+- `DELETE /tasks/{id}/comments/{comment_id}`: the author, or any manager or admin. A comment id that belongs to a different task returns 404.
+
 ### `GET /tasks/{id}/history`
 Audit entries, newest first: `{ id, action, changes: { field: { old, new } }, source: "api" | "chat" | "scheduler", created_at, user }`.
 

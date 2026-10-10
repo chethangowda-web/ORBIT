@@ -88,6 +88,7 @@ export const NOTIFICATION_TYPE_LABEL: Record<string, string> = {
   task_assigned: "Task assigned",
   task_updated: "Task updated",
   task_completed: "Task completed",
+  task_commented: "New comment",
 };
 
 export const AGENT_LABEL: Record<string, string> = {

@@ -9,8 +9,10 @@ import { ConfirmDialog } from "@/components/ui/Overlay";
 import { Pagination } from "@/components/ui/Pagination";
 import { EmptyState, ErrorState, PageHeader } from "@/components/ui/Primitives";
 import { useShell } from "@/components/shell/ShellContext";
+import { BulkBar } from "@/components/tasks/BulkBar";
 import { TaskTable } from "@/components/tasks/TaskTable";
 import { useAuth } from "@/lib/auth";
+import { toggleId, togglePage } from "@/lib/bulk";
 import { ALL_STATUSES, PRIORITIES, PRIORITY_LABEL, STATUS_LABEL } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 import { useCompleteTask, useDeleteTask, useTasks, useUsers } from "@/lib/hooks";
@@ -30,6 +32,7 @@ function TasksScreen() {
   const view = useMemo(() => parseView(new URLSearchParams(params.toString())), [params]);
   const [search, setSearch] = useState(view.q);
   const [toDelete, setToDelete] = useState<Task | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const update = useCallback(
     (patch: Partial<TaskView>) => {
@@ -52,6 +55,11 @@ function TasksScreen() {
   const { data, isLoading, isFetching, error, refetch } = useTasks(filters, { poll: true });
   const complete = useCompleteTask();
   const remove = useDeleteTask(() => setToDelete(null));
+
+  // A selection only makes sense for the rows it was made on.
+  const viewKey = params.toString();
+  useEffect(() => setSelected(new Set()), [viewKey]);
+  const pageIds = (data?.items ?? []).map((t) => t.id);
 
   const active = hasActiveFilters(view);
   const reset = () => {
@@ -107,6 +115,8 @@ function TasksScreen() {
         )}
       </div>
 
+      {selected.size > 0 && <BulkBar ids={Array.from(selected)} onClear={() => setSelected(new Set())} />}
+
       {error ? (
         <ErrorState title="Could not load tasks" error={error} onRetry={() => void refetch()} />
       ) : !isLoading && data && data.items.length === 0 ? (
@@ -126,6 +136,9 @@ function TasksScreen() {
             onComplete={(task) => complete.mutate(task.id)}
             onEdit={openEditTask}
             onDelete={isManager ? setToDelete : undefined}
+            selected={selected}
+            onToggle={(id) => setSelected((s) => toggleId(s, id))}
+            onTogglePage={() => setSelected((s) => togglePage(s, pageIds))}
           />
           {data && <Pagination meta={data.meta} noun="tasks" onPageChange={(page) => update({ page })} />}
         </div>

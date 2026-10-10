@@ -11,6 +11,7 @@ Employees manage tasks in plain language inside **Google Chat**; managers get a 
 - **Six cooperating agents**: Supervisor, Task, Planner, Recommendation, Review (human-in-the-loop) and Memory, orchestrated with LangGraph.
 - **Google Chat bot**: natural-language task management, interactive confirmation cards, direct-message notifications, idempotent webhook handling.
 - **Mission Control dashboard** (Next.js 14): drag-and-drop board, dense task table with URL-synced filters, task detail with a readable audit trail, insights charts, agent run traces, admin console, command palette (`Ctrl+K`) and an always-available agent panel.
+- **Collaboration**: comments on tasks (assignee and creator notified in Chat), bulk actions on the task table (complete, status, priority, assign, delete) with per-task permission checks.
 - **Role-based access** (employee, manager, admin) enforced identically in the REST API *and* in the chat agents' tools.
 - **Proactive assistance**: 9:00 morning briefing, 18:00 overdue alerts, Monday weekly summary; per-user opt-outs honoured; honest delivery logging (`sent`, `failed`, `skipped`).
 - **Conversation memory**: Redis-backed LangGraph checkpoints, so "make it high priority" resolves across turns.
@@ -99,7 +100,8 @@ ORBIT never guesses: an unknown or ambiguous name ("Joe" matches two people) or 
 ### In the dashboard
 
 - **Board**: drag cards between lanes (or use the arrow on a card). `Mine` / `Everyone` scope toggle.
-- **Tasks**: search title, description and tags; filter by status, priority, assignee, overdue; sort columns. Filters live in the URL so views are shareable.
+- **Tasks**: search title, description and tags; filter by status, priority, assignee, overdue; sort columns. Filters live in the URL so views are shareable. Tick rows (or the header box) for bulk actions.
+- **Task page**: fields, a comment thread (`Ctrl+Enter` to send) and a readable activity log.
 - **Agent panel** (top bar, or `Ctrl+K` then type a request): chat with the agents, confirm destructive actions, inspect which agents ran and how long each took.
 - **Insights** (managers): completion, status and priority mix, creation trend, workload per person, all computed from the database.
 - **Agent runs**: every request's route, tools and timings.
@@ -108,6 +110,10 @@ ORBIT never guesses: an unknown or ambiguous name ("Joe" matches two people) or 
 ---
 
 ## Google Chat setup
+
+Full walkthrough with a verification checklist: [docs/GOOGLE_CHAT_SETUP.md](docs/GOOGLE_CHAT_SETUP.md). Try the bot first without Google: `cd backend && python -m scripts.simulate_chat --email john@orbit.dev`.
+
+Slash commands: `/tasks`, `/plan`, `/overdue`, `/insights`, `/help`, `/new <title>`. Task lists come back as cards with a **Done** button per task.
 
 1. In Google Cloud, enable the **Google Chat API** and create a service account with the Chat Bot role. Save its key as `credentials/service-account.json` (never commit it).
 2. Configure the Chat app: HTTP endpoint, **Receive 1:1 messages**, **Join spaces**.
@@ -186,6 +192,7 @@ docs/           Architecture, API, data model, design system, decisions
 | Document | Contents |
 |---|---|
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Deployment, security checklist, runbook, troubleshooting |
+| [docs/GOOGLE_CHAT_SETUP.md](docs/GOOGLE_CHAT_SETUP.md) | Step-by-step Google Chat setup, slash commands, local simulator, checklist |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design and request flows |
 | [docs/AGENTS.md](docs/AGENTS.md) | Agent responsibilities, routing, safety rules |
 | [docs/TOOLS.md](docs/TOOLS.md) | Tool contracts and permission model |

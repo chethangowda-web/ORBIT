@@ -69,6 +69,21 @@ export interface TaskAuditLog {
   user?: UserPublic | null;
 }
 
+export interface TaskComment {
+  id: string;
+  task_id: string;
+  body: string;
+  created_at: string;
+  author?: UserPublic | null;
+}
+
+export type BulkAction = "complete" | "set_status" | "set_priority" | "assign" | "delete";
+
+export interface BulkResult {
+  succeeded: string[];
+  failed: { id: string; reason: string }[];
+}
+
 export interface TaskStats {
   total_tasks: number;
   completed_tasks: number;
