@@ -88,9 +88,14 @@ async def test_get_and_update_task_tool(
 
 @pytest.mark.asyncio
 async def test_complete_and_delete_task_tool(
-    db_session: AsyncSession, seed_test_user: User
+    db_session: AsyncSession, seed_test_user: User, seed_manager_user: User
 ):
-    """Test complete_task and delete_task tools."""
+    """Test complete_task and delete_task tools.
+
+    Deletion is manager/admin-only (auth.rbac.check_task_permission), so the
+    delete step runs as a manager even though creation/completion is by the
+    employee assignee.
+    """
     c_res = await create_task.ainvoke(
         {
             "title": "Task To Complete And Delete",
@@ -112,11 +117,11 @@ async def test_complete_and_delete_task_tool(
     assert comp_res["data"]["status"] == "DONE"
     assert comp_res["data"]["completed_at"] is not None
 
-    # Delete task
+    # Delete task (manager/admin only)
     del_res = await delete_task.ainvoke(
         {
             "task_id": task_id,
-            "deleted_by_id": str(seed_test_user.id),
+            "deleted_by_id": str(seed_manager_user.id),
             "reason": "Test finished",
         }
     )

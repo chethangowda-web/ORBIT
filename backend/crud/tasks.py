@@ -16,6 +16,16 @@ from db.models import Task, TaskAuditLog, User
 from exceptions import EntityNotFoundException, OrbitException
 from schemas.analytics import DailyCount, TaskStatsResponse, TeamMemberWorkload
 from schemas.task import TaskCreate, TaskPriority, TaskStatus, TaskUpdate
+from services.notifications import notify_task_event
+
+
+async def _get_actor_name(db: AsyncSession, user_id: Optional[uuid.UUID]) -> str:
+    """Resolve a display name for the acting user, used in notification text."""
+    if not user_id:
+        return "ORBIT"
+    result = await db.execute(select(User.display_name).where(User.id == user_id))
+    name = result.scalar_one_or_none()
+    return name or "A teammate"
 
 
 def enrich_task_metadata(task: Task) -> Task:
@@ -67,7 +77,19 @@ async def create_task(
     )
     await db.commit()
     reloaded = await get_task(db, task.id)
-    return reloaded if reloaded is not None else enrich_task_metadata(task)
+    final_task = reloaded if reloaded is not None else enrich_task_metadata(task)
+
+    if final_task.assignee_id and final_task.assignee_id != created_by_id:
+        actor_name = await _get_actor_name(db, created_by_id)
+        await notify_task_event(
+            session=db,
+            task=final_task,
+            event_type="task_assigned",
+            recipient=final_task.assignee,
+            actor_name=actor_name,
+        )
+
+    return final_task
 
 
 async def get_task(
@@ -124,6 +146,13 @@ async def update_task(
     if "status" in update_dict and update_dict["status"] == "DONE" and not task.completed_at:
         task.completed_at = utc_now()
 
+    if "assignee_id" in changes:
+        # Setting the FK column directly does not refresh the `assignee`
+        # relationship on this already-identity-mapped instance; without
+        # expiring it, a subsequent reload would keep serving the stale
+        # (pre-reassignment) related object instead of the new assignee.
+        db.expire(task, ["assignee"])
+
     if changes:
         action_type = "STATUS_CHANGED" if "status" in changes else "UPDATED"
         await log_task_action(
@@ -137,7 +166,20 @@ async def update_task(
 
     await db.commit()
     reloaded = await get_task(db, task.id)
-    return reloaded if reloaded is not None else enrich_task_metadata(task)
+    final_task = reloaded if reloaded is not None else enrich_task_metadata(task)
+
+    if changes and final_task.assignee_id and final_task.assignee_id != user_id:
+        actor_name = await _get_actor_name(db, user_id)
+        event_type = "task_assigned" if "assignee_id" in changes else "task_updated"
+        await notify_task_event(
+            session=db,
+            task=final_task,
+            event_type=event_type,
+            recipient=final_task.assignee,
+            actor_name=actor_name,
+        )
+
+    return final_task
 
 
 async def soft_delete_task(
@@ -197,7 +239,19 @@ async def complete_task(
     )
     await db.commit()
     reloaded = await get_task(db, task.id)
-    return reloaded if reloaded is not None else enrich_task_metadata(task)
+    final_task = reloaded if reloaded is not None else enrich_task_metadata(task)
+
+    if final_task.created_by_id and final_task.created_by_id != user_id:
+        actor_name = await _get_actor_name(db, user_id)
+        await notify_task_event(
+            session=db,
+            task=final_task,
+            event_type="task_completed",
+            recipient=final_task.creator,
+            actor_name=actor_name,
+        )
+
+    return final_task
 
 
 async def list_tasks(

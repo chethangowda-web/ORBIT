@@ -125,8 +125,11 @@ See `AGENTS.md` for full contracts.
 ```
 User types in Google Chat
   → Google Chat sends POST to /api/chat/webhook
-  → FastAPI verifies webhook signature
+  → FastAPI verifies webhook signature (Bearer OIDC or HMAC)
   → Extracts sender, message text, space ID
+  → Idempotency check: MESSAGE/CARD_CLICKED events are deduped against
+    chat_event_ledger (keyed on message resource name / action+params).
+    A redelivered event short-circuits here and is never re-executed.
   → Loads conversation history from Redis (Memory Agent)
   → Supervisor Agent classifies intent
   → Routes to specialist agent
@@ -135,7 +138,20 @@ User types in Google Chat
   → Review Agent validates response
   → FastAPI sends response to Google Chat via REST API
   → Memory Agent persists updated conversation state
+  → Ledger entry finalized as COMPLETED (or FAILED, which allows a future retry)
 ```
+
+**Idempotency ledger** (`chat_event_ledger`, see `backend/crud/chat_events.py`):
+Google Chat may redeliver an event (timeouts, platform retries). The webhook
+handler computes a stable `event_key` per event — the Chat message resource
+name for `MESSAGE` events, or a hash of `(space, user, eventTime, action,
+parameters)` for `CARD_CLICKED` — and atomically claims it via a unique DB
+constraint before invoking the agent graph. A duplicate claim returns the
+cached response (or a safe generic acknowledgement) without re-running any
+tool. A claim that fails before completion is marked `FAILED` so a genuine
+retry can still succeed; only `COMPLETED` claims are treated as already
+processed. `ADDED_TO_SPACE`/`APP_HOME` events are not deduped since resending
+the welcome card has no side effects.
 
 ### 3.2 Autonomous Flow (Scheduler → Notification)
 ```
@@ -155,6 +171,28 @@ Next.js page loads
   → Returns paginated task list
   → Dashboard renders Kanban/table view
 ```
+
+### 3.4 Dashboard/Chat → Google Chat Notification Flow
+```
+Task mutated via POST/PATCH /api/tasks (dashboard) OR via a chat command
+  → crud/tasks.py: create_task / update_task / complete_task
+  → DB transaction commits (the task mutation is never rolled back for a
+    notification failure — this runs strictly after commit)
+  → services/notifications.notify_task_event() dispatches when the
+    recipient differs from the acting user:
+      - create_task with assignee != creator        → "task_assigned"
+      - update_task with assignee_id changed         → "task_assigned" (new assignee)
+      - update_task with other fields changed        → "task_updated" (current assignee)
+      - complete_task by someone other than creator  → "task_completed" (creator)
+  → Delivery via services/google_chat.send_dm (or send_text_message as a
+    space fallback), with one bounded retry on transient failure
+  → Outcome always recorded in notification_logs as sent | failed | skipped
+    (skipped = recipient has no linked Google Chat handle) — never marked
+    "sent" without an API success response
+```
+This is the same `NotificationLog` model and delivery path the scheduler
+jobs already use for daily briefings and overdue alerts (`scheduler/jobs/`),
+so both proactive and event-driven notifications share one audit trail.
 
 ---
 

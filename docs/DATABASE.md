@@ -206,6 +206,31 @@ CREATE INDEX idx_notif_type ON notification_logs(type, sent_at DESC);
 
 ---
 
+### 2.6 `chat_event_ledger`
+
+Idempotency ledger preventing a redelivered Google Chat event (webhook retry)
+from double-creating a task or double-executing a confirmed destructive
+action. See `backend/crud/chat_events.py` and ARCHITECTURE.md §3.1.
+
+```sql
+CREATE TABLE chat_event_ledger (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_key     VARCHAR(512) NOT NULL UNIQUE,
+    event_type    VARCHAR(50) NOT NULL,     -- MESSAGE | CARD_CLICKED
+    status        VARCHAR(20) NOT NULL DEFAULT 'PROCESSING',
+                  -- PROCESSING | COMPLETED | FAILED
+    response_text TEXT,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at  TIMESTAMPTZ
+);
+
+CREATE INDEX ix_chat_event_ledger_event_key ON chat_event_ledger(event_key);
+```
+
+Migration: `backend/alembic/versions/003_chat_event_ledger.py`.
+
+---
+
 ## 3. SQLAlchemy Models
 
 ```python

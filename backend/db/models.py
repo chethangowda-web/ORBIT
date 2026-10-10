@@ -227,6 +227,26 @@ class NotificationLog(Base):
     user: Mapped["User"] = relationship("User", back_populates="notifications")
 
 
+class ChatEventLedger(Base):
+    """Idempotency ledger preventing duplicate processing of retried Google Chat events."""
+
+    __tablename__ = "chat_event_ledger"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    event_key: Mapped[str] = mapped_column(String(512), nullable=False, unique=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="PROCESSING", nullable=False)
+    response_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
 class AgentExecutionTrace(Base):
     """Execution trace of LangGraph agent coordination and tool execution."""
 

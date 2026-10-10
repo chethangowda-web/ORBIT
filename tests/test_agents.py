@@ -142,18 +142,24 @@ async def test_recommendation_agent_insights(db_session: AsyncSession, seed_test
 
 
 @pytest.mark.asyncio
-async def test_review_agent_hitl_delete_flow(db_session: AsyncSession, seed_test_user: User):
-    """Test HITL confirmation flow for task deletion."""
+async def test_review_agent_hitl_delete_flow(db_session: AsyncSession, seed_manager_user: User):
+    """Test HITL confirmation flow for task deletion.
+
+    Deletion is restricted to managers/admins (see auth.rbac.check_task_permission
+    and tools.task_tools.delete_task), so this flow must run as a manager — an
+    employee would correctly be rejected with a permission error, exercised
+    separately in test_rbac_and_oauth.py.
+    """
     t_res = await create_task.ainvoke({
         "title": "Temporary test item to delete",
-        "created_by_id": str(seed_test_user.id),
-        "assignee_name": seed_test_user.display_name,
+        "created_by_id": str(seed_manager_user.id),
+        "assignee_name": seed_manager_user.display_name,
     })
     target_id = t_res["data"]["id"]
 
     # 1. First attempt: requires confirmation
     del_state = await process_message(
-        user_id=str(seed_test_user.id),
+        user_id=str(seed_manager_user.id),
         space_id="spaces/TESTSPACE",
         message=f"Delete task {target_id}",
         confirmed=False,
@@ -166,7 +172,7 @@ async def test_review_agent_hitl_delete_flow(db_session: AsyncSession, seed_test
 
     # 2. Second attempt with confirmed=True
     conf_state = await process_message(
-        user_id=str(seed_test_user.id),
+        user_id=str(seed_manager_user.id),
         space_id="spaces/TESTSPACE",
         message=f"Delete task {target_id}",
         confirmed=True,

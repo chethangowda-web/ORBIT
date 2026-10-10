@@ -33,6 +33,7 @@ from services.google_chat import (
     verify_google_chat_bearer_token,
     verify_webhook_signature,
 )
+from crud.chat_events import claim_event, compute_event_key, finalize_event
 from schemas.common import api_response
 from tools.base import get_tool_session
 
@@ -234,6 +235,20 @@ def format_chat_response(
     return msg
 
 
+def _extract_response_text(response_payload: dict[str, Any]) -> str:
+    """Extracts a plain-text summary from a formatted Chat response for ledger caching."""
+    if "text" in response_payload:
+        return str(response_payload["text"])
+    try:
+        return str(
+            response_payload["hostAppDataAction"]["chatDataAction"]["createMessageAction"]["message"].get(
+                "text", "Action processed."
+            )
+        )
+    except Exception:
+        return "Action processed."
+
+
 def parse_chat_event_payload(body_bytes: bytes) -> GoogleChatEvent:
     """Parses and normalizes both standard Google Chat events and Workspace Add-on commonEventObject payloads."""
     raw = json.loads(body_bytes.decode("utf-8") or "{}")
@@ -360,6 +375,42 @@ async def google_chat_webhook(
         return format_chat_response("Event received without user profile.", is_addon=is_addon)
 
     space_id = event.space.name
+
+    # Idempotency: dedupe retried deliveries of the same side-effecting event
+    # (message send or button click) so retries can never double-create a task
+    # or double-execute a confirmed destructive action.
+    event_key: Optional[str] = None
+    if event.type == "MESSAGE" and event.message:
+        discriminator = event.message.name or f"text:{event.message.text}"
+        event_key = compute_event_key(
+            event_type="MESSAGE",
+            space_name=space_id,
+            user_name=event.user.name,
+            event_time=event.eventTime,
+            discriminator=discriminator,
+        )
+    elif event.type == "CARD_CLICKED" and event.action:
+        params = {p.get("key"): p.get("value") for p in (event.action.parameters or []) if p.get("key")}
+        discriminator = f"{event.action.actionMethodName}:{json.dumps(params, sort_keys=True)}"
+        event_key = compute_event_key(
+            event_type="CARD_CLICKED",
+            space_name=space_id,
+            user_name=event.user.name,
+            event_time=event.eventTime,
+            discriminator=discriminator,
+        )
+
+    if event_key:
+        is_duplicate, cached_response = await claim_event(event_key, event.type)
+        if is_duplicate:
+            logger.info("[WEBHOOK DEDUP] Duplicate event ignored: key=%s", event_key)
+            return format_chat_response(
+                cached_response or "This action was already processed.",
+                is_addon=is_addon,
+            )
+
+    result_response: dict[str, Any] = format_chat_response("Action processed.", is_addon=is_addon)
+    processing_failed = False
     try:
         async with get_tool_session() as session:
             user = await get_or_create_google_user(session, event.user)
@@ -395,7 +446,7 @@ async def google_chat_webhook(
                         thread_id=effective_thread_id,
                         prompt_text=resp_text,
                     )
-                    return format_chat_response(resp_text, cards_v2=[conf_card], is_addon=is_addon)
+                    result_response = format_chat_response(resp_text, cards_v2=[conf_card], is_addon=is_addon)
                 elif resp_type == "card" and card_data:
                     if isinstance(card_data, dict) and "cardsV2" in card_data and card_data["cardsV2"]:
                         card_v2 = card_data["cardsV2"][0]
@@ -403,9 +454,9 @@ async def google_chat_webhook(
                         card_v2 = card_data
                     else:
                         card_v2 = build_task_card_v2(card_data)
-                    return format_chat_response(resp_text, cards_v2=[card_v2], is_addon=is_addon)
+                    result_response = format_chat_response(resp_text, cards_v2=[card_v2], is_addon=is_addon)
                 else:
-                    return format_chat_response(resp_text, is_addon=is_addon)
+                    result_response = format_chat_response(resp_text, is_addon=is_addon)
 
             elif event.type == "CARD_CLICKED" and event.action:
                 action_name = event.action.actionMethodName or ""
@@ -450,12 +501,22 @@ async def google_chat_webhook(
 
                 resp_text = agent_state.get("response", "Action processed.")
                 logger.info("[WEBHOOK OUTGOING] Card click response: %r", resp_text[:80])
-                return format_chat_response(resp_text, is_addon=is_addon)
+                result_response = format_chat_response(resp_text, is_addon=is_addon)
     except Exception as exc:
         logger.exception("[WEBHOOK PROCESSING ERROR] %s", exc)
-        return format_chat_response(f"⚠️ ORBIT encountered an internal error: {str(exc)}", is_addon=is_addon)
+        processing_failed = True
+        result_response = format_chat_response(
+            f"⚠️ ORBIT encountered an internal error: {str(exc)}", is_addon=is_addon
+        )
 
-    return format_chat_response("Action processed.", is_addon=is_addon)
+    if event_key:
+        await finalize_event(
+            event_key,
+            response_text=_extract_response_text(result_response),
+            status="FAILED" if processing_failed else "COMPLETED",
+        )
+
+    return result_response
 
 
 SUGGESTED_ACTIONS_BY_INTENT = {

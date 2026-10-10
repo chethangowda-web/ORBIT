@@ -317,17 +317,22 @@ async def test_eval_cross_user_task_reference_isolation(
 @pytest.mark.asyncio
 async def test_eval_destructive_action_replay_prevention(
     client: AsyncClient,
-    seed_test_user: User,
-    user_auth_headers: dict,
+    seed_manager_user: User,
+    manager_auth_headers: dict,
     db_session: AsyncSession,
 ):
-    """Evaluates that destructive confirmations cannot be replayed or reused once consumed."""
+    """Evaluates that destructive confirmations cannot be replayed or reused once consumed.
+
+    Deletion is manager/admin-only (auth.rbac.check_task_permission), so this
+    flow runs as a manager; an employee's deletion attempt is covered
+    separately in test_rbac_and_oauth.py.
+    """
     # Create task
     task = Task(
         title="Temporary Scrap Task",
         priority=TaskPriority.LOW.value,
         status=TaskStatus.TODO.value,
-        created_by_id=seed_test_user.id,
+        created_by_id=seed_manager_user.id,
     )
     db_session.add(task)
     await db_session.commit()
@@ -339,7 +344,7 @@ async def test_eval_destructive_action_replay_prevention(
     res_req = await client.post(
         "/api/chat/query",
         json={"message": f"Delete Task #{task.id}", "thread_id": thread_id},
-        headers=user_auth_headers,
+        headers=manager_auth_headers,
     )
     assert res_req.status_code == 200
     data1 = res_req.json()["data"]
@@ -350,7 +355,7 @@ async def test_eval_destructive_action_replay_prevention(
     res_conf = await client.post(
         "/api/chat/query",
         json={"message": "yes", "confirmed": True, "thread_id": thread_id},
-        headers=user_auth_headers,
+        headers=manager_auth_headers,
     )
     assert res_conf.status_code == 200
     data2 = res_conf.json()["data"]
@@ -360,7 +365,7 @@ async def test_eval_destructive_action_replay_prevention(
     res_replay = await client.post(
         "/api/chat/query",
         json={"message": "yes", "confirmed": True, "thread_id": thread_id},
-        headers=user_auth_headers,
+        headers=manager_auth_headers,
     )
     assert res_replay.status_code == 200
     data3 = res_replay.json()["data"]
