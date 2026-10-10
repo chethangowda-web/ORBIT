@@ -2,6 +2,8 @@
 
 import React, { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ToastProvider } from "@/components/ui/Toast";
+import { ApiError } from "@/lib/api-client";
 import { AuthProvider } from "@/lib/auth";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -10,17 +12,20 @@ export function Providers({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 1000 * 10, // 10 seconds
+            staleTime: 10_000,
             refetchOnWindowFocus: false,
-            retry: 1,
+            // Retry network blips once; never retry a definitive client error.
+            retry: (count, error) => !(error instanceof ApiError && error.status >= 400 && error.status < 500) && count < 1,
           },
         },
-      })
+      }),
   );
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>{children}</AuthProvider>
+      <ToastProvider>
+        <AuthProvider>{children}</AuthProvider>
+      </ToastProvider>
     </QueryClientProvider>
   );
 }

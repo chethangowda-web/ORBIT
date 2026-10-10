@@ -2,42 +2,94 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Mission Control design tokens. Values are space-separated RGB triplets so Tailwind
+ * can apply opacity modifiers (bg-accent/20). Never use raw colors in components.
+ * Spec: docs/DESIGN_MISSION_CONTROL.md
+ */
 @layer base {
   :root {
-    --background: #090D13;
-    --foreground: #E5EAF1;
-    --card: #111821;
-    --card-foreground: #E5EAF1;
-    --border: #263241;
-    --primary: #3B82F6;
-    --primary-foreground: #FFFFFF;
-    --accent: #3B82F6;
-    --muted: #94A3B8;
+    color-scheme: dark;
+
+    --bg: 10 14 20;
+    --surface-1: 16 21 29;
+    --surface-2: 22 29 40;
+    --surface-3: 29 38 51;
+    --line: 36 48 64;
+    --line-subtle: 26 35 48;
+
+    --fg: 230 235 242;
+    --fg-muted: 151 163 182;
+    --fg-faint: 124 138 163;
+
+    --accent: 76 141 255;
+    --accent-strong: 47 114 235;
+    --ok: 52 195 143;
+    --warn: 245 165 36;
+    --danger: 240 84 106;
+    --info: 63 182 232;
+    --high: 242 129 46;
+  }
+
+  html,
+  body {
+    background: rgb(var(--bg));
+    color: rgb(var(--fg));
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 13px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  * {
+    border-color: rgb(var(--line));
+  }
+
+  ::selection {
+    background: rgb(var(--accent) / 0.3);
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(var(--accent));
+    outline-offset: 2px;
+  }
+
+  /* Dense, quiet scrollbars */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgb(var(--line));
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--fg-faint));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  overflow-x: hidden;
-}
-
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-
-::-webkit-scrollbar-track {
-  background: #090D13;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #263241;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #3B82F6;
+@layer components {
+  .section-label {
+    @apply text-[11px] font-semibold uppercase tracking-[0.06em] text-fg-faint;
+  }
+  .num {
+    @apply font-mono tabular-nums;
+  }
 }

@@ -1,224 +1,193 @@
 /**
- * ORBIT REST API Client
- * Typed Axios instance handling token injection, response envelope unwrapping, and API routes.
+ * ORBIT REST API client.
+ *
+ * Typed Axios instance that injects the JWT, unwraps the `{success, data, meta, error}`
+ * envelope, and raises `ApiError` (with HTTP status and server metadata) on failure.
  */
 
 import axios, { AxiosError } from "axios";
-import {
+import type {
+  AgentExecutionTrace,
   APIResponse,
+  ChatQueryRequest,
+  ChatQueryResponse,
+  HealthStatus,
+  NotificationLogEntry,
   PaginationMeta,
   SchedulerStatus,
+  SessionUser,
   Task,
   TaskAuditLog,
+  TaskFilters,
   TaskStats,
   TeamWorkload,
   User,
-  ChatQueryRequest,
-  ChatQueryResponse,
-  AgentExecutionTrace,
+  UserPublic,
+  UserRole,
 } from "@/types";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001/api";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001/api";
+
+export const TOKEN_KEY = "orbit_token";
+export const USER_KEY = "orbit_user";
+export const AUTH_EVENT = "orbit:auth-expired";
+
+/** Error raised for any non-2xx API response or network failure. */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly meta: Record<string, unknown> | null;
+
+  constructor(message: string, status = 0, meta: Record<string, unknown> | null = null) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.meta = meta;
+  }
+}
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
+  headers: { "Content-Type": "application/json" },
+  timeout: 30_000,
+  // FastAPI expects repeated keys (status=A&status=B), not status[]=A.
+  paramsSerializer: { indexes: null },
 });
 
-// Attach JWT access token to every outgoing request
 apiClient.interceptors.request.use((config) => {
   if (typeof window !== "undefined") {
-    const token = localStorage.getItem("orbit_token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    const token = window.localStorage.getItem(TOKEN_KEY);
+    if (token) config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
 
-// Handle 401 unauthorized errors
 apiClient.interceptors.response.use(
   (response) => response,
-  (error: AxiosError<APIResponse>) => {
-    if (error.response?.status === 401 && typeof window !== "undefined") {
-      const isLoginPath = window.location.pathname === "/login";
-      if (!isLoginPath) {
-        localStorage.removeItem("orbit_token");
-        localStorage.removeItem("orbit_user");
-        window.location.href = "/login";
-      }
+  (error: AxiosError<APIResponse<unknown>>) => {
+    const status = error.response?.status ?? 0;
+    const body = error.response?.data;
+
+    if (status === 401 && typeof window !== "undefined") {
+      const onAuthPage = ["/login", "/auth/callback"].includes(window.location.pathname);
+      if (!onAuthPage) window.dispatchEvent(new Event(AUTH_EVENT));
     }
-    const errMsg =
-      error.response?.data?.error ||
-      error.message ||
-      "An unexpected network error occurred.";
-    return Promise.reject(new Error(errMsg));
-  }
+
+    const message =
+      (typeof body?.error === "string" && body.error) ||
+      (status === 0 ? "Cannot reach the ORBIT server. Check your connection." : error.message) ||
+      "Something went wrong.";
+    const meta = body?.meta && !("page" in body.meta) ? (body.meta as Record<string, unknown>) : null;
+    return Promise.reject(new ApiError(message, status, meta));
+  },
 );
 
-// ---------------- API Methods ----------------
+type Paged<T> = { items: T[]; meta: PaginationMeta };
+
+const EMPTY_META: PaginationMeta = { page: 1, page_size: 20, total: 0, total_pages: 0 };
+
+const unwrap = <T>(res: { data: APIResponse<T> }): T => res.data.data;
+
+export interface LoginResult {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  user: SessionUser;
+}
 
 export const api = {
-  // Auth
   auth: {
-    login: async (email: string, password: string): Promise<{ access_token: string; token_type: string; user: User }> => {
-      const { data } = await apiClient.post<APIResponse<{ access_token: string; token_type: string; user: User }>>(
-        "/auth/token",
-        { email, password }
-      );
-      return data.data;
-    },
-    googleUrl: async (): Promise<{ authorization_url: string; state: string }> => {
-      const { data } = await apiClient.get<APIResponse<{ authorization_url: string; state: string }>>(
-        "/auth/google/url",
-        { withCredentials: true }
-      );
-      return data.data;
-    },
-    googleCallback: async (code: string, state: string): Promise<{ access_token: string; token_type: string; user: User }> => {
-      const { data } = await apiClient.post<APIResponse<{ access_token: string; token_type: string; user: User }>>(
-        "/auth/google/callback",
-        { code, state },
-        { withCredentials: true }
-      );
-      return data.data;
-    },
-    googleLink: async (link_token: string, password: string): Promise<{ access_token: string; token_type: string; user: User }> => {
-      const { data } = await apiClient.post<APIResponse<{ access_token: string; token_type: string; user: User }>>(
-        "/auth/google/link",
-        { link_token, password }
-      );
-      return data.data;
-    },
-    logout: async (): Promise<void> => {
+    login: async (email: string, password: string) =>
+      unwrap<LoginResult>(await apiClient.post("/auth/token", { email, password })),
+    googleUrl: async () =>
+      unwrap<{ authorization_url: string; state: string }>(
+        await apiClient.get("/auth/google/url", { withCredentials: true }),
+      ),
+    googleCallback: async (code: string, state: string) =>
+      unwrap<LoginResult>(
+        await apiClient.post("/auth/google/callback", { code, state }, { withCredentials: true }),
+      ),
+    googleLink: async (link_token: string, password: string) =>
+      unwrap<LoginResult>(await apiClient.post("/auth/google/link", { link_token, password })),
+    logout: async () => {
       await apiClient.post("/auth/logout", {}, { withCredentials: true });
     },
-    me: async (): Promise<User> => {
-      const { data } = await apiClient.get<APIResponse<User>>("/auth/me");
-      return data.data;
-    },
+    me: async () => unwrap<User>(await apiClient.get("/users/me")),
   },
 
-  // Tasks
   tasks: {
-    list: async (params?: {
-      status?: string;
-      priority?: string;
-      assignee_id?: string;
-      q?: string;
-      page?: number;
-      page_size?: number;
-    }): Promise<{ tasks: Task[]; meta: PaginationMeta }> => {
-      const { data } = await apiClient.get<APIResponse<Task[]>>("/tasks", { params });
-      return {
-        tasks: data.data || [],
-        meta: (data.meta as PaginationMeta) || { page: 1, page_size: 20, total: 0, total_pages: 0 },
-      };
+    list: async (filters: TaskFilters = {}): Promise<Paged<Task>> => {
+      const res = await apiClient.get<APIResponse<Task[]>>("/tasks", { params: filters });
+      return { items: res.data.data ?? [], meta: (res.data.meta as PaginationMeta) ?? EMPTY_META };
     },
-    get: async (id: string): Promise<Task> => {
-      const { data } = await apiClient.get<APIResponse<Task>>(`/tasks/${id}`);
-      return data.data;
-    },
-    create: async (taskData: {
+    get: async (id: string) => unwrap<Task>(await apiClient.get(`/tasks/${id}`)),
+    create: async (body: {
       title: string;
       description?: string;
       priority?: string;
-      assignee_id?: string;
-      due_date?: string;
+      assignee_id?: string | null;
+      due_date?: string | null;
       tags?: string[];
-    }): Promise<Task> => {
-      const { data } = await apiClient.post<APIResponse<Task>>("/tasks", taskData);
-      return data.data;
-    },
+    }) => unwrap<Task>(await apiClient.post("/tasks", body)),
     update: async (
       id: string,
-      updates: {
-        title?: string;
-        description?: string;
-        status?: string;
-        priority?: string;
-        assignee_id?: string;
-        due_date?: string | null;
-        tags?: string[];
-      }
-    ): Promise<Task> => {
-      const { data } = await apiClient.patch<APIResponse<Task>>(`/tasks/${id}`, updates);
-      return data.data;
-    },
-    complete: async (id: string): Promise<Task> => {
-      const { data } = await apiClient.post<APIResponse<Task>>(`/tasks/${id}/complete`);
-      return data.data;
-    },
-    delete: async (id: string): Promise<boolean> => {
-      const { data } = await apiClient.delete<APIResponse<boolean>>(`/tasks/${id}`);
-      return data.data;
-    },
-    history: async (id: string): Promise<TaskAuditLog[]> => {
-      const { data } = await apiClient.get<APIResponse<TaskAuditLog[]>>(`/tasks/${id}/history`);
-      return data.data || [];
-    },
+      body: Partial<{
+        title: string;
+        description: string | null;
+        status: string;
+        priority: string;
+        assignee_id: string | null;
+        due_date: string | null;
+        tags: string[];
+      }>,
+    ) => unwrap<Task>(await apiClient.patch(`/tasks/${id}`, body)),
+    complete: async (id: string) => unwrap<Task>(await apiClient.post(`/tasks/${id}/complete`)),
+    remove: async (id: string) => unwrap<{ message: string }>(await apiClient.delete(`/tasks/${id}`)),
+    history: async (id: string) => (unwrap<TaskAuditLog[]>(await apiClient.get(`/tasks/${id}/history`)) ?? []),
   },
 
-  // Users
   users: {
-    list: async (): Promise<User[]> => {
-      const { data } = await apiClient.get<APIResponse<User[]>>("/users");
-      return data.data || [];
+    list: async (params: { q?: string; role?: string; is_active?: boolean; page?: number; page_size?: number } = {}) => {
+      const res = await apiClient.get<APIResponse<UserPublic[]>>("/users", { params });
+      return { items: res.data.data ?? [], meta: (res.data.meta as PaginationMeta) ?? EMPTY_META } as Paged<UserPublic>;
     },
-    get: async (id: string): Promise<User> => {
-      const { data } = await apiClient.get<APIResponse<User>>(`/users/${id}`);
-      return data.data;
-    },
+    get: async (id: string) => unwrap<User | UserPublic>(await apiClient.get(`/users/${id}`)),
+    updateMe: async (body: { display_name?: string; first_name?: string; last_name?: string; timezone?: string }) =>
+      unwrap<User>(await apiClient.patch("/users/me", body)),
+    preferences: async () => unwrap<Record<string, string>>(await apiClient.get("/users/me/preferences")),
+    updatePreferences: async (preferences: Record<string, string>) =>
+      unwrap<{ message: string }>(await apiClient.patch("/users/me/preferences", { preferences })),
+    adminUpdate: async (id: string, body: { role?: UserRole; is_active?: boolean }) =>
+      unwrap<User>(await apiClient.patch(`/users/${id}`, body)),
   },
 
-  // Analytics
   analytics: {
-    stats: async (params?: { user_id?: string; date_from?: string; date_to?: string }): Promise<TaskStats> => {
-      const { data } = await apiClient.get<APIResponse<TaskStats>>("/analytics/stats", { params });
-      return data.data;
-    },
-    workload: async (): Promise<TeamWorkload[]> => {
-      const { data } = await apiClient.get<APIResponse<TeamWorkload[]>>("/analytics/team-workload");
-      return data.data || [];
-    },
+    stats: async () => unwrap<TaskStats>(await apiClient.get("/analytics/stats")),
+    workload: async () => (unwrap<TeamWorkload[]>(await apiClient.get("/analytics/team-workload")) ?? []),
   },
 
-  // Admin & Scheduler
   admin: {
-    status: async (): Promise<SchedulerStatus> => {
-      const { data } = await apiClient.get<APIResponse<SchedulerStatus>>("/admin/scheduler/status");
-      return data.data;
+    schedulerStatus: async () => unwrap<SchedulerStatus>(await apiClient.get("/admin/scheduler/status")),
+    trigger: async (job: "briefing" | "overdue" | "weekly") => {
+      const path = {
+        briefing: "/admin/trigger-briefing",
+        overdue: "/admin/trigger-overdue-alerts",
+        weekly: "/admin/trigger-weekly-summary",
+      }[job];
+      return unwrap<Record<string, number>>(await apiClient.post(path, null, { params: { force: true } }));
     },
-    triggerBriefing: async (force: boolean = true): Promise<any> => {
-      const { data } = await apiClient.post<APIResponse>(`/admin/trigger-briefing?force=${force}`);
-      return data.data;
-    },
-    triggerOverdue: async (force: boolean = true): Promise<any> => {
-      const { data } = await apiClient.post<APIResponse>(`/admin/trigger-overdue-alerts?force=${force}`);
-      return data.data;
-    },
-    triggerWeekly: async (force: boolean = true): Promise<any> => {
-      const { data } = await apiClient.post<APIResponse>(`/admin/trigger-weekly-summary?force=${force}`);
-      return data.data;
+    notifications: async (params: { status?: string; type?: string; page?: number; page_size?: number } = {}) => {
+      const res = await apiClient.get<APIResponse<NotificationLogEntry[]>>("/admin/notifications", { params });
+      return { items: res.data.data ?? [], meta: (res.data.meta as PaginationMeta) ?? EMPTY_META } as Paged<NotificationLogEntry>;
     },
   },
 
-  // AI Command Center
   chat: {
-    query: async (payload: ChatQueryRequest): Promise<ChatQueryResponse> => {
-      const { data } = await apiClient.post<APIResponse<ChatQueryResponse>>("/chat/query", payload);
-      return data.data;
-    },
-    traces: async (params?: { limit?: number; offset?: number }): Promise<{ items: AgentExecutionTrace[]; total: number }> => {
-      const { data } = await apiClient.get<APIResponse<{ items: AgentExecutionTrace[]; total: number }>>("/chat/traces", { params });
-      return data.data;
-    },
-    trace: async (id: string): Promise<AgentExecutionTrace> => {
-      const { data } = await apiClient.get<APIResponse<AgentExecutionTrace>>(`/chat/traces/${id}`);
-      return data.data;
-    },
+    query: async (payload: ChatQueryRequest) =>
+      unwrap<ChatQueryResponse>(await apiClient.post("/chat/query", payload)),
+    traces: async (params: { limit?: number; offset?: number } = {}) =>
+      unwrap<{ items: AgentExecutionTrace[]; total: number }>(await apiClient.get("/chat/traces", { params })),
+    trace: async (id: string) => unwrap<AgentExecutionTrace>(await apiClient.get(`/chat/traces/${id}`)),
   },
+
+  health: async () => unwrap<HealthStatus>(await apiClient.get("/health")),
 };
