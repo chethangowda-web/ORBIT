@@ -86,3 +86,18 @@ def test_production_requires_audience_when_verifying_chat():
             GOOGLE_CHAT_VERIFY_AUTH=True,
             GOOGLE_CHAT_AUDIENCE="",
         )
+
+
+@pytest.mark.parametrize(
+    "given,expected",
+    [
+        ("postgres://u:p@host/db", "postgresql+asyncpg://u:p@host/db"),
+        ("postgresql://u:p@host:5432/db", "postgresql+asyncpg://u:p@host:5432/db"),
+        ("postgresql+asyncpg://u:p@host/db", "postgresql+asyncpg://u:p@host/db"),
+        ("sqlite+aiosqlite:///:memory:", "sqlite+aiosqlite:///:memory:"),
+    ],
+)
+def test_database_url_is_converted_for_the_async_driver(given, expected):
+    from config import Settings
+
+    assert Settings(DATABASE_URL=given).DATABASE_URL == expected

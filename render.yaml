@@ -1,0 +1,82 @@
+# Render Blueprint for the ORBIT backend (API + Google Chat webhook), Postgres and Redis.
+# Deploy: Render dashboard > New > Blueprint > pick this repository. Walkthrough: docs/DEPLOY_RENDER.md
+#
+# Plans: the web service uses "starter" (paid) because free web services sleep after 15 minutes of
+# no traffic, and a sleeping service cannot answer Google Chat inside its 30 second limit. The free
+# Postgres is deleted after 30 days; switch `plan` to a paid one before then (data is kept on upgrade).
+
+databases:
+  - name: orbit-db
+    databaseName: orbit
+    user: orbit
+    plan: free
+    ipAllowList: []  # reachable from your Render services only
+
+services:
+  - type: keyvalue
+    name: orbit-redis
+    plan: free
+    maxmemoryPolicy: noeviction  # never evict conversation state or scheduler jobs
+    ipAllowList: []  # internal only
+
+  - type: web
+    name: orbit-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: starter
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: PORT
+        value: "8000"  # the image listens on 8000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: orbit-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: orbit-redis
+          property: connectionString
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: '["http://localhost:3000"]'  # add your dashboard URL here once it is deployed
+      - key: ALLOW_REGISTRATION
+        value: "false"
+      - key: APP_TIMEZONE
+        value: Asia/Kolkata
+      - key: SCHEDULER_ENABLED
+        value: "true"
+
+      # Google Chat. Verification must stay on for a public address.
+      - key: GOOGLE_CHAT_VERIFY_AUTH
+        value: "true"
+      - key: GOOGLE_CHAT_AUDIENCE
+        sync: false  # https://<your-service>.onrender.com/api/chat/webhook
+      - key: GOOGLE_CHAT_ADDON_PROJECT_NUMBER
+        sync: false  # your Google Cloud project number
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false  # the whole service-account JSON, pasted in the Render dashboard (secret)
+
+      # Optional
+      - key: GOOGLE_GEMINI_API_KEY
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+
+      # First deploy creates the demo accounts with this password (12+ characters). It only runs
+      # while the users table is empty, so it is safe to leave on.
+      - key: SEED_ON_START
+        value: "true"
+      - key: SEED_PASSWORD
+        sync: false

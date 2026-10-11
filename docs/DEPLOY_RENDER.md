@@ -1,0 +1,56 @@
+# Deploying the ORBIT backend to Render
+
+This puts the API, the Google Chat webhook and the scheduler on a fixed public HTTPS address, so the bot works without your PC. It uses `render.yaml` in the repository root, which creates a web service, a Postgres database and a Redis (Key Value) instance.
+
+## What it costs and what to expect
+
+| Piece | Plan in `render.yaml` | Notes |
+|---|---|---|
+| Web service | `starter` (paid, roughly $7 per month) | A free web service sleeps after 15 minutes without traffic; the first Chat message after that would time out. The scheduler (morning briefings, overdue alerts) also needs the service awake. |
+| Postgres | `free` | Deleted after 30 days. Upgrade the plan in the Render dashboard before then; data is kept. |
+| Redis (Key Value) | `free` | Holds conversation memory and scheduler jobs. |
+
+Check current prices on Render's pricing page before confirming.
+
+Not included: the dashboard (it still runs on your PC) and file attachments persistence (Render's disk needs a paid plan; without it uploaded files are lost on each deploy).
+
+## Before you start
+
+- The code must be on GitHub, on the branch you will deploy. Merge `feature/v2-rebuild` into `master` first, or choose `feature/v2-rebuild` in step 2.
+- Have these ready, but **never paste secrets into chat or commit them**:
+  - the Google service-account JSON (the file behind `GOOGLE_SERVICE_ACCOUNT_FILE`),
+  - your Google Cloud project number (for a Workspace add-on Chat app),
+  - a seed password of 12 or more characters,
+  - optionally a Gemini API key.
+
+## Steps
+
+1. Create a Render account at render.com and connect your GitHub account.
+2. **New > Blueprint**, select the ORBIT repository and the branch, then **Apply**.
+3. Render asks for the variables marked `sync: false`:
+   - `GOOGLE_CHAT_ADDON_PROJECT_NUMBER`: your project number.
+   - `GOOGLE_SERVICE_ACCOUNT_JSON`: open the service-account file, copy its entire contents, paste them here.
+   - `SEED_PASSWORD`: the password for the demo accounts (`admin@orbit.dev`, `sarah@orbit.dev`, `john@orbit.dev`).
+   - `GOOGLE_CHAT_AUDIENCE`: type any placeholder for now; you fix it in step 5.
+   - Leave the optional ones blank if unused.
+4. Wait for the first deploy. The container applies the database migrations on start. When the service shows **Live**, open `https://<service-name>.onrender.com/health`: you should see `{"status":"healthy",...}`.
+5. In the service's **Environment** tab, set `GOOGLE_CHAT_AUDIENCE` to `https://<service-name>.onrender.com/api/chat/webhook` and save. Render redeploys.
+6. In Google Cloud Console, Chat API, Configuration:
+   - HTTP endpoint URL: `https://<service-name>.onrender.com/api/chat/webhook`
+   - Authentication audience: **HTTP endpoint URL**
+   - Save.
+7. Send "hi" to the bot. If it does not answer, open the service **Logs** and look for `verification failed`; the line says why (see `docs/GOOGLE_CHAT_SETUP.md`, Troubleshooting).
+8. **Turn the local copy off** so two backends do not both run the scheduler and message people twice: stop the ngrok service, remove the scheduled task and stop the local containers.
+
+   ```powershell
+   Unregister-ScheduledTask -TaskName "ORBIT keep running" -Confirm:$false
+   docker compose stop backend
+   ```
+   (Stopping the ngrok Windows service needs an Administrator PowerShell: `ngrok service stop`.)
+
+## Afterwards
+
+- The Render database starts empty. Chat users are created when they first message the bot; the seeded accounts let you sign in to a dashboard.
+- To point your local dashboard at Render, rebuild it with `NEXT_PUBLIC_API_URL=https://<service-name>.onrender.com/api` and add the dashboard address to `CORS_ORIGINS` in Render (a JSON list, for example `["http://localhost:3000"]`).
+- Logs, metrics and restarts are in the Render dashboard. The service restarts itself if it crashes, and Render health-checks `/health`.
+- Rotate secrets that have been shared anywhere (service-account key, ngrok and Cloudflare tokens).

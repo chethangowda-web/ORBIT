@@ -4,7 +4,7 @@ Loads environment variables using Pydantic Settings
 """
 
 from typing import List
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEV_JWT_SECRET = "dev-secret-key-orbit-multi-agent-task-system-jwt-2026"
@@ -117,6 +117,16 @@ class Settings(BaseSettings):
     # Login brute-force protection (per client IP + email)
     LOGIN_RATE_LIMIT_ATTEMPTS: int = 10
     LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 300
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def _use_async_driver(cls, value: str) -> str:
+        """Hosts such as Render and Heroku hand out postgres:// or postgresql:// URLs; the app
+        needs the asyncpg driver prefix."""
+        for plain in ("postgres://", "postgresql://"):
+            if value.startswith(plain):
+                return "postgresql+asyncpg://" + value[len(plain):]
+        return value
 
     @model_validator(mode="after")
     def _enforce_production_safety(self) -> "Settings":

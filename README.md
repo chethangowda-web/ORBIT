@@ -199,6 +199,7 @@ docs/           Architecture, API, data model, design system, decisions
 |---|---|
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Deployment, security checklist, runbook, troubleshooting |
 | [docs/GOOGLE_CHAT_SETUP.md](docs/GOOGLE_CHAT_SETUP.md) | Step-by-step Google Chat setup, slash commands, local simulator, checklist |
+| [docs/DEPLOY_RENDER.md](docs/DEPLOY_RENDER.md) | Deploy the API and Chat webhook to Render (`render.yaml`) with a fixed HTTPS address |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design and request flows |
 | [docs/AGENTS.md](docs/AGENTS.md) | Agent responsibilities, routing, safety rules |
 | [docs/TOOLS.md](docs/TOOLS.md) | Tool contracts and permission model |
