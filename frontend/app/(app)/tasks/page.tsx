@@ -59,6 +59,14 @@ function TasksScreen() {
   // A selection only makes sense for the rows it was made on.
   const viewKey = params.toString();
   useEffect(() => setSelected(new Set()), [viewKey]);
+
+  // Deleting or completing the last rows of the final page leaves the URL pointing past the end;
+  // step back to the last page that still has rows instead of showing "No tasks yet".
+  useEffect(() => {
+    if (data && data.items.length === 0 && data.meta.total > 0 && view.page > 1) {
+      update({ page: Math.max(1, data.meta.total_pages) });
+    }
+  }, [data, view.page, update]);
   const pageIds = (data?.items ?? []).map((t) => t.id);
 
   const active = hasActiveFilters(view);

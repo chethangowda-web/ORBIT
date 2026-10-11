@@ -13,6 +13,7 @@ shared bus (Redis pub/sub); the dashboard keeps polling as a fallback so it stil
 import asyncio
 import json
 import logging
+import time
 from typing import AsyncIterator, Optional
 
 from sqlalchemy import event
@@ -21,30 +22,52 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 MAX_SUBSCRIBERS = 200
+MAX_PER_USER = 5  # one account (or one script) must not be able to use up every connection
 QUEUE_SIZE = 64
 HEARTBEAT_SECONDS = 15.0
+# A stream is authenticated only when it opens. Ending it after this long (or at the token's expiry,
+# whichever is sooner) makes the browser reconnect, which checks the token and the account again.
+MAX_STREAM_SECONDS = 30 * 60
 
 WATCHED_TABLES = {"tasks": "tasks", "task_comments": "comments", "task_attachments": "attachments"}
 
 
 class EventHub:
     def __init__(self) -> None:
-        self._subscribers: set[asyncio.Queue] = set()
+        # queue -> owner (a user id, or None); insertion order is connection order
+        self._subscribers: dict[asyncio.Queue, Optional[str]] = {}
 
     @property
     def subscriber_count(self) -> int:
         return len(self._subscribers)
 
-    def subscribe(self) -> Optional[asyncio.Queue]:
-        """Returns a queue, or None when the server is at its connection cap."""
+    def subscribe(self, owner: Optional[str] = None) -> Optional[asyncio.Queue]:
+        """Returns a queue, or None when the server is at its global connection cap.
+
+        When `owner` already has MAX_PER_USER streams, the oldest of theirs is closed to make room
+        (a reloaded tab leaves its old stream behind for a moment; evicting beats refusing)."""
+        if owner is not None:
+            mine = [q for q, o in self._subscribers.items() if o == owner]
+            while len(mine) >= MAX_PER_USER:
+                self._close(mine.pop(0))
         if len(self._subscribers) >= MAX_SUBSCRIBERS:
             return None
         queue: asyncio.Queue = asyncio.Queue(maxsize=QUEUE_SIZE)
-        self._subscribers.add(queue)
+        self._subscribers[queue] = owner
         return queue
 
     def unsubscribe(self, queue: asyncio.Queue) -> None:
-        self._subscribers.discard(queue)
+        self._subscribers.pop(queue, None)
+
+    def _close(self, queue: asyncio.Queue) -> None:
+        """Tells a stream to end: its generator stops when it reads None."""
+        self.unsubscribe(queue)
+        try:
+            while True:
+                queue.get_nowait()
+        except asyncio.QueueEmpty:
+            pass
+        queue.put_nowait(None)
 
     def publish(self, topic: str, task_id: Optional[str] = None) -> None:
         """Never blocks and never raises. A subscriber that fell behind is told to resync."""
@@ -68,16 +91,27 @@ def format_sse(payload: dict) -> str:
     return f"event: change\ndata: {json.dumps(payload)}\n\n"
 
 
-async def event_stream(queue: asyncio.Queue, heartbeat: float = HEARTBEAT_SECONDS) -> AsyncIterator[str]:
-    """Yields SSE frames until cancelled. Comment heartbeats keep proxies from closing the socket."""
+async def event_stream(
+    queue: asyncio.Queue,
+    heartbeat: float = HEARTBEAT_SECONDS,
+    max_seconds: float = MAX_STREAM_SECONDS,
+) -> AsyncIterator[str]:
+    """Yields SSE frames until cancelled, evicted (None) or past its lifetime. Comment heartbeats
+    keep proxies from closing the socket."""
+    deadline = time.monotonic() + max_seconds
     try:
         yield "retry: 3000\n\n"
-        while True:
+        while time.monotonic() < deadline:
             try:
-                payload = await asyncio.wait_for(queue.get(), timeout=heartbeat)
-                yield format_sse(payload)
+                payload = await asyncio.wait_for(queue.get(), timeout=min(heartbeat, max(0.0, deadline - time.monotonic())))
             except asyncio.TimeoutError:
+                if time.monotonic() >= deadline:
+                    break
                 yield ": keep-alive\n\n"
+                continue
+            if payload is None:
+                break
+            yield format_sse(payload)
     finally:
         hub.unsubscribe(queue)
 

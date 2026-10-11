@@ -87,14 +87,6 @@ async def _handle_update_task(ctx: dict[str, Any], user_id: str, state_ref_id: A
                 )
 
     if not task_id:
-        tools_used.append("get_user_tasks")
-        u_tasks_res = await get_user_tasks.ainvoke({"user_id": user_id, "status": ["TODO", "IN_PROGRESS"]})
-        if u_tasks_res.get("success") and u_tasks_res.get("data"):
-            active_tasks = u_tasks_res["data"]
-            if len(active_tasks) == 1:
-                task_id = active_tasks[0].get("id")
-
-    if not task_id:
         return (
             "🤔 Which task would you like to update? Please specify the task title or ID (e.g. 'Make Task #123 high priority').",
             "text",

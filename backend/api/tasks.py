@@ -148,13 +148,19 @@ async def update_task_details(
     current_user: User = Depends(get_current_user),
 ):
     """Partially update task fields after object-level authorization check."""
-    await get_authorized_task(
+    existing = await get_authorized_task(
         db=db, task_id=task_id, user=current_user, action=TaskAction.UPDATE
     )
 
-    # Policy: Employees cannot reassign tasks to other users
+    # Policy: employees cannot hand a task to someone else or take it off its assignee. Sending the
+    # current assignee back unchanged is fine (the edit form does), and so is assigning to themselves.
     is_employee = Role.from_str(current_user.role) == Role.EMPLOYEE
-    if is_employee and payload.assignee_id is not None and payload.assignee_id != current_user.id:
+    if (
+        is_employee
+        and "assignee_id" in payload.model_fields_set
+        and payload.assignee_id != existing.assignee_id
+        and payload.assignee_id != current_user.id
+    ):
         raise PermissionDeniedException("Employees cannot reassign tasks to other users.")
 
     task = await task_crud.update_task(

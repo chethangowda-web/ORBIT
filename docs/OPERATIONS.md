@@ -137,7 +137,7 @@ The backend tests never contact an LLM or Google (`tests/conftest.py` blanks the
 
 | Failure | What happens |
 |---|---|
-| LLM provider slow | Each attempt is cut off after `LLM_TIMEOUT_SECONDS` (8) |
+| LLM provider slow | Each call is cut off after `LLM_TIMEOUT_SECONDS` (8), one attempt (`LLM_MAX_ATTEMPTS`) |
 | LLM provider failing or out of quota | After `LLM_BREAKER_FAILURES` (3) consecutive failures the LLM is skipped for `LLM_BREAKER_COOLDOWN_SECONDS` (60); the offline classifier answers instantly, then one request probes the provider again |
 | Agent pipeline stuck | Replies "timed out, please try again" after `AGENT_TIMEOUT_SECONDS` (22), inside Google Chat's 30 second limit |
 | Unexpected error while handling a Chat event | HTTP 200 with a short apology and an error reference found in the logs |
@@ -161,6 +161,9 @@ Remove it with `Unregister-ScheduledTask -TaskName "ORBIT keep running" -Confirm
 
 - Uploaded files are not virus-scanned; the type allow-list and attachment-only downloads limit the risk but do not remove it. Add a scanner (for example ClamAV) before accepting files from untrusted users.
 - Files of a soft-deleted task stay on disk with the task row.
+- Uploads are buffered to a temporary file by the web framework before the size limit is applied, so a very large request can briefly use temp disk space; put a body-size limit in front of the API (reverse proxy) as well. The 20-attachments-per-task limit is checked before the insert, so many simultaneous uploads to the same task can slightly exceed it.
+- Notification delivery runs inside the request that caused it, with an 8 second ceiling. If Google's API is very slow the log can say `failed` for a message Google did accept; delivery is never claimed as `sent` without a confirmed response, so the error is on the safe side.
+- Chat cards built today have no Confirm or Cancel buttons (deletion is confirmed by typing "yes", which expires after 10 minutes and after any other message). If you add confirm buttons, make the button carry the task id and compare it with the pending action.
 
 - Conversation state lives in Redis with a 24 hour TTL; a Redis flush ends open conversations (pending delete confirmations are lost safely: nothing is deleted without a fresh confirmation).
 - Task search is substring-based (`LIKE`), fine for thousands of tasks; add a Postgres full-text index if the table grows into the hundreds of thousands.

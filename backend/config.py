@@ -55,12 +55,12 @@ class Settings(BaseSettings):
     # LLM & AI Settings
     GOOGLE_GEMINI_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
-    DEFAULT_LLM_MODEL: str = "gemini/gemini-3.8-flash"
-    FAST_LLM_MODEL: str = "gemini/gemini-3.8-flash"
+    DEFAULT_LLM_MODEL: str = "gemini/gemini-2.5-flash"  # answers in about 2s; gemini-3.x "thinking" models take 15s+
+    FAST_LLM_MODEL: str = "gemini/gemini-2.5-flash"
     LLM_TEMPERATURE: float = 0.1
     LLM_MAX_TOKENS: int = 2048
     LLM_TIMEOUT_SECONDS: float = 8.0  # per attempt; a hung provider must not stall a chat reply
-    LLM_MAX_ATTEMPTS: int = 2
+    LLM_MAX_ATTEMPTS: int = 1
     LLM_BREAKER_FAILURES: int = 3  # consecutive failures before the LLM is skipped for a while
     LLM_BREAKER_COOLDOWN_SECONDS: float = 60.0
     # Google Chat gives up after 30s, so the agent must answer (or apologise) before that.

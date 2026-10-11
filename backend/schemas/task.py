@@ -35,10 +35,24 @@ class TaskBase(BaseModel):
     tags: List[str] = Field(default_factory=list)
 
 
+def _clean_title(value: str) -> str:
+    """Trim, then insist on something left: "   " used to be stored as "" and then made every
+    list that contained the task fail validation on the way out."""
+    stripped = value.strip()
+    if not stripped:
+        raise ValueError("Title cannot be blank.")
+    return stripped
+
+
 class TaskCreate(TaskBase):
     """Payload to create a new task."""
 
     assignee_id: Optional[uuid.UUID] = None
+
+    @field_validator("title")
+    @classmethod
+    def _title_not_blank(cls, value: str) -> str:
+        return _clean_title(value)
 
 
 class TaskUpdate(BaseModel):
@@ -51,6 +65,21 @@ class TaskUpdate(BaseModel):
     assignee_id: Optional[uuid.UUID] = None
     due_date: Optional[date] = None
     tags: Optional[List[str]] = None
+
+    @field_validator("title", "status", "priority", "tags")
+    @classmethod
+    def _not_null(cls, value: Any) -> Any:
+        """These columns are NOT NULL: an explicit null is a client error, not a database error
+        (or worse, a stored JSON null that breaks every read of the task). description, due_date and
+        assignee_id may be null to clear them."""
+        if value is None:
+            raise ValueError("This field cannot be null.")
+        return value
+
+    @field_validator("title")
+    @classmethod
+    def _title_not_blank(cls, value: str) -> str:
+        return _clean_title(value)
 
 
 class TaskCompleteRequest(BaseModel):

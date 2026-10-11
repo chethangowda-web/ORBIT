@@ -87,7 +87,9 @@ export function TaskFormModal({ open, onClose, task, defaultStatus = "TODO" }: P
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((f) => ({ ...f, [key]: value }));
   const errors = validateTask(form);
-  const assignable = isManager ? users : users.filter((u) => u.id === user?.id);
+  // Employees can only pick themselves, plus whoever the task is already assigned to, so the form
+  // shows the real assignee and an edit that leaves it alone is not rejected.
+  const assignable = isManager ? users : users.filter((u) => u.id === user?.id || u.id === task?.assignee_id);
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
