@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { buildCsp, generateNonce } from "@/lib/csp";
 import { isManagerRole, isTokenExpired, decodeTokenClaims, routeRequiresManager } from "@/lib/session";
 
-const PUBLIC_PATHS = ["/login", "/auth/callback"];
+const PUBLIC_PATHS = ["/login"];
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001/api";
 
 /** Attach the per-request CSP to a response (and forward the nonce so Next tags its scripts). */

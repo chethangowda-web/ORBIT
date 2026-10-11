@@ -87,7 +87,7 @@ Each semantic color has a `-soft` variant at 12% alpha for badge backgrounds.
    called, status and error. Source: `/chat/traces`.
 6. **Admin** (`/admin`): scheduler jobs, manual triggers, notification delivery log, users
    and roles. Admin and manager only; user management admin only.
-7. **Auth** (`/login`, `/auth/callback`): sign in (Google plus password), account link flow.
+7. **Auth** (`/login`): email and password. The dashboard has no Google sign-in; the backend OAuth routes remain but nothing in the UI calls them. An optional demo-accounts panel appears when `NEXT_PUBLIC_DEMO_PASSWORD` is set at build time (always in development).
 
 ## Component kit (`frontend/components/ui`)
 Button, IconButton, Input, Select, Textarea, Checkbox, Badge, StatusBadge,

@@ -227,7 +227,7 @@ backend/
   services/     LLM client, Google Chat client, notification dispatcher
   tools/        Agent tools (permission-checked, never raise)
 frontend/
-  app/          Routes: (auth) login and OAuth callback, (app) board, tasks, insights, traces, admin, profile
+  app/          Routes: (auth) login, (app) board, tasks, insights, traces, admin, profile
   components/   ui/ (design-system kit), shell/, tasks/, agent/
   lib/          API client, auth, hooks, formatting and query helpers
   __tests__/    Vitest unit and component tests

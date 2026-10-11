@@ -72,7 +72,7 @@ apiClient.interceptors.response.use(
     const body = error.response?.data;
 
     if (status === 401 && typeof window !== "undefined") {
-      const onAuthPage = ["/login", "/auth/callback"].includes(window.location.pathname);
+      const onAuthPage = ["/login"].includes(window.location.pathname);
       if (!onAuthPage) window.dispatchEvent(new Event(AUTH_EVENT));
     }
 
@@ -102,16 +102,6 @@ export const api = {
   auth: {
     login: async (email: string, password: string) =>
       unwrap<LoginResult>(await apiClient.post("/auth/token", { email, password })),
-    googleUrl: async () =>
-      unwrap<{ authorization_url: string; state: string }>(
-        await apiClient.get("/auth/google/url", { withCredentials: true }),
-      ),
-    googleCallback: async (code: string, state: string) =>
-      unwrap<LoginResult>(
-        await apiClient.post("/auth/google/callback", { code, state }, { withCredentials: true }),
-      ),
-    googleLink: async (link_token: string, password: string) =>
-      unwrap<LoginResult>(await apiClient.post("/auth/google/link", { link_token, password })),
     logout: async () => {
       await apiClient.post("/auth/logout", {}, { withCredentials: true });
     },

@@ -65,6 +65,10 @@ The demo accounts get `SEED_PASSWORD` on the first deploy. If that value had a s
 3. Sign in with `admin@orbit.dev` and the new password.
 4. **Delete `SEED_RESET_PASSWORDS`** so the passwords are not reset on every start.
 
+## Demo credentials on the login page
+
+For a demo, set `NEXT_PUBLIC_DEMO_PASSWORD` in Vercel (Settings, Environment Variables) to the same value as `SEED_PASSWORD` in Render, then redeploy the dashboard. The login page then lists the three demo accounts with one-click sign-in buttons. The value is public to anyone who opens the page and `admin@orbit.dev` is an administrator, so use a password you do not use anywhere else and remove the variable (and reset the passwords) when the demo is over. Leave it unset for real use.
+
 ## Afterwards
 
 - The Render database starts empty. Chat users are created when they first message the bot; the seeded accounts let you sign in to a dashboard.
