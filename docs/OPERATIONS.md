@@ -19,7 +19,7 @@ Also do:
 
 - [ ] Use a managed Postgres with backups and a managed or persistent Redis.
 - [ ] Put the API and dashboard behind HTTPS (the OAuth cookie is `Secure` when `ENVIRONMENT=production`).
-- [ ] Set `ALLOW_REGISTRATION=false` (the default) and provision users through Google sign-in or the Admin screen.
+- [ ] Set `ALLOW_REGISTRATION=false` (the default) and provision users through the Admin screen (Google Chat users are created when they first message the bot).
 - [ ] Seed with `SEED_PASSWORD` (12+ chars) or do not seed; never ship `password123`.
 - [ ] Keep `credentials/` and `.env` out of images and version control (the `.dockerignore` files exclude them).
 - [ ] Rotate any service-account key that has ever been committed to a repository.
@@ -112,7 +112,6 @@ The backend tests never contact an LLM or Google (`tests/conftest.py` blanks the
 |---|---|
 | Backend exits with `Unsafe production configuration` | One of the section 1 requirements is missing; the message names which |
 | Dashboard shows "API unreachable" | Browser cannot reach `NEXT_PUBLIC_API_URL` (baked at build time) or CORS_ORIGINS lacks the dashboard origin |
-| Google sign-in button says not configured | `GOOGLE_OAUTH_CLIENT_ID` is empty; the redirect URI must equal `GOOGLE_OAUTH_REDIRECT_URI` exactly |
 | Chat messages get 401 | `GOOGLE_CHAT_VERIFY_AUTH=true` but the audience does not match the Chat app's *Authentication audience*, or the request did not come from Google |
 | Chat messages get 403 | `GOOGLE_CHAT_WEBHOOK_SECRET` is set but the request lacks a valid `X-Goog-Signature` |
 | Briefings logged `skipped` | The user has no linked Google Chat account; have them message the bot once |

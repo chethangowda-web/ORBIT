@@ -8,6 +8,16 @@ test.describe("authentication and access", () => {
     await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   });
 
+  test("the login page has no Google sign-in and offers one-click demo accounts", async ({ page }) => {
+    await page.goto("/login");
+    await expect(page.getByText(/continue with google/i)).toHaveCount(0);
+    const demo = page.getByTestId("demo-accounts");
+    await expect(demo).toBeVisible();
+    await expect(demo.getByText("john@orbit.dev")).toBeVisible();
+    await demo.getByRole("button", { name: "Employee" }).click();
+    await expect(page).toHaveURL("/");
+  });
+
   test("a wrong password shows an error and stays on the page", async ({ page }) => {
     await page.goto("/login");
     await page.getByLabel("Work email").fill(ACCOUNTS.employee.email);

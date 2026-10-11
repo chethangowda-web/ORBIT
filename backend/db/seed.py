@@ -26,7 +26,9 @@ def resolve_seed_password() -> str:
     Development and tests use a well-known password. Production refuses to seed
     unless SEED_PASSWORD is supplied, so a default admin password can never ship.
     """
-    configured = os.environ.get("SEED_PASSWORD", "")
+    # Stripped: a trailing newline or space pasted into a hosting dashboard would otherwise become
+    # part of the stored password, and the real password would never match.
+    configured = os.environ.get("SEED_PASSWORD", "").strip()
     if settings.ENVIRONMENT.lower() == "production":
         if len(configured) < 12:
             raise RuntimeError(
@@ -158,6 +160,20 @@ async def populate_data(session: AsyncSession) -> None:
     await session.commit()
 
 
+DEMO_EMAILS = ("admin@orbit.dev", "sarah@orbit.dev", "john@orbit.dev")
+
+
+async def reset_demo_passwords(session: AsyncSession) -> int:
+    """Sets the three demo accounts' password to the current SEED_PASSWORD. Opt-in (see seed_data),
+    for repairing a deployment seeded with a wrong password. Returns how many accounts changed."""
+    pwd_hash = get_password_hash(resolve_seed_password())
+    users = (await session.execute(select(User).where(User.email.in_(DEMO_EMAILS)))).scalars().all()
+    for user in users:
+        user.hashed_password = pwd_hash
+    await session.commit()
+    return len(users)
+
+
 async def seed_data(session: Optional[AsyncSession] = None) -> None:
     """Entrypoint to seed database with initial records."""
     if session is not None:
@@ -170,6 +186,9 @@ async def seed_data(session: Optional[AsyncSession] = None) -> None:
     async with async_session_factory() as s:
         await populate_data(s)
         print("Database seed completed successfully!")
+        if os.environ.get("SEED_RESET_PASSWORDS", "").strip().lower() in ("1", "true", "yes"):
+            changed = await reset_demo_passwords(s)
+            print(f"Reset the password of {changed} demo account(s) to SEED_PASSWORD. Remove SEED_RESET_PASSWORDS now.")
 
 
 # Alias for compatibility
