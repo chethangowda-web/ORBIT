@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     GOOGLE_CHAT_SPACE_ID: str = ""
     GOOGLE_CHAT_AUDIENCE: str = ""
     GOOGLE_CHAT_VERIFY_AUTH: bool = False
+    # Only for Chat apps published as a Workspace add-on: the Google Cloud project number whose
+    # add-on service agent (service-<number>@gcp-sa-gsuiteaddons...) may sign requests.
+    GOOGLE_CHAT_ADDON_PROJECT_NUMBER: str = ""
 
     # Email notifications (optional; off unless SMTP_HOST and EMAIL_FROM are set)
     SMTP_HOST: str = ""

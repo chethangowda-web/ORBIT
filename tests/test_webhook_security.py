@@ -99,6 +99,35 @@ def test_bearer_identity_checks(monkeypatch, claims, expected):
         assert verify_google_chat_bearer_token("Bearer abc") is expected
 
 
+ADDON_EMAIL = "service-495048386884@gcp-sa-gsuiteaddons.iam.gserviceaccount.com"
+
+
+@pytest.mark.parametrize(
+    "configured,email,expected",
+    [
+        ("495048386884", ADDON_EMAIL, True),  # your project's add-on service agent
+        ("", ADDON_EMAIL, False),  # not configured: rejected, never guessed
+        ("111111111111", ADDON_EMAIL, False),  # another project's add-on agent
+        ("495048386884", "service-495048386884@evil.iam.gserviceaccount.com", False),
+    ],
+)
+def test_workspace_addon_identity_requires_matching_project_number(monkeypatch, configured, email, expected):
+    monkeypatch.setattr(settings, "GOOGLE_CHAT_VERIFY_AUTH", True)
+    monkeypatch.setattr(settings, "GOOGLE_CHAT_AUDIENCE", "https://x.example/api/chat/webhook")
+    monkeypatch.setattr(settings, "GOOGLE_CHAT_ADDON_PROJECT_NUMBER", configured)
+    claims = {"iss": "https://accounts.google.com", "email": email, "email_verified": True}
+    with patch("services.google_chat.id_token.verify_oauth2_token", return_value=claims):
+        assert verify_google_chat_bearer_token("Bearer abc") is expected
+
+
+def test_small_clock_differences_are_tolerated(monkeypatch):
+    monkeypatch.setattr(settings, "GOOGLE_CHAT_VERIFY_AUTH", True)
+    monkeypatch.setattr(settings, "GOOGLE_CHAT_AUDIENCE", "123456789012")
+    with patch("services.google_chat.id_token.verify_oauth2_token", return_value={"iss": CHAT_SERVICE_ACCOUNT}) as verify:
+        assert verify_google_chat_bearer_token("Bearer abc") is True
+    assert verify.call_args.kwargs["clock_skew_in_seconds"] >= 10
+
+
 def test_bearer_falls_back_to_chat_certificates(monkeypatch):
     monkeypatch.setattr(settings, "GOOGLE_CHAT_VERIFY_AUTH", True)
     monkeypatch.setattr(settings, "GOOGLE_CHAT_AUDIENCE", "123456789012")
