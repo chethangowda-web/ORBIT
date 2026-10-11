@@ -146,6 +146,17 @@ The backend tests never contact an LLM or Google (`tests/conftest.py` blanks the
 | Database connection dropped | Pool pre-ping replaces dead connections |
 | Container crash | `restart: unless-stopped` plus health checks; migrations re-run safely on start |
 
+**Keeping a Windows dev machine reachable.** The bot answers only while Docker Desktop and the ORBIT containers are running. Docker Desktop does not always start after a reboot, which shows up in Google Chat as "not responding" (ngrok then reports 502 for `localhost:8001`). `backend/scripts/keep_orbit_running.ps1` starts Docker Desktop if needed and brings up postgres, redis and the backend; it does nothing when all is well. Register it once (no admin rights needed):
+
+```powershell
+$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"D:/ORBIT/backend/scripts/keep_orbit_running.ps1`""
+$logon  = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+$every5 = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 5)
+Register-ScheduledTask -TaskName "ORBIT keep running" -Action $action -Trigger @($logon,$every5) -Force
+```
+
+Remove it with `Unregister-ScheduledTask -TaskName "ORBIT keep running" -Confirm:$false`. Its log is `%LOCALAPPDATA%/orbit-autostart.log`. It cannot help while the PC is asleep or off; for an always-on bot, deploy the backend to a host.
+
 ## 8. Known limitations
 
 - Uploaded files are not virus-scanned; the type allow-list and attachment-only downloads limit the risk but do not remove it. Add a scanner (for example ClamAV) before accepting files from untrusted users.
