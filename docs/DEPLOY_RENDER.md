@@ -56,6 +56,15 @@ Not included: the dashboard (it still runs on your PC) and file attachments pers
 
 If the service ever restarts or redeploys, the first Chat message can still be slow (a cold start takes up to a minute). The monitor also emails you when the service is down.
 
+## If sign-in says "Invalid email or password"
+
+The demo accounts get `SEED_PASSWORD` on the first deploy. If that value had a stray space or newline when it was pasted, the stored password is wrong. To reset it:
+
+1. In Render, **Environment**: re-type `SEED_PASSWORD` (12 or more characters) and add `SEED_RESET_PASSWORDS` = `true`.
+2. Save and wait for the redeploy to show **Live**. The log prints `Reset the password of 3 demo account(s)`.
+3. Sign in with `admin@orbit.dev` and the new password.
+4. **Delete `SEED_RESET_PASSWORDS`** so the passwords are not reset on every start.
+
 ## Afterwards
 
 - The Render database starts empty. Chat users are created when they first message the bot; the seeded accounts let you sign in to a dashboard.
