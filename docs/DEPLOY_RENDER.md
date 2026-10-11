@@ -6,7 +6,7 @@ This puts the API, the Google Chat webhook and the scheduler on a fixed public H
 
 | Piece | Plan in `render.yaml` | Notes |
 |---|---|---|
-| Web service | `starter` (paid, roughly $7 per month) | A free web service sleeps after 15 minutes without traffic; the first Chat message after that would time out. The scheduler (morning briefings, overdue alerts) also needs the service awake. |
+| Web service | `free` | 512 MB RAM (the backend idles at about 360 MB, so there is little headroom). A free service **sleeps after 15 minutes without traffic**, and a sleeping service cannot answer Google Chat inside its 30 second limit or run the scheduler, so set up the keep-alive below. For a service that stays awake on its own change `plan` to `starter` (paid, roughly $7 per month). |
 | Postgres | `free` | Deleted after 30 days. Upgrade the plan in the Render dashboard before then; data is kept. |
 | Redis (Key Value) | `free` | Holds conversation memory and scheduler jobs. |
 
@@ -47,6 +47,14 @@ Not included: the dashboard (it still runs on your PC) and file attachments pers
    docker compose stop backend
    ```
    (Stopping the ngrok Windows service needs an Administrator PowerShell: `ngrok service stop`.)
+
+## Keep the free service awake
+
+1. Create a free account at uptimerobot.com.
+2. **Add New Monitor**: type **HTTP(s)**, URL `https://<service-name>.onrender.com/health`, interval **5 minutes**.
+3. Done. The regular visits stop the 15 minute idle sleep. A free service has about 750 running hours per month, enough for one service all month.
+
+If the service ever restarts or redeploys, the first Chat message can still be slow (a cold start takes up to a minute). The monitor also emails you when the service is down.
 
 ## Afterwards
 

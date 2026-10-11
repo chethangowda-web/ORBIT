@@ -1,9 +1,11 @@
 # Render Blueprint for the ORBIT backend (API + Google Chat webhook), Postgres and Redis.
 # Deploy: Render dashboard > New > Blueprint > pick this repository. Walkthrough: docs/DEPLOY_RENDER.md
 #
-# Plans: the web service uses "starter" (paid) because free web services sleep after 15 minutes of
-# no traffic, and a sleeping service cannot answer Google Chat inside its 30 second limit. The free
-# Postgres is deleted after 30 days; switch `plan` to a paid one before then (data is kept on upgrade).
+# Plans: everything is on Render's free tier. A free web service sleeps after 15 minutes without
+# traffic, and a sleeping service cannot answer Google Chat inside its 30 second limit, so set up a
+# free pinger that calls /health every 5 minutes (docs/DEPLOY_RENDER.md). For a service that stays
+# awake by itself change the web `plan` to "starter" (paid). The free Postgres is deleted after
+# 30 days; switch its `plan` to a paid one before then (data is kept on upgrade).
 
 databases:
   - name: orbit-db
@@ -24,7 +26,7 @@ services:
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    plan: starter
+    plan: free  # 512 MB RAM; the backend idles at about 360 MB
     healthCheckPath: /health
     autoDeploy: true
     envVars:
