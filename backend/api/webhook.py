@@ -4,7 +4,7 @@ import uuid
 from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Header, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from agents.orchestrator import process_message
 from crud.tasks import get_task
@@ -67,20 +67,29 @@ def normalize_chat_message(text: str) -> str:
 async def get_or_create_google_user(session: AsyncSession, chat_user: GoogleChatUser) -> User:
     """Auto-registers or retrieves Google Chat user in PostgreSQL database."""
     google_id = chat_user.name
-    email = chat_user.email or f"{google_id.replace('users/', '')}@orbit.chat"
+    real_email = (chat_user.email or "").strip().lower()
+    email = real_email or f"{google_id.replace('users/', '')}@orbit.chat"
     display_name = chat_user.displayName or "Google Chat User"
 
-    # 1. Lookup by email or google_id
-    query = select(User).where((User.email == email) | (User.google_id == google_id))
-    result = await session.execute(query)
-    user = result.scalar_one_or_none()
-
+    # 1. The Chat identity itself wins. Looking up "email OR google_id" in one query could match
+    # two rows (a placeholder account made from an event without an email, plus a real account),
+    # which raised MultipleResultsFound for every later message from that person.
+    result = await session.execute(select(User).where(User.google_id == google_id))
+    user = result.scalars().first()
     if user:
-        if not user.google_id:
-            user.google_id = google_id
-            await session.commit()
-            await session.refresh(user)
         return user
+
+    # 2. Otherwise match an existing account by email, ignoring case (registration lowercases
+    # emails, Chat may not), and link this Chat identity to it.
+    if real_email:
+        result = await session.execute(select(User).where(func.lower(User.email) == real_email))
+        user = result.scalars().first()
+        if user:
+            if not user.google_id:
+                user.google_id = google_id
+                await session.commit()
+                await session.refresh(user)
+            return user
 
     # 2. Create new employee
     new_user = User(

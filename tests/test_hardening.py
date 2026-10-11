@@ -86,3 +86,28 @@ def test_production_requires_audience_when_verifying_chat():
             GOOGLE_CHAT_VERIFY_AUTH=True,
             GOOGLE_CHAT_AUDIENCE="",
         )
+
+
+@pytest.mark.parametrize(
+    "given,expected",
+    [
+        ("postgres://u:p@host/db", "postgresql+asyncpg://u:p@host/db"),
+        ("postgresql://u:p@host:5432/db", "postgresql+asyncpg://u:p@host:5432/db"),
+        ("postgresql+asyncpg://u:p@host/db", "postgresql+asyncpg://u:p@host/db"),
+        ("sqlite+aiosqlite:///:memory:", "sqlite+aiosqlite:///:memory:"),
+    ],
+)
+def test_database_url_is_converted_for_the_async_driver(given, expected):
+    from config import Settings
+
+    assert Settings(DATABASE_URL=given).DATABASE_URL == expected
+
+
+def test_pasted_whitespace_in_settings_is_ignored(monkeypatch):
+    from config import Settings
+
+    monkeypatch.setenv("GOOGLE_CHAT_AUDIENCE", "https://x.example/api/chat/webhook\n")
+    monkeypatch.setenv("GOOGLE_CHAT_ADDON_PROJECT_NUMBER", " 495048386884 ")
+    s = Settings()
+    assert s.GOOGLE_CHAT_AUDIENCE == "https://x.example/api/chat/webhook"
+    assert s.GOOGLE_CHAT_ADDON_PROJECT_NUMBER == "495048386884"

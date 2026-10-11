@@ -67,6 +67,18 @@ def enrich_task_metadata(task: Task) -> Task:
     return task
 
 
+async def ensure_assignable_user(db: AsyncSession, user_id: Optional[uuid.UUID]) -> None:
+    """A task can only be assigned to an existing, active user. Without this the database raised a
+    foreign-key error (HTTP 500), and a bulk assignment aborted halfway."""
+    if user_id is None:
+        return
+    found = (
+        await db.execute(select(User.id).where(User.id == user_id, User.is_active.is_(True)))
+    ).scalar_one_or_none()
+    if found is None:
+        raise EntityNotFoundException("User", user_id)
+
+
 async def create_task(
     db: AsyncSession,
     task_in: TaskCreate,
@@ -74,6 +86,7 @@ async def create_task(
     source: str = "api",
 ) -> Task:
     """Create a new task and record creation in the audit log."""
+    await ensure_assignable_user(db, task_in.assignee_id)
     task = Task(
         title=task_in.title.strip(),
         description=task_in.description,
@@ -156,6 +169,8 @@ async def update_task(
         raise EntityNotFoundException("Task", task_id)
 
     update_dict = task_update.model_dump(exclude_unset=True)
+    if update_dict.get("assignee_id") is not None:
+        await ensure_assignable_user(db, update_dict["assignee_id"])
     changes = {}
 
     for field, new_val in update_dict.items():

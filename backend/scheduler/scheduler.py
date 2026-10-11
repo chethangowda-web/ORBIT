@@ -101,14 +101,31 @@ def with_job_lock(name: str, job: Callable[..., Awaitable[Any]]) -> Callable[...
             if client is not None:
                 await client.aclose()
 
+    locked.__orbit_locked__ = True  # type: ignore[attr-defined]
     return locked
+
+
+# Module-level locked jobs. APScheduler's persistent job stores save a job as a "module:function"
+# reference and rebuild it from that; a wrapper created at registration time was saved as the
+# *unwrapped* job, so jobs restored from Redis silently ran without their lock.
+locked_daily_briefing = with_job_lock("daily_briefing", run_daily_briefing)
+locked_overdue_alerts = with_job_lock("overdue_alert", run_overdue_alerts)
+locked_weekly_summary = with_job_lock("weekly_summary", run_weekly_summary)
+for _fn, _name in (
+    (locked_daily_briefing, "locked_daily_briefing"),
+    (locked_overdue_alerts, "locked_overdue_alerts"),
+    (locked_weekly_summary, "locked_weekly_summary"),
+):
+    _fn.__name__ = _name
+    _fn.__qualname__ = _name
+    _fn.__module__ = __name__
 
 
 def register_default_jobs(sched: AsyncIOScheduler) -> None:
     """Registers standard cron triggers for briefings, alerts, and summaries."""
     # 1. Daily Morning Briefing at 9:00 AM IST
     sched.add_job(
-        with_job_lock("daily_briefing", run_daily_briefing),
+        locked_daily_briefing,
         trigger=CronTrigger(hour=9, minute=0, timezone=TIMEZONE),
         id="daily_briefing",
         name="Daily Morning Briefing",
@@ -117,7 +134,7 @@ def register_default_jobs(sched: AsyncIOScheduler) -> None:
 
     # 2. Daily Overdue Alerts at 6:00 PM IST
     sched.add_job(
-        with_job_lock("overdue_alert", run_overdue_alerts),
+        locked_overdue_alerts,
         trigger=CronTrigger(hour=18, minute=0, timezone=TIMEZONE),
         id="overdue_alert",
         name="Daily Overdue Task Alert",
@@ -126,7 +143,7 @@ def register_default_jobs(sched: AsyncIOScheduler) -> None:
 
     # 3. Weekly Summary on Mondays at 9:30 AM IST
     sched.add_job(
-        with_job_lock("weekly_summary", run_weekly_summary),
+        locked_weekly_summary,
         trigger=CronTrigger(day_of_week="mon", hour=9, minute=30, timezone=TIMEZONE),
         id="weekly_summary",
         name="Weekly Productivity Digest",

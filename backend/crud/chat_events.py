@@ -6,8 +6,9 @@ Prevents duplicate side effects when Google Chat redelivers the same event.
 import hashlib
 import json
 import logging
+from datetime import timedelta
 from typing import Optional, Tuple
-from sqlalchemy import select, update
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +17,9 @@ from db.models import ChatEventLedger
 from tools.base import get_tool_session
 
 logger = logging.getLogger(__name__)
+
+# An event still "processing" after this long belongs to a worker that died; redelivery may retry it.
+STALE_PROCESSING_SECONDS = 120
 
 
 def compute_event_key(
@@ -61,16 +65,33 @@ async def claim_event(event_key: str, event_type: str) -> Tuple[bool, Optional[s
         )
         row = existing.scalar_one_or_none()
         if row is not None:
-            if row.status == "FAILED":
-                # A prior attempt failed before completing; a retry is allowed to
-                # re-run, but it must not be allowed to run concurrently with
-                # another in-flight attempt.
-                row.status = "PROCESSING"
-                row.response_text = None
-                await session.commit()
+            if row.status == "COMPLETED":
+                return True, row.response_text
+
+            # FAILED, or PROCESSING for so long that its worker must have died: a retry may re-run.
+            # The takeover is ONE conditional UPDATE, so of several simultaneous retries exactly
+            # one changes the row and the rest see it as in flight. created_at doubles as the
+            # "claimed at" time.
+            now = utc_now()
+            takeover = await session.execute(
+                update(ChatEventLedger)
+                .where(
+                    ChatEventLedger.event_key == event_key,
+                    or_(
+                        ChatEventLedger.status == "FAILED",
+                        and_(
+                            ChatEventLedger.status == "PROCESSING",
+                            ChatEventLedger.created_at < now - timedelta(seconds=STALE_PROCESSING_SECONDS),
+                        ),
+                    ),
+                )
+                .values(status="PROCESSING", response_text=None, created_at=now)
+                .execution_options(synchronize_session=False)
+            )
+            await session.commit()
+            if takeover.rowcount == 1:
                 return False, None
-            # PROCESSING (in-flight or stuck) or COMPLETED: do not re-execute.
-            return True, row.response_text if row.status == "COMPLETED" else None
+            return True, None
 
         ledger_entry = ChatEventLedger(event_key=event_key, event_type=event_type, status="PROCESSING")
         session.add(ledger_entry)

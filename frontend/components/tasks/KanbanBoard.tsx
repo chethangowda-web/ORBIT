@@ -79,7 +79,7 @@ function DraggableCard({ task, onAdvance }: { task: Task; onAdvance: (task: Task
       <button
         type="button"
         aria-label={`Drag "${task.title}". Press space to pick up, arrow keys to move, space to drop.`}
-        className="absolute left-0 top-1/2 z-10 -ml-0.5 hidden h-8 w-4 -translate-y-1/2 cursor-grab items-center justify-center text-fg-faint hover:text-fg group-hover:flex focus-visible:flex"
+        className="absolute left-0 top-1/2 z-10 -ml-0.5 flex h-8 w-4 -translate-y-1/2 cursor-grab items-center justify-center text-fg-faint opacity-0 hover:text-fg focus-visible:opacity-100 group-hover:opacity-100"
         {...listeners}
         {...attributes}
       >

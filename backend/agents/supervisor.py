@@ -5,7 +5,7 @@ from agents.intents import (
     Intent,
     IntentClassificationResult,
 )
-from agents.memory_agent import resolve_references
+from agents.memory_agent import mentions_previous_task, resolve_references
 from agents.prompts import SUPERVISOR_PROMPT
 from agents.state import AgentState
 from services.llm import call_llm, fallback_intent_classifier
@@ -25,6 +25,24 @@ ROUTING_MAP: dict[Intent, str] = {
     Intent.GREETING: "task_agent",
     Intent.UNKNOWN: "task_agent",
 }
+
+
+_FILLER_WORDS = {
+    "a", "an", "the", "as", "it", "its", "this", "that", "these", "those", "one", "task", "tasks", "done",
+    "complete", "completed", "finished", "finish", "my", "me", "now", "please", "is", "was", "to", "of",
+    "and", "or", "on", "for", "with", "mark", "set",
+}
+
+
+def _meaningful_hint(hint: Any) -> bool:
+    """A task title hint that carries at least one real word. Extractors sometimes return filler
+    such as "as" (from "mark as done"); that must not count as naming a task."""
+    words = [w for w in str(hint or "").lower().replace("'", " ").split() if w.strip(".,!?")]
+    return any(w.strip(".,!?") not in _FILLER_WORDS and len(w.strip(".,!?")) >= 3 for w in words)
+
+
+# Intents that may continue with "the task we were just talking about" when no task is named.
+FOLLOW_UP_INTENTS = {Intent.UPDATE_TASK, Intent.COMPLETE_TASK, Intent.GET_TASK_DETAIL}
 
 
 async def classify_intent(raw_message: str) -> IntentClassificationResult:
@@ -92,14 +110,26 @@ async def supervisor_node(state: AgentState) -> dict[str, Any]:
             "tool_calls_made": state.get("tool_calls_made", []),
         }
 
-    referenced_id = resolve_references(raw_message, history) or state.get("referenced_task_id")
     classification = await classify_intent(raw_message)
-
     task_context = classification.task_context.model_dump()
-    if referenced_id and not task_context.get("task_id"):
-        task_context["task_id"] = referenced_id
 
+    # The previous task is only the target when the user refers back to it ("make it high
+    # priority"). Reusing it for every message made "complete the report task" act on whatever
+    # task was mentioned last, instead of searching or asking which one was meant.
+    referenced_id = None
     target_intent = classification.intent
+    names_a_task = bool(task_context.get("task_id") or _meaningful_hint(task_context.get("title_hint")))
+    # A message that names a task never inherits the previous one. One that names none ("mark as
+    # done", "move that deadline to Friday") means the task just discussed, for edits that cannot
+    # do much harm. Deleting needs an explicit reference ("delete it") on top of its confirmation.
+    inherits_previous = not names_a_task and (
+        mentions_previous_task(raw_message) or target_intent in FOLLOW_UP_INTENTS
+    )
+    if inherits_previous:
+        referenced_id = resolve_references(raw_message, history) or state.get("referenced_task_id")
+        if referenced_id:
+            task_context["task_id"] = str(referenced_id)
+
     active_agent = ROUTING_MAP.get(target_intent, "task_agent")
 
     return {
@@ -109,4 +139,11 @@ async def supervisor_node(state: AgentState) -> dict[str, Any]:
         "task_context": task_context,
         "referenced_task_id": referenced_id or task_context.get("task_id"),
         "tool_calls_made": state.get("tool_calls_made", []),
+        # A new request ends any earlier question: a later "yes" must never answer a delete
+        # prompt from a different part of the conversation, and a cancelled action's reply must
+        # not be repeated on every following turn. These values persist in the checkpoint.
+        "needs_confirmation": False,
+        "confirmed": False,
+        "pending_confirmation": None,
+        "response": "",
     }

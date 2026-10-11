@@ -34,6 +34,51 @@ Employees manage tasks in plain language inside **Google Chat**; managers get a 
 
 ---
 
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph Clients
+        GC[Google Chat]
+        UI[Next.js dashboard]
+    end
+
+    GC -- "HTTPS event (signed by Google)" --> WH["/api/chat/webhook<br/>verify, map user, de-duplicate"]
+    UI -- "REST + SSE (JWT)" --> API[FastAPI REST API]
+
+    subgraph Agents["LangGraph (state checkpointed in Redis)"]
+        SUP{{Supervisor<br/>classify intent}}
+        TA[Task Agent<br/>CRUD tools]
+        PA[Planner Agent<br/>daily plan]
+        RA[Recommendation Agent<br/>priorities, workload]
+        RV[Review Agent<br/>validate + human confirmation]
+        SUP --> TA
+        SUP --> PA
+        SUP --> RA
+        SUP --> RV
+    end
+
+    WH --> SUP
+    API -- "Ask ORBIT /chat/query" --> SUP
+
+    TA & PA & RA & RV --> TOOLS[Tools scoped to the requesting user<br/>same RBAC as the REST API]
+    API --> SVC[CRUD services]
+    TOOLS --> SVC
+    SVC --> PG[(PostgreSQL<br/>tasks, history, traces)]
+    SUP -. "LLM (Gemini via LiteLLM)<br/>timeout + circuit breaker" .-> LLM[LLM]
+    SUP -. "offline rules if LLM fails" .-> RULES[Rule-based classifier]
+
+    SCH[Scheduler<br/>briefing, overdue, weekly] --> SVC
+    SCH --> OUT
+    SVC --> OUT[Notifications]
+    OUT --> GC
+    OUT --> MAIL[Email, optional]
+    SVC -- "commit hook" --> EV[Live-update hub]
+    EV -- SSE --> UI
+```
+
+The Supervisor never answers by itself: it classifies the request (LLM first, deterministic rules as a fallback) and hands it to a specialist that calls real tools against PostgreSQL. Dashboard and Chat go through the same tools and the same permission checks, so they always show the same records. Deleting a task needs an explicit confirmation that is bound to the user and the pending action. More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ## Quick start (local development)
 
 Prerequisites: Python 3.11+, Node 20+, Docker (for Postgres and Redis).
@@ -199,6 +244,7 @@ docs/           Architecture, API, data model, design system, decisions
 |---|---|
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Deployment, security checklist, runbook, troubleshooting |
 | [docs/GOOGLE_CHAT_SETUP.md](docs/GOOGLE_CHAT_SETUP.md) | Step-by-step Google Chat setup, slash commands, local simulator, checklist |
+| [docs/DEPLOY_RENDER.md](docs/DEPLOY_RENDER.md) | Deploy the API and Chat webhook to Render (`render.yaml`) with a fixed HTTPS address |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design and request flows |
 | [docs/AGENTS.md](docs/AGENTS.md) | Agent responsibilities, routing, safety rules |
 | [docs/TOOLS.md](docs/TOOLS.md) | Tool contracts and permission model |

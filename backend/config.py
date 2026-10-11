@@ -4,7 +4,7 @@ Loads environment variables using Pydantic Settings
 """
 
 from typing import List
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEV_JWT_SECRET = "dev-secret-key-orbit-multi-agent-task-system-jwt-2026"
@@ -17,6 +17,9 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        # Pasted values often carry a trailing newline or space (seen in a Render dashboard); that
+        # silently breaks exact comparisons such as the Google Chat audience.
+        str_strip_whitespace=True,
     )
 
     # General App Settings
@@ -52,12 +55,12 @@ class Settings(BaseSettings):
     # LLM & AI Settings
     GOOGLE_GEMINI_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
-    DEFAULT_LLM_MODEL: str = "gemini/gemini-3.8-flash"
-    FAST_LLM_MODEL: str = "gemini/gemini-3.8-flash"
+    DEFAULT_LLM_MODEL: str = "gemini/gemini-2.5-flash"  # answers in about 2s; gemini-3.x "thinking" models take 15s+
+    FAST_LLM_MODEL: str = "gemini/gemini-2.5-flash"
     LLM_TEMPERATURE: float = 0.1
     LLM_MAX_TOKENS: int = 2048
     LLM_TIMEOUT_SECONDS: float = 8.0  # per attempt; a hung provider must not stall a chat reply
-    LLM_MAX_ATTEMPTS: int = 2
+    LLM_MAX_ATTEMPTS: int = 1
     LLM_BREAKER_FAILURES: int = 3  # consecutive failures before the LLM is skipped for a while
     LLM_BREAKER_COOLDOWN_SECONDS: float = 60.0
     # Google Chat gives up after 30s, so the agent must answer (or apologise) before that.
@@ -117,6 +120,16 @@ class Settings(BaseSettings):
     # Login brute-force protection (per client IP + email)
     LOGIN_RATE_LIMIT_ATTEMPTS: int = 10
     LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 300
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def _use_async_driver(cls, value: str) -> str:
+        """Hosts such as Render and Heroku hand out postgres:// or postgresql:// URLs; the app
+        needs the asyncpg driver prefix."""
+        for plain in ("postgres://", "postgresql://"):
+            if value.startswith(plain):
+                return "postgresql+asyncpg://" + value[len(plain):]
+        return value
 
     @model_validator(mode="after")
     def _enforce_production_safety(self) -> "Settings":

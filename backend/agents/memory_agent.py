@@ -349,25 +349,26 @@ def make_thread_id(space_id: str, user_id: str) -> str:
     return f"{space_id}:{user_id}"
 
 
+_UUID_RE = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+# Whole words only: "it" must not match "edit" or "submit", nor "the task" inside "the task deadline".
+_REFERENCE_RE = re.compile(r"\b(it|that task|this task|the task|same task|that one|this one)\b", re.IGNORECASE)
+
+
 def extract_task_id_from_text(text: str) -> Optional[str]:
-    """Extracts task UUID or Task #ID from message text."""
-    uuid_match = re.search(
-        r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
-        text,
-    )
-    if uuid_match:
-        return uuid_match.group(0)
-    num_match = re.search(r"Task\s*#?\s*([0-9a-fA-F\-]+)", text, re.IGNORECASE)
-    if num_match:
-        return num_match.group(1)
-    return None
+    """Extracts a task UUID from message text. Only a full UUID counts: a looser pattern turned
+    ordinary words such as "task deadline" into the id "dead"."""
+    match = _UUID_RE.search(text)
+    return match.group(0) if match else None
+
+
+def mentions_previous_task(text: str) -> bool:
+    """True when the message refers back to a task ("make it high priority", "that task")."""
+    return bool(_REFERENCE_RE.search(text))
 
 
 def resolve_references(raw_message: str, messages: list[BaseMessage]) -> Optional[str]:
     """Resolves 'it', 'that task', 'the task' to the most recently mentioned task ID in conversation history."""
-    msg = raw_message.lower()
-    pronouns = ["it", "that task", "the task", "this task", "same task"]
-    if not any(p in msg for p in pronouns):
+    if not mentions_previous_task(raw_message):
         return None
 
     for m in reversed(messages):

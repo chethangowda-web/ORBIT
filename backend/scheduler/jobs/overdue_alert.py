@@ -34,7 +34,8 @@ async def _has_already_received_overdue_alert(session: AsyncSession, user_id: An
         NotificationLog.status == "sent",
     )
     result = await session.execute(query)
-    return result.scalar_one_or_none() is not None
+    # first(), not scalar_one_or_none(): a forced admin run can leave several 'sent' rows
+    return result.scalars().first() is not None
 
 
 def _format_overdue_message(user_name: str, tasks: List[Task]) -> str:

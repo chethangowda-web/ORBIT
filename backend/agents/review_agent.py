@@ -1,10 +1,24 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from agents.state import AgentState
 from auth.rbac import is_manager
 from crud import users as user_crud
 from tools.base import get_tool_session
 from tools.task_tools import delete_task, get_task_by_id, search_tasks
+
+
+# A delete confirmation answers the question that was just asked, not one from hours ago.
+PENDING_CONFIRMATION_TTL = timedelta(minutes=10)
+
+
+def _pending_expired(pending: dict[str, Any]) -> bool:
+    try:
+        created = datetime.fromisoformat(str(pending.get("created_at")))
+    except (TypeError, ValueError):
+        return True  # an unreadable timestamp cannot be trusted
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - created > PENDING_CONFIRMATION_TTL
 
 
 async def _caller_may_delete(user_id: str) -> bool:
@@ -19,8 +33,11 @@ async def _caller_may_delete(user_id: str) -> bool:
     return bool(user and user.is_active and is_manager(user))
 
 
-async def _resolve_target_task(state: AgentState, tools_used: list[str]) -> tuple[Any, Any]:
-    """Resolves task ID and title for destructive action."""
+async def _resolve_target_task(state: AgentState, tools_used: list[str]) -> tuple[Any, Any, list[str]]:
+    """Resolves task ID and title for destructive action.
+
+    Returns (task_id, title, ambiguous_titles); the last item is non-empty when several tasks
+    match and the user has to say which one."""
     ctx = state.get("task_context", {})
     raw_msg = state.get("raw_message", "")
     task_id = ctx.get("task_id") or state.get("referenced_task_id")
@@ -28,17 +45,23 @@ async def _resolve_target_task(state: AgentState, tools_used: list[str]) -> tupl
         tools_used.append("get_task_by_id")
         t_res = await get_task_by_id.ainvoke({"task_id": task_id, "viewer_id": state.get("user_id")})
         if t_res.get("success"):
-            return task_id, t_res.get("data", {}).get("title", "Untitled")
+            return task_id, t_res.get("data", {}).get("title", "Untitled"), []
 
     query = ctx.get("title_hint") or raw_msg
     tools_used.append("search_tasks")
     s_res = await search_tasks.ainvoke(
         {"query": query, "include_completed": True, "viewer_id": state.get("user_id")}
     )
-    if s_res.get("success") and s_res.get("data"):
-        matched = s_res["data"][0]
-        return matched.get("id"), matched.get("title")
-    return None, None
+    matches = (s_res.get("data") or []) if s_res.get("success") else []
+    if len(matches) > 1:
+        exact = [m for m in matches if str(m.get("title", "")).strip().lower() == str(query).strip().lower()]
+        if len(exact) == 1:
+            matches = exact
+        else:
+            return None, None, [str(m.get("title", "Untitled")) for m in matches[:5]]
+    if matches:
+        return matches[0].get("id"), matches[0].get("title"), []
+    return None, None, []
 
 
 async def review_agent_node(state: AgentState) -> dict[str, Any]:
@@ -55,6 +78,15 @@ async def review_agent_node(state: AgentState) -> dict[str, Any]:
         if not pending or pending.get("status") != "PENDING":
             return {
                 "response": "❌ No valid pending action to confirm, or the action was already consumed or cancelled.",
+                "response_type": "text",
+                "needs_confirmation": False,
+                "pending_confirmation": None,
+                "tool_calls_made": tools_used,
+            }
+
+        if _pending_expired(pending):
+            return {
+                "response": "⌛ That confirmation has expired. Please ask me to delete the task again.",
                 "response_type": "text",
                 "needs_confirmation": False,
                 "pending_confirmation": None,
@@ -109,7 +141,16 @@ async def review_agent_node(state: AgentState) -> dict[str, Any]:
         }
 
     # Identify target and establish pending confirmation state
-    task_id, task_title = await _resolve_target_task(state, tools_used)
+    task_id, task_title, ambiguous = await _resolve_target_task(state, tools_used)
+    if ambiguous:
+        listing = "\n".join(f"• {title}" for title in ambiguous)
+        return {
+            "response": f"🤔 Multiple tasks match. Which one should I delete?\n{listing}\nTell me the exact title or ID.",
+            "response_type": "text",
+            "needs_confirmation": False,
+            "pending_confirmation": None,
+            "tool_calls_made": tools_used,
+        }
     if not task_id:
         return {
             "response": "❌ Could not find the task to delete. Please specify the task title or ID.",

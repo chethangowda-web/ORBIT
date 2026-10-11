@@ -86,3 +86,31 @@ async def test_rolled_back_changes_publish_nothing(db_session, seed_test_user):
         assert drain(queue) == []
     finally:
         hub.unsubscribe(queue)
+
+
+# --- limits and lifetime ------------------------------------------------------------------------
+
+
+def test_one_user_cannot_hold_all_the_connections():
+    h = EventHub()
+    mine = [h.subscribe(owner="u1") for _ in range(events.MAX_PER_USER)]
+    newest = h.subscribe(owner="u1")  # over the per-user limit: the oldest connection is closed
+    assert newest is not None and h.subscriber_count == events.MAX_PER_USER
+    assert drain(mine[0])[-1] is None, "the evicted stream is told to end"
+    other = h.subscribe(owner="u2")
+    assert other is not None, "other users are unaffected"
+
+
+async def test_a_stream_ends_when_its_lifetime_is_over():
+    h = EventHub()
+    queue = h.subscribe(owner="u1")
+    gen = event_stream(queue, heartbeat=0.02, max_seconds=0.1)
+    frames = [frame async for frame in gen]
+    assert frames[0].startswith("retry:")
+
+
+async def test_an_evicted_stream_stops_sending():
+    queue = hub.subscribe(owner="evict-test")
+    queue.put_nowait(None)
+    frames = [frame async for frame in event_stream(queue, heartbeat=0.05)]
+    assert frames == ["retry: 3000\n\n"]
