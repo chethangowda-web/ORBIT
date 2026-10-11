@@ -101,3 +101,13 @@ def test_database_url_is_converted_for_the_async_driver(given, expected):
     from config import Settings
 
     assert Settings(DATABASE_URL=given).DATABASE_URL == expected
+
+
+def test_pasted_whitespace_in_settings_is_ignored(monkeypatch):
+    from config import Settings
+
+    monkeypatch.setenv("GOOGLE_CHAT_AUDIENCE", "https://x.example/api/chat/webhook\n")
+    monkeypatch.setenv("GOOGLE_CHAT_ADDON_PROJECT_NUMBER", " 495048386884 ")
+    s = Settings()
+    assert s.GOOGLE_CHAT_AUDIENCE == "https://x.example/api/chat/webhook"
+    assert s.GOOGLE_CHAT_ADDON_PROJECT_NUMBER == "495048386884"

@@ -17,6 +17,9 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        # Pasted values often carry a trailing newline or space (seen in a Render dashboard); that
+        # silently breaks exact comparisons such as the Google Chat audience.
+        str_strip_whitespace=True,
     )
 
     # General App Settings
