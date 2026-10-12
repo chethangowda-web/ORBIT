@@ -47,6 +47,8 @@ services:
         generateValue: true
       - key: CORS_ORIGINS
         value: '["http://localhost:3000"]'  # add your dashboard URL here once it is deployed
+      - key: CORS_ORIGIN_REGEX
+        value: ""  # optional, e.g. https://myapp-[a-z0-9-]+-myteam\.vercel\.app so every Vercel deployment address works
       - key: ALLOW_REGISTRATION
         value: "false"
       - key: APP_TIMEZONE

@@ -34,6 +34,9 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
         "http://localhost:8001",
     ]
+    # Optional pattern for dashboard addresses that change, such as Vercel's one-off address for every
+    # deployment (https://orbit-abc123-team.vercel.app). It must match the whole origin. Empty = off.
+    CORS_ORIGIN_REGEX: str = ""
 
     # Database Settings
     DATABASE_URL: str = "postgresql+asyncpg://orbit:password@localhost:5432/orbit"
@@ -144,6 +147,8 @@ class Settings(BaseSettings):
         placeholder = "change-this" in self.JWT_SECRET_KEY.lower()
         if self.JWT_SECRET_KEY == DEV_JWT_SECRET or placeholder or len(self.JWT_SECRET_KEY) < 32:
             problems.append("JWT_SECRET_KEY must be a unique secret of at least 32 characters")
+        if self.CORS_ORIGIN_REGEX.strip() in (".*", "^.*$", ".+", "^.+$", "https?://.*"):
+            problems.append("CORS_ORIGIN_REGEX is too broad: it would allow every website")
         if "*" in self.CORS_ORIGINS:
             problems.append("CORS_ORIGINS must not contain '*' when credentials are allowed")
         if not self.GOOGLE_CHAT_VERIFY_AUTH:

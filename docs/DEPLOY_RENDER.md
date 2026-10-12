@@ -72,6 +72,7 @@ For a demo, set `NEXT_PUBLIC_DEMO_PASSWORD` in Vercel (Settings, Environment Var
 ## Afterwards
 
 - The Render database starts empty. Chat users are created when they first message the bot; the seeded accounts let you sign in to a dashboard.
+- **Vercel gives every deployment its own address** (for example `orbit-abc123-team.vercel.app`) besides your main one. The browser blocks sign-in from any address that is not allowed, and the login shows "Cannot reach the ORBIT server". Always share the main address. To allow all of your team's deployment addresses, set `CORS_ORIGIN_REGEX` in Render to a pattern that matches the whole address, for example `https://orbit-[a-z0-9-]+-chethann1328-7757s-projects\.vercel\.app`. Patterns that match every website are refused in production.
 - To point your local dashboard at Render, rebuild it with `NEXT_PUBLIC_API_URL=https://<service-name>.onrender.com/api` and add the dashboard address to `CORS_ORIGINS` in Render (a JSON list, for example `["http://localhost:3000"]`).
 - Logs, metrics and restarts are in the Render dashboard. The service restarts itself if it crashes, and Render health-checks `/health`.
 - Rotate secrets that have been shared anywhere (service-account key, ngrok and Cloudflare tokens).
