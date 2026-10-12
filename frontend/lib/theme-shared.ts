@@ -3,7 +3,7 @@
 export const THEME_COOKIE = "orbit_theme";
 export const THEMES = ["dark", "light", "system"] as const;
 export type Theme = (typeof THEMES)[number];
-export const DEFAULT_THEME: Theme = "dark";
+export const DEFAULT_THEME: Theme = "light";
 
 export function parseTheme(value: string | null | undefined): Theme {
   return (THEMES as readonly string[]).includes(value ?? "") ? (value as Theme) : DEFAULT_THEME;
