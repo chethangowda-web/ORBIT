@@ -515,7 +515,7 @@ SUGGESTED_ACTIONS_BY_INTENT = {
     "CREATE_TASK": [
         "Plan my day",
         "Show my pending tasks",
-        "View task details",
+        "Undo that",
     ],
     "GET_MY_TASKS": [
         "Plan my day",

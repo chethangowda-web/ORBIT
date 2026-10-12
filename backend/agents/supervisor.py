@@ -27,6 +27,7 @@ ROUTING_MAP: dict[Intent, str] = {
     Intent.HELP: "task_agent",
     Intent.GREETING: "task_agent",
     Intent.MULTI_STEP: "tool_agent",
+    Intent.UNDO_LAST: "task_agent",
     Intent.UNKNOWN: "task_agent",
 }
 
@@ -105,6 +106,7 @@ _QUICK_INTENTS = {
     Intent.GET_OVERDUE_TASKS,
     Intent.PLAN_WEEK,  # an algorithm, not a prompt
     Intent.SUGGEST_ASSIGNEE,  # arithmetic on task counts
+    Intent.UNDO_LAST,  # replays the audit trail backwards
 }
 _QUICK_MIN_CONFIDENCE = 0.85
 

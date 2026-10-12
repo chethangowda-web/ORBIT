@@ -14,6 +14,7 @@ from tools.task_tools import (
     update_task,
 )
 from services.duplicate_check import check_for_duplicates, describe
+from services.undo import format_undo, undo_last_changes
 from tools.format_tools import friendly
 from tools.user_tools import get_all_users
 
@@ -28,6 +29,7 @@ Just tell me in your own words, for example:
 • *Hand over a task:* "Assign that to Sarah"
 • *Find a task:* "Search for budget report"
 • *Remove a task:* "Delete the old brochure task" (I will ask you to confirm first)
+• *Changed your mind:* "Undo that" reverses what I just did in chat
 """
 
 
@@ -265,6 +267,9 @@ async def task_agent_node(state: AgentState) -> dict[str, Any]:
         resp_text, resp_type, card_data, ref_task_id = await _handle_complete_task(ctx, user_id, ref_task_id, tools_used)
     elif intent in (Intent.GET_MY_TASKS.value, Intent.SEARCH_TASKS.value):
         resp_text, resp_type, card_data = await _handle_list_or_search(intent, ctx, user_id, state.get("raw_message", ""), tools_used)
+    elif intent == Intent.UNDO_LAST.value:
+        tools_used.append("undo_last_changes")
+        resp_text, resp_type, card_data = format_undo(await undo_last_changes(user_id)), "text", None
     elif intent == Intent.HELP.value:
         resp_text, resp_type, card_data = HELP_TEXT, "text", None
     elif intent == Intent.GREETING.value:

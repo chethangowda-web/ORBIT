@@ -77,6 +77,13 @@ _PLAN_WEEK_RE = re.compile(
     r"|\bnext\s+(?:five|5)\s+days\b",
     re.IGNORECASE,
 )
+# Only a bare "undo" counts, so "undo the deadline on the report task" is never read as an undo.
+_UNDO_RE = re.compile(
+    r"^\s*(?:please\s+|can\s+you\s+|could\s+you\s+)?(?:undo|revert|roll\s*back|take\s+(?:that|it)\s+back)"
+    r"(?:\s+(?:that|it|this|the\s+last(?:\s+(?:change|action|one))?|my\s+last(?:\s+(?:change|action))?|last\s+(?:change|action)|everything))?"
+    r"(?:\s+please)?\s*[.!?]*\s*$",
+    re.IGNORECASE,
+)
 _SUGGEST_ASSIGNEE_RE = re.compile(
     r"\bwho\s+(?:should|could|can|would|might)\s+(?:take|do|handle|own|pick\s+up|work\s+on|get|be\s+assigned)\b"
     r"|\bwho(?:'s|\s+is|\s+has|\s+have|\s+got)\s+(?:the\s+)?(?:free|available|capacity|bandwidth|time|room|least|lowest|less\s+busy|not\s+busy|most\s+free)\b"
@@ -140,6 +147,8 @@ def fallback_intent_classifier(user_message: str) -> IntentClassificationResult:
                 ctx.assignee_name = cand
 
     # Intent routing
+    if _UNDO_RE.search(msg):
+        return IntentClassificationResult(intent=Intent.UNDO_LAST, confidence=0.97, task_context=ctx)
     if _PLAN_WEEK_RE.search(msg):
         return IntentClassificationResult(intent=Intent.PLAN_WEEK, confidence=0.95, task_context=ctx)
     if _SUGGEST_ASSIGNEE_RE.search(msg):

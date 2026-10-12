@@ -23,6 +23,7 @@ class Intent(str, Enum):
     HELP = "HELP"
     GREETING = "GREETING"
     MULTI_STEP = "MULTI_STEP"
+    UNDO_LAST = "UNDO_LAST"
     UNKNOWN = "UNKNOWN"
 
 
