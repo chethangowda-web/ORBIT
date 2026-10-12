@@ -18,6 +18,7 @@ SUPERVISOR_PROMPT = """You are ORBIT's intelligent router. Analyze the user's me
 - GET_RECOMMENDATIONS: User asks for productivity insights, bottlenecks, or suggestions
 - HELP: User asks for instructions on what ORBIT can do
 - GREETING: A greeting or thanks with no request (hi, hello, good morning, thanks)
+- UNDO_LAST: User asks to undo, revert or take back the last change ORBIT made (only a bare request such as "undo that")
 - MULTI_STEP: A request that needs several steps or acts on MANY tasks or people, or a question about tasks that none of the intents above can answer. Examples: "Move all of John's overdue tasks to Rahul and make them high priority", "Mark every task about the website as done", "Which of Sarah's tasks are due this week and who has the most work?", "Create three tasks for the launch and assign them to Priya"
 - UNKNOWN: Unrelated queries or ambiguous messages requiring clarification
 

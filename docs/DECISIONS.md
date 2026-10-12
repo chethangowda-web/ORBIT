@@ -328,3 +328,13 @@ result = await supervisor_chain.ainvoke(messages)
 **Decision**: Per-attempt LLM timeout, two attempts, a circuit breaker that skips the provider for a cooldown after repeated failures, and an agent deadline (22 seconds) shorter than Google's limit that returns an apology instead of silence.
 
 **Consequences**: During an LLM outage the bot answers from the rule-based classifier immediately rather than slowly; behaviour is covered by `tests/test_resilience.py`.
+
+## ADR-023: Undo replays the audit trail, scoped to the last chat run
+
+**Date**: 2026-10-12  **Status**: Accepted
+
+**Context**: Chat and the multi-step agent change several tasks from one sentence. People need a cheap way back, but a general undo risks overwriting teammates' later edits.
+
+**Decision**: Reuse the existing task audit trail (it already stores old and new values). "Undo that" reverts only the caller's own latest run of `chat` changes (rows 15 seconds apart or less, within 30 minutes), newest first, and only where the task still has the value ORBIT set. The reversal is logged with source `undo`, which also makes a second undo a no-op. It is code, not a prompt.
+
+**Consequences**: Single level of undo, chat changes only; no new tables. Covered by `tests/test_undo.py`.

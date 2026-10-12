@@ -53,6 +53,7 @@ const INTENT_LABEL: Record<string, string> = {
   HELP: "Help",
   GREETING: "Saying hello",
   MULTI_STEP: "Working through several steps",
+  UNDO_LAST: "Undoing your last change",
   UNKNOWN: "Not sure what you meant",
 };
 
@@ -94,6 +95,7 @@ const STEP_LABEL: Record<string, string> = {
   team_workload: "Checked who is busy",
   task_stats: "Counted tasks by status",
   suggest_assignee: "Checked who has room",
+  undo_last_changes: "Undid your last change",
 };
 
 function sentence(text: string): string {
