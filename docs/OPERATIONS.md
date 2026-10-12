@@ -140,6 +140,7 @@ The backend tests never contact an LLM or Google (`tests/conftest.py` blanks the
 | Failure | What happens |
 |---|---|
 | LLM provider slow | Each call is cut off after `LLM_TIMEOUT_SECONDS` (8), one attempt (`LLM_MAX_ATTEMPTS`) |
+| A model out of daily quota (free keys allow about 20 requests a day per model) | That model rests for the time the provider suggests and the next one in `LLM_FALLBACK_MODELS` is tried at once; capacity multiplies by the number of models |
 | LLM provider failing or out of quota | After `LLM_BREAKER_FAILURES` (3) consecutive failures the LLM is skipped for `LLM_BREAKER_COOLDOWN_SECONDS` (60); the offline classifier answers instantly, then one request probes the provider again |
 | Agent pipeline stuck | Replies "timed out, please try again" after `AGENT_TIMEOUT_SECONDS` (22), inside Google Chat's 30 second limit |
 | Unexpected error while handling a Chat event | HTTP 200 with a short apology and an error reference found in the logs |

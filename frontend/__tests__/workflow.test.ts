@@ -46,6 +46,7 @@ describe("intentLabel", () => {
 describe("classifierLabel", () => {
   it("says how the request was understood, without technical terms", () => {
     expect(classifierLabel("llm")).toBe("AI");
+    expect(classifierLabel("quick")).toBe("a quick check");
     expect(classifierLabel("rules")).toBe("a quick check (the AI was busy)");
     expect(classifierLabel("flow")).toBe("your answer");
     expect(classifierLabel(null)).toBe("ORBIT");

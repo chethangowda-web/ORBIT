@@ -65,6 +65,9 @@ def offline_llm(monkeypatch: pytest.MonkeyPatch) -> None:
 
     Set ORBIT_LIVE_LLM=1 to opt in to live calls for manual evaluation runs.
     """
+    from services import llm as _llm
+
+    _llm.model_pool.blocked_until.clear()  # a quota hit in one test must not rest a model in the next
     if os.environ.get("ORBIT_LIVE_LLM") == "1":
         return
     monkeypatch.setattr(_settings, "GOOGLE_GEMINI_API_KEY", "")

@@ -37,6 +37,7 @@ class AgentState(TypedDict, total=False):
     response_type: str                    # "text" | "card" | "confirmation_dialog"
     card_data: Optional[dict[str, Any]]   # Google Chat card payload
     tool_calls_made: list[str]            # Audit log of tools called in this run
+    actions_summary: list[str]            # Plain-language list of what the tool-using agent changed
     agents_invoked: list[str]             # List of agent nodes invoked in order
     node_durations_ms: dict[str, float]   # Milliseconds spent in each node
     trace_metadata: Optional[dict[str, Any]] # Observability trace record

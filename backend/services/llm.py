@@ -276,6 +276,10 @@ class LLMCircuitBreaker:
             return True
         return False
 
+    def is_available(self) -> bool:
+        """True when a call would be attempted (closed, or the cooldown is over). Changes no state."""
+        return self.opened_at is None or time.monotonic() - self.opened_at >= settings.LLM_BREAKER_COOLDOWN_SECONDS
+
     def record_success(self) -> None:
         self.failures = 0
         self.opened_at = None
@@ -290,6 +294,111 @@ class LLMCircuitBreaker:
 llm_breaker = LLMCircuitBreaker()
 
 
+class ModelPool:
+    """The models to try, in order, and which of them are resting after hitting a quota."""
+
+    def __init__(self) -> None:
+        self.blocked_until: dict[str, float] = {}
+
+    def models(self) -> list[str]:
+        chain = [getattr(settings, "DEFAULT_LLM_MODEL", "")] + [m.strip() for m in settings.LLM_FALLBACK_MODELS.split(",")]
+        seen: list[str] = []
+        for model in chain:
+            if model and model not in seen:
+                seen.append(model)
+        return seen
+
+    def candidates(self) -> list[str]:
+        now = time.monotonic()
+        return [m for m in self.models() if self.blocked_until.get(m, 0.0) <= now]
+
+    def block(self, model: str, seconds: float) -> None:
+        self.blocked_until[model] = time.monotonic() + max(1.0, min(seconds, settings.LLM_MAX_BLOCK_SECONDS))
+        logger.warning("Model %s is resting for %.0fs (quota or availability)", model, min(seconds, settings.LLM_MAX_BLOCK_SECONDS))
+
+
+model_pool = ModelPool()
+
+_RETRY_DELAY = re.compile(r'retryDelay"?\s*[:=]\s*"?(\d+(?:\.\d+)?)s', re.IGNORECASE)
+
+
+def _is_rate_limited(err: Exception) -> bool:
+    text = str(err)
+    return isinstance(err, litellm.RateLimitError) or "429" in text or "RESOURCE_EXHAUSTED" in text
+
+
+def _is_missing_model(err: Exception) -> bool:
+    return isinstance(err, litellm.NotFoundError) or "NOT_FOUND" in str(err)
+
+
+def _is_busy(err: Exception) -> bool:
+    """The provider is overloaded right now (HTTP 503). Not the model's fault: do not rest it."""
+    text = str(err)
+    return isinstance(err, litellm.ServiceUnavailableError) or "503" in text or "UNAVAILABLE" in text or "high demand" in text
+
+
+def _retry_after(err: Exception) -> float:
+    found = _RETRY_DELAY.search(str(err))
+    return float(found.group(1)) if found else 60.0
+
+
+async def _complete(timeout: float, **kwargs: Any) -> Any:
+    """litellm.acompletion across the model chain. A model that is out of quota or gone is skipped (and
+    rests for a while) and the next one is tried at once; any other error is the caller's to handle."""
+    last: Optional[Exception] = None
+    for model in model_pool.candidates():
+        try:
+            return await asyncio.wait_for(litellm.acompletion(model=model, timeout=timeout, **kwargs), timeout=timeout + 2)
+        except Exception as err:
+            if _is_rate_limited(err):
+                model_pool.block(model, _retry_after(err))
+            elif _is_missing_model(err):
+                model_pool.block(model, settings.LLM_MAX_BLOCK_SECONDS)
+            elif not _is_busy(err):
+                raise
+            last = err
+    raise last or RuntimeError("No AI model is available right now.")
+
+
+def llm_available() -> bool:
+    """Is there an API key, and is the provider not currently paused by the circuit breaker?"""
+    key = getattr(settings, "GOOGLE_GEMINI_API_KEY", "") or getattr(settings, "OPENAI_API_KEY", "")
+    return bool(key) and llm_breaker.is_available() and bool(model_pool.candidates())
+
+
+async def call_llm_with_tools(
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]],
+    max_tokens: int = 1200,
+    timeout: Optional[float] = None,
+) -> Optional[Any]:
+    """One model turn with function calling. Returns the assistant message (``content`` and
+    ``tool_calls``), or None when the model cannot answer in time. Same key check, timeout and circuit
+    breaker as call_llm: a failing provider never blocks the caller."""
+    api_key = getattr(settings, "GOOGLE_GEMINI_API_KEY", "") or getattr(settings, "OPENAI_API_KEY", "")
+    if not api_key or not model_pool.candidates() or not llm_breaker.allow():
+        return None
+    limit = timeout or settings.LLM_TIMEOUT_SECONDS
+    try:
+        try:
+            response = await _complete(
+                limit, messages=messages, tools=tools, tool_choice="auto", temperature=0.1, max_tokens=max_tokens, api_key=api_key
+            )
+        except Exception as first:
+            if not _is_busy(first) or not model_pool.candidates():
+                raise
+            await asyncio.sleep(1.5)  # demand spikes are short; one more pass through the models
+            response = await _complete(
+                limit, messages=messages, tools=tools, tool_choice="auto", temperature=0.1, max_tokens=max_tokens, api_key=api_key
+            )
+        llm_breaker.record_success()
+        return response.choices[0].message
+    except Exception as err:
+        logger.warning("LLM tool call failed: %s", err)
+        llm_breaker.record_failure()
+        return None
+
+
 async def call_llm(
     messages: list[dict[str, str]],
     temperature: float = 0.1,
@@ -300,7 +409,7 @@ async def call_llm(
     """Execute LLM call via LiteLLM with structured output, a per-attempt timeout, bounded retries
     and a circuit breaker. Returns None whenever the provider cannot answer in time."""
     api_key = getattr(settings, "GOOGLE_GEMINI_API_KEY", "") or getattr(settings, "OPENAI_API_KEY", "")
-    if not api_key:
+    if not api_key or not model_pool.candidates():
         return None
     if not llm_breaker.allow():
         return None
@@ -309,7 +418,6 @@ async def call_llm(
     for attempt in range(retries):
         try:
             kwargs: dict[str, Any] = {
-                "model": getattr(settings, "DEFAULT_LLM_MODEL", "gemini/gemini-1.5-pro"),
                 "messages": messages,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
@@ -318,8 +426,7 @@ async def call_llm(
             if response_model:
                 kwargs["response_format"] = response_model
 
-            kwargs["timeout"] = settings.LLM_TIMEOUT_SECONDS
-            response = await asyncio.wait_for(litellm.acompletion(**kwargs), timeout=settings.LLM_TIMEOUT_SECONDS + 2)
+            response = await _complete(settings.LLM_TIMEOUT_SECONDS, **kwargs)
             content = response.choices[0].message.content
             llm_breaker.record_success()
             if response_model and isinstance(content, str):

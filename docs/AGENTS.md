@@ -353,6 +353,25 @@ def resolve_context(message: str, history: list[BaseMessage]) -> dict:
 
 ---
 
+### 4.7 Tool-Using Agent (`agents/tool_agent.py`)
+
+The specialists above run a fixed handler for each request type. This one lets the **model plan**: it decides which tools to call, in what order, and when it is finished. It handles requests the fixed handlers cannot, such as "Move all of John's overdue tasks to Rahul and make them high priority" (search, look up the person, then update each task) or "Who has the most overdue work?".
+
+**When it runs.** The Supervisor sends a request here when the model classifies it as `MULTI_STEP` (several steps, many tasks, or a task question no fixed intent covers), or when the wording both covers many tasks ("all", "every", "and then") and asks for a change. It never runs without a model: with no key, or while the provider is down, the reply says the AI is busy and suggests one simple request at a time.
+
+**Tools it may call** (all permission-checked exactly like the REST API): `search_tasks`, `get_task`, `find_person`, `list_team`, `team_workload`, `task_stats`, `create_task`, `update_task`, `complete_task`.
+
+**Guardrails.** The model is trusted to plan, never to authorise:
+- *Identity is injected.* The agent supplies who is asking; `created_by_id`, `viewer_id` and similar fields sent by the model are discarded, so it cannot act as someone else.
+- *Same permissions as the dashboard.* An employee's searches only return their own tasks, and they cannot reassign work to others, whatever the model asks for.
+- *No deleting.* Deleting is not among the tools; it keeps its own confirmation flow. A forced `delete_task` call is rejected.
+- *Bounded runs.* At most 6 model turns, 12 seconds, and 10 changes per request. An identical change requested twice happens once. If a limit is hit, the reply says so.
+- *Honest replies.* The "What changed" list is built from the tools' own results, so a reply cannot claim a change that failed. If the model drops out midway, the reply lists what was already done.
+- *Untrusted text.* Task titles and descriptions are marked as data in the system prompt, and since delete is unavailable and changes are capped, a malicious title gains no extra power.
+- *Plain output.* Ids are stripped from replies, bold becomes Chat-style, and failures are turned into sentences.
+
+Each run is recorded like any other: the activity page shows the helper's tools in order and a "Changes made" list.
+
 ## 5. Agent Graph Definition
 
 ```python
@@ -405,7 +424,7 @@ app = workflow.compile(checkpointer=AsyncRedisSaver(redis_client))
 
 ## 7. As built: behaviours and safety rules
 
-**Graph.** `START -> supervisor -> {task_agent | planner_agent | recommendation_agent | review_agent} -> END`. There is no separate `memory_save` node: the Redis checkpointer persists state after every node, and the review agent performs the confirmed delete itself rather than routing back to the task agent.
+**Graph.** `START -> supervisor -> {task_agent | planner_agent | recommendation_agent | review_agent | tool_agent} -> END`. There is no separate `memory_save` node: the Redis checkpointer persists state after every node, and the review agent performs the confirmed delete itself rather than routing back to the task agent.
 
 **Never guess.** The agents ask instead of acting when the target is unclear:
 - Unknown assignee: "I could not find a team member matching 'X'." (the task is **not** silently assigned to the requester).
@@ -424,6 +443,8 @@ app = workflow.compile(checkpointer=AsyncRedisSaver(redis_client))
 3. Card buttons map only to known actions (`confirm_delete_task`, `confirm_action`, `cancel_action`, `cancel`, `complete_task`); anything else is ignored rather than forwarded to the agent as text.
 
 **Dates.** Relative dates ("Friday", "tomorrow") resolve in `APP_TIMEZONE`, not UTC.
+
+**How a request is understood.** Simple, unambiguous requests (help, hello, show my tasks, what is overdue) are recognised by the instant built-in check and never use the AI (`classifier: quick`), which saves a request from a small daily quota and several seconds when a model is slow. Everything else is read by the AI (`llm`); if the AI is unavailable the built-in rules answer (`rules`); a yes or cancel answer is `flow`.
 
 **Workflow visibility.** Every run records its steps in order: the Supervisor (intent, confidence, and whether the intent came from the LLM, the built-in rules, or a yes/cancel answer), then the specialist agent with the tools it called and the time each step took. The dashboard draws this under every reply in the agent panel and on the Agent workflow screen, which also shows per-agent run counts. The Admin screen's Integrations tab shows whether Google Chat, the AI model and email are connected and being used.
 
