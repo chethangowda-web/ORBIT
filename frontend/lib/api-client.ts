@@ -6,6 +6,7 @@
  */
 
 import axios, { AxiosError } from "axios";
+import { DEFAULT_API_URL, resolveApiBase } from "./api-base";
 import type {
   AgentExecutionTrace,
   APIResponse,
@@ -34,7 +35,9 @@ import type {
   UserRole,
 } from "@/types";
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001/api";
+/** The backend's own address, for the few calls that must reach it directly (waking a sleeping server). */
+export const DIRECT_API_URL = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
+export const API_BASE_URL = resolveApiBase(process.env.NEXT_PUBLIC_API_URL, typeof window !== "undefined" ? window.location.hostname : undefined);
 
 export const TOKEN_KEY = "orbit_token";
 export const USER_KEY = "orbit_user";

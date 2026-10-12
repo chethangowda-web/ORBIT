@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, ShieldCheck, User, UserCog } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
-import { ApiError, apiClient } from "@/lib/api-client";
+import { ApiError, DIRECT_API_URL } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
 
 const DEMO_ACCOUNTS = [
@@ -33,14 +33,18 @@ function LoginForm() {
   // time someone has typed a password it is ready, and say so if it takes a while.
   useEffect(() => {
     const notice = window.setTimeout(() => setWaking(true), 2500);
-    apiClient
-      .get("/health", { timeout: 90_000 })
+    const controller = new AbortController();
+    // Straight to the backend (not through the dashboard's proxy), and answer unread: this only wakes it.
+    fetch(`${DIRECT_API_URL}/health`, { mode: "no-cors", signal: controller.signal, cache: "no-store" })
       .catch(() => undefined)
       .finally(() => {
         window.clearTimeout(notice);
         setWaking(false);
       });
-    return () => window.clearTimeout(notice);
+    return () => {
+      window.clearTimeout(notice);
+      controller.abort();
+    };
   }, []);
 
   useEffect(() => {
@@ -56,7 +60,7 @@ function LoginForm() {
         await login(nextEmail, nextPassword);
         return;
       } catch (e) {
-        const unreachable = e instanceof ApiError && e.status === 0;
+        const unreachable = e instanceof ApiError && [0, 502, 503, 504].includes(e.status);
         if (unreachable && attempt < 3) {
           setWaking(true);
           continue;

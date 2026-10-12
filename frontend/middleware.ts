@@ -55,6 +55,6 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Everything except Next internals and static files.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|ico|webp|woff2?)$).*)"],
+  // Everything except Next internals, static files and the backend proxy (the API checks its own tokens).
+  matcher: ["/((?!_next/static|_next/image|backend-api/|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|ico|webp|woff2?)$).*)"],
 };
