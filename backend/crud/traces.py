@@ -2,7 +2,7 @@
 
 import uuid
 from typing import Any, Dict, List, Optional
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import AgentExecutionTrace
@@ -38,9 +38,8 @@ async def list_user_traces(
     traces = list(result.scalars().all())
 
     # Count total for user
-    count_query = select(AgentExecutionTrace).where(AgentExecutionTrace.user_id == user_id)
-    count_res = await db.execute(count_query)
-    total = len(count_res.scalars().all())
+    count_query = select(func.count()).select_from(AgentExecutionTrace).where(AgentExecutionTrace.user_id == user_id)
+    total = (await db.execute(count_query)).scalar_one()
 
     return traces, total
 

@@ -55,6 +55,7 @@ async def process_message(
 
     agents_invoked: List[str] = []
     node_durations_ms: Dict[str, float] = {}
+    steps: List[Dict[str, Any]] = []
     accumulated_state: Dict[str, Any] = dict(initial_state)
 
     async def _run_graph_stream() -> Dict[str, Any]:
@@ -71,8 +72,22 @@ async def process_message(
                     agents_invoked.append(node_name)
                 # Compute individual elapsed time for node (aggregate if node is revisited in graph loop)
                 node_durations_ms[node_name] = round(node_durations_ms.get(node_name, 0.0) + node_delta_ms, 2)
+                step: Dict[str, Any] = {"node": node_name, "duration_ms": node_delta_ms}
                 if isinstance(updates, dict):
+                    # Tools are attributed to the node that added them to the running list.
+                    known = accumulated_state.get("tool_calls_made") or []
+                    now = updates.get("tool_calls_made") or []
+                    new_tools = list(now[len(known):]) if len(now) >= len(known) else list(now)
+                    if new_tools:
+                        step["tools"] = new_tools
+                    if node_name == "supervisor":
+                        step["intent"] = updates.get("intent")
+                        step["confidence"] = updates.get("confidence")
+                        step["classifier"] = updates.get("classifier")
+                    elif updates.get("needs_confirmation"):
+                        step["awaiting_confirmation"] = True
                     accumulated_state.update(updates)
+                steps.append(step)
         return accumulated_state
 
     try:
@@ -97,6 +112,8 @@ async def process_message(
                 "tool_calls_made": result.get("tool_calls_made", []),
                 "node_durations_ms": node_durations_ms,
                 "total_duration_ms": total_duration_ms,
+                "classifier": result.get("classifier"),
+                "steps": steps,
                 "status": status,
                 "error_code": None,
                 "error_message": None,
@@ -133,6 +150,8 @@ async def process_message(
             "tool_calls_made": accumulated_state.get("tool_calls_made", []),
             "node_durations_ms": node_durations_ms,
             "total_duration_ms": total_duration_ms,
+            "classifier": accumulated_state.get("classifier"),
+            "steps": steps,
             "status": "TIMEOUT",
             "error_code": "AGENT_TIMEOUT",
             "error_message": "Agent execution timed out",
@@ -180,9 +199,11 @@ async def process_message(
             "tool_calls_made": accumulated_state.get("tool_calls_made", []),
             "node_durations_ms": node_durations_ms,
             "total_duration_ms": total_duration_ms,
+            "classifier": accumulated_state.get("classifier"),
+            "steps": steps,
             "status": "FAILURE",
             "error_code": "AGENT_EXECUTION_ERROR",
-            "error_message": str(exc),
+            "error_message": str(exc)[:500],
             "started_at": started_at,
             "completed_at": completed_at,
         }
@@ -203,7 +224,7 @@ async def process_message(
             "agents_invoked": agents_invoked,
             "intent": "UNKNOWN",
             "needs_confirmation": False,
-            "response": f"❌ An error occurred while processing your request: {str(exc)}",
+            "response": "❌ Something went wrong while handling that request. Please try again in a moment.",
             "response_type": "text",
             "tool_calls_made": accumulated_state.get("tool_calls_made", []),
             "node_durations_ms": node_durations_ms,

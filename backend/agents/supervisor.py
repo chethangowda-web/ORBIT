@@ -45,8 +45,9 @@ def _meaningful_hint(hint: Any) -> bool:
 FOLLOW_UP_INTENTS = {Intent.UPDATE_TASK, Intent.COMPLETE_TASK, Intent.GET_TASK_DETAIL}
 
 
-async def classify_intent(raw_message: str) -> IntentClassificationResult:
-    """Classifies user intent using LiteLLM structured output or rule fallback."""
+async def classify_intent_with_source(raw_message: str) -> tuple[IntentClassificationResult, str]:
+    """Classifies user intent with the LLM, or with the deterministic rules when the LLM is not
+    configured, slow or failing. Returns (result, "llm" | "rules")."""
     messages = [
         {"role": "system", "content": SUPERVISOR_PROMPT},
         {"role": "user", "content": raw_message},
@@ -57,8 +58,13 @@ async def classify_intent(raw_message: str) -> IntentClassificationResult:
         response_model=IntentClassificationResult,
     )
     if isinstance(res, IntentClassificationResult):
-        return res
-    return fallback_intent_classifier(raw_message)
+        return res, "llm"
+    return fallback_intent_classifier(raw_message), "rules"
+
+
+async def classify_intent(raw_message: str) -> IntentClassificationResult:
+    """Classifies user intent (see classify_intent_with_source)."""
+    return (await classify_intent_with_source(raw_message))[0]
 
 
 async def supervisor_node(state: AgentState) -> dict[str, Any]:
@@ -78,6 +84,7 @@ async def supervisor_node(state: AgentState) -> dict[str, Any]:
         return {
             "intent": Intent.UNKNOWN.value,
             "confidence": 1.0,
+            "classifier": "flow",
             "active_agent": "task_agent",
             "task_context": {},
             "referenced_task_id": None,
@@ -101,6 +108,7 @@ async def supervisor_node(state: AgentState) -> dict[str, Any]:
         return {
             "intent": target_intent.value,
             "confidence": 1.0,
+            "classifier": "flow",
             "active_agent": "review_agent",
             "task_context": task_context,
             "referenced_task_id": str(ref_id) if ref_id else None,
@@ -110,7 +118,7 @@ async def supervisor_node(state: AgentState) -> dict[str, Any]:
             "tool_calls_made": state.get("tool_calls_made", []),
         }
 
-    classification = await classify_intent(raw_message)
+    classification, classifier = await classify_intent_with_source(raw_message)
     task_context = classification.task_context.model_dump()
 
     # The previous task is only the target when the user refers back to it ("make it high
@@ -135,6 +143,7 @@ async def supervisor_node(state: AgentState) -> dict[str, Any]:
     return {
         "intent": target_intent.value,
         "confidence": classification.confidence,
+        "classifier": classifier,
         "active_agent": active_agent,
         "task_context": task_context,
         "referenced_task_id": referenced_id or task_context.get("task_id"),

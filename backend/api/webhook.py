@@ -624,6 +624,8 @@ async def chat_query(
             tool_calls_made=agent_state.get("tool_calls_made", []),
             node_durations_ms=agent_state.get("node_durations_ms", {}),
             total_duration_ms=trace_meta.get("total_duration_ms", 0.0),
+            classifier=trace_meta.get("classifier"),
+            steps=trace_meta.get("steps") or [],
             status=trace_meta.get("status", "NEEDS_CONFIRMATION" if needs_confirmation else "SUCCESS"),
         ),
     )

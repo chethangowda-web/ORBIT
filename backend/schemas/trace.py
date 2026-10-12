@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class AgentExecutionTraceRead(BaseModel):
@@ -22,12 +22,19 @@ class AgentExecutionTraceRead(BaseModel):
     tool_calls_made: List[str] = Field(default_factory=list)
     node_durations_ms: Dict[str, float] = Field(default_factory=dict)
     total_duration_ms: float = 0.0
+    classifier: Optional[str] = None  # llm | rules | flow
+    steps: List[Dict[str, Any]] = Field(default_factory=list)
     status: str = "SUCCESS"  # SUCCESS | FAILURE | TIMEOUT | NEEDS_CONFIRMATION
     error_code: Optional[str] = None
     error_message: Optional[str] = None
     started_at: datetime
     completed_at: datetime
     created_at: datetime
+
+    @field_validator("steps", mode="before")
+    @classmethod
+    def _steps_default(cls, value: Any) -> Any:
+        return value or []
 
 
 class TraceListResponse(BaseModel):

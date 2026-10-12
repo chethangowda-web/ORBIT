@@ -235,7 +235,7 @@ Migration: `backend/alembic/versions/003_chat_event_ledger.py`. `event_key` is c
 
 ### 2.7 `agent_execution_traces`
 
-One row per agent request (chat or dashboard), written by `agents/orchestrator.py`. Powers the Agent runs screen. Readable only by the user who made the request.
+One row per agent request (chat or dashboard), written by `agents/orchestrator.py`. Powers the Agent workflow screen (migration 007 added `classifier` and `steps`). Readable only by the user who made the request.
 
 ```sql
 CREATE TABLE agent_execution_traces (
@@ -249,6 +249,8 @@ CREATE TABLE agent_execution_traces (
     agents_invoked    JSON NOT NULL,      -- ["supervisor", "task_agent"]
     tool_calls_made   JSON NOT NULL,
     node_durations_ms JSON NOT NULL,      -- {"supervisor": 120.5, ...}
+    classifier        VARCHAR(20),        -- llm | rules | flow (how the intent was decided)
+    steps             JSON,               -- ordered workflow: [{node, duration_ms, tools?, intent?, ...}]
     total_duration_ms FLOAT NOT NULL,
     status            VARCHAR(50) NOT NULL,  -- SUCCESS | NEEDS_CONFIRMATION | TIMEOUT | FAILURE
     error_code        VARCHAR(100),

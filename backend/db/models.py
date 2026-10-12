@@ -348,6 +348,8 @@ class AgentExecutionTrace(Base):
     tool_calls_made: Mapped[List[str]] = mapped_column(JSON, default=list, nullable=False)
     node_durations_ms: Mapped[Dict[str, float]] = mapped_column(JSON, default=dict, nullable=False)
     total_duration_ms: Mapped[float] = mapped_column(default=0.0, nullable=False)
+    classifier: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # llm | rules | flow
+    steps: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSON, nullable=True)  # ordered workflow
     status: Mapped[str] = mapped_column(String(50), default="SUCCESS", nullable=False)
     error_code: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

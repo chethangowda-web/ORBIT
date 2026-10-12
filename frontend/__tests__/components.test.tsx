@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Waterfall } from "@/components/agent/Waterfall";
+import { WorkflowDiagram } from "@/components/agent/WorkflowDiagram";
 import { PriorityBadge, RunStatusBadge, StatusBadge } from "@/components/ui/Badge";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
@@ -153,17 +153,44 @@ describe("Pagination", () => {
   });
 });
 
-describe("Waterfall", () => {
-  it("labels each agent and shows its duration", () => {
-    render(<Waterfall durations={{ supervisor: 120, task_agent: 480 }} total={600} />);
+describe("WorkflowDiagram", () => {
+  const planRun = {
+    steps: [
+      { node: "supervisor", duration_ms: 2100, intent: "PLAN_DAY", confidence: 0.92, classifier: "llm" },
+      { node: "planner_agent", duration_ms: 6400, tools: ["get_overdue_tasks", "get_user_tasks"] },
+    ],
+    status: "SUCCESS",
+    total_duration_ms: 8500,
+  };
+
+  it("draws the request, the supervisor's decision, the agent with numbered tools, and the outcome", () => {
+    render(<WorkflowDiagram run={planRun} request="plan my day" />);
+    expect(screen.getByText(/plan my day/)).toBeInTheDocument();
     expect(screen.getByText("Supervisor")).toBeInTheDocument();
-    expect(screen.getByText("Tasks")).toBeInTheDocument();
-    expect(screen.getByText("480ms")).toBeInTheDocument();
+    expect(screen.getByText("Plan day")).toBeInTheDocument();
+    expect(screen.getByText(/92%/)).toBeInTheDocument();
+    expect(screen.getByText(/Decided by Gemini AI/)).toBeInTheDocument();
+    expect(screen.getByText("Planner agent")).toBeInTheDocument();
+    const tools = within(screen.getByRole("list", { name: "Tools used, in order" })).getAllByRole("listitem");
+    expect(tools.map((li) => li.textContent)).toEqual([expect.stringContaining("Get overdue tasks"), expect.stringContaining("Get user tasks")]);
+    expect(screen.getByText("Replied")).toBeInTheDocument();
+    expect(screen.getByText(/Total 8.5s/)).toBeInTheDocument();
   });
 
-  it("renders nothing without timings", () => {
-    const { container } = render(<Waterfall durations={{}} />);
-    expect(container).toBeEmptyDOMElement();
+  it("says when approval is needed or the run failed", () => {
+    const { rerender } = render(<WorkflowDiagram run={{ ...planRun, status: "NEEDS_CONFIRMATION" }} />);
+    expect(screen.getByText("Waiting for your approval")).toBeInTheDocument();
+    rerender(<WorkflowDiagram run={{ ...planRun, status: "FAILURE", error_message: "boom" }} />);
+    expect(screen.getByText("Failed")).toBeInTheDocument();
+    expect(screen.getByText("boom")).toBeInTheDocument();
+  });
+
+  it("still draws a run that was stored before steps were recorded", () => {
+    render(<WorkflowDiagram run={{ agents_invoked: ["supervisor", "task_agent"], tool_calls_made: ["create_task"], intent: "CREATE_TASK", status: "SUCCESS" }} />);
+    expect(screen.getByText("Task agent")).toBeInTheDocument();
+    const tools = within(screen.getByRole("list", { name: "Tools used, in order" })).getAllByRole("listitem");
+    expect(tools).toHaveLength(1);
+    expect(tools[0]).toHaveTextContent("Create task");
   });
 });
 

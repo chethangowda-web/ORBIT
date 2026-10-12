@@ -2,15 +2,15 @@
 
 import React, { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertCircle, KeyRound } from "lucide-react";
+import { AlertCircle, ShieldCheck, User, UserCog } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
 import { useAuth } from "@/lib/auth";
 
 const DEMO_ACCOUNTS = [
-  { email: "admin@orbit.dev", label: "Admin" },
-  { email: "sarah@orbit.dev", label: "Manager" },
-  { email: "john@orbit.dev", label: "Employee" },
+  { email: "admin@orbit.dev", label: "Admin", icon: ShieldCheck },
+  { email: "sarah@orbit.dev", label: "Manager", icon: UserCog },
+  { email: "john@orbit.dev", label: "Employee", icon: User },
 ];
 
 // Demo accounts are shown when a demo password is configured at build time
@@ -25,20 +25,20 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(params.get("expired") ? "Your session expired. Please sign in again." : null);
-  const [busy, setBusy] = useState<"password" | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (status === "authenticated") router.replace("/");
   }, [status, router]);
 
   const signIn = async (nextEmail: string, nextPassword: string) => {
-    setBusy("password");
+    setBusy(true);
     setError(null);
     try {
       await login(nextEmail, nextPassword);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not sign in.");
-      setBusy(null);
+      setBusy(false);
     }
   };
 
@@ -53,7 +53,8 @@ function LoginForm() {
 
   return (
     <>
-      <h1 className="mb-4 text-sm font-semibold text-fg">Sign in</h1>
+      <h1 className="text-lg font-semibold text-fg">Welcome back</h1>
+      <p className="mb-5 mt-1 text-[13px] text-fg-muted">Sign in to your workspace.</p>
 
       {error && (
         <div role="alert" className="mb-4 flex items-start gap-2 rounded-control border border-danger/30 bg-danger/10 p-3 text-xs text-fg">
@@ -62,38 +63,39 @@ function LoginForm() {
         </div>
       )}
 
-      <form onSubmit={submit} noValidate className="space-y-3">
-        <Input label="Work email" type="email" autoComplete="username" value={email} placeholder="you@company.com" onChange={(e) => setEmail(e.target.value)} />
+      <form onSubmit={submit} noValidate className="space-y-3.5">
+        <Input label="Email" type="email" autoComplete="username" value={email} placeholder="you@company.com" onChange={(e) => setEmail(e.target.value)} />
         <Input label="Password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
-        <Button type="submit" variant="primary" className="w-full" loading={busy === "password"}>
+        <Button type="submit" variant="primary" className="h-10 w-full text-sm" loading={busy}>
           Sign in
         </Button>
       </form>
 
       {DEMO_PASSWORD && (
-        <div className="mt-5 border-t border-line-subtle pt-4" data-testid="demo-accounts">
-          <p className="mb-2 flex items-center gap-1.5 text-[11px] text-fg-faint">
-            <KeyRound className="h-3 w-3" aria-hidden /> Demo accounts
-          </p>
+        <div className="mt-6" data-testid="demo-accounts">
+          <div className="mb-3 flex items-center gap-3 text-[11px] uppercase tracking-wider text-fg-faint">
+            <span className="h-px flex-1 bg-line" />
+            Try a demo account
+            <span className="h-px flex-1 bg-line" />
+          </div>
           <div className="grid grid-cols-3 gap-2">
-            {DEMO_ACCOUNTS.map((a) => (
-              <Button key={a.email} size="sm" disabled={busy !== null} onClick={() => void signIn(a.email, DEMO_PASSWORD)}>
-                {a.label}
-              </Button>
+            {DEMO_ACCOUNTS.map(({ email: demoEmail, label, icon: Icon }) => (
+              <button
+                key={demoEmail}
+                type="button"
+                disabled={busy}
+                onClick={() => void signIn(demoEmail, DEMO_PASSWORD)}
+                className="flex flex-col items-center gap-1 rounded-control border border-line bg-surface-2 px-2 py-2.5 transition-colors hover:border-accent/60 hover:bg-surface-3 disabled:opacity-50"
+              >
+                <Icon className="h-4 w-4 text-accent" aria-hidden />
+                <span className="text-xs font-medium text-fg">{label}</span>
+                <span className="w-full truncate text-center text-[10px] text-fg-faint">{demoEmail}</span>
+              </button>
             ))}
           </div>
-          <dl className="mt-3 space-y-0.5 text-[11px] text-fg-muted">
-            {DEMO_ACCOUNTS.map((a) => (
-              <div key={a.email} className="flex justify-between gap-3">
-                <dt>{a.label}</dt>
-                <dd className="num text-fg">{a.email}</dd>
-              </div>
-            ))}
-            <div className="flex justify-between gap-3 border-t border-line-subtle pt-1">
-              <dt>Password</dt>
-              <dd className="num text-fg">{DEMO_PASSWORD}</dd>
-            </div>
-          </dl>
+          <p className="mt-3 text-center text-[11px] text-fg-faint">
+            Password for all demo accounts: <span className="num text-fg-muted">{DEMO_PASSWORD}</span>
+          </p>
         </div>
       )}
     </>

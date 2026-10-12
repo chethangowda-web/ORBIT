@@ -180,5 +180,6 @@ async def test_chat_query_agent_failure_safe_handling(
         res = response.json()
         assert res["success"] is True
         data = res["data"]
-        assert "An error occurred" in data["response"]
+        assert "something went wrong" in data["response"].lower()
+        assert "database lock" not in data["response"].lower(), "internal error text must not reach the user"
         assert data["needs_confirmation"] is False

@@ -157,6 +157,9 @@ Per active user: `user_id, display_name, email, role, assigned_tasks, completed_
 
 ---
 
+### `GET /admin/integrations` (manager, admin)
+Is each integration connected and in use? Booleans and counts only, no secrets, addresses or message text: `google_chat { verification_enabled, audience_configured, service_account_configured, events_24h, last_event_at, linked_users, dm_ready_users, deliveries_24h }`, `email { enabled, deliveries_24h }`, `llm { configured, model, circuit_open, classified_24h }`. Shown on the Admin screen's Integrations tab.
+
 ## Chat
 
 ### `POST /chat/webhook`
@@ -169,10 +172,10 @@ Authentication:
 Events: `MESSAGE`, `CARD_CLICKED` (Confirm, Cancel, Complete), `ADDED_TO_SPACE`, `APP_HOME`. `MESSAGE` and `CARD_CLICKED` are idempotent: a redelivered event returns the first response and never re-runs tools. Unknown card actions are ignored. Errors reach the user only as a generic message with a reference id.
 
 ### `POST /chat/query`
-Dashboard agent endpoint. Body `{ message (1 to 2000 chars), thread_id? (<=100), confirmed? }`. Threads are namespaced per user, so one user can never read or continue another's conversation. Returns `{ response, thread_id, message_id, needs_confirmation, referenced_task_id, referenced_tasks, suggested_actions, metadata: { request_id, active_agent, agents_invoked, intent, confidence, tool_calls_made, node_durations_ms, total_duration_ms, status } }`.
+Dashboard agent endpoint. Body `{ message (1 to 2000 chars), thread_id? (<=100), confirmed? }`. Threads are namespaced per user, so one user can never read or continue another's conversation. Returns `{ response, thread_id, message_id, needs_confirmation, referenced_task_id, referenced_tasks, suggested_actions, metadata: { request_id, active_agent, agents_invoked, intent, confidence, tool_calls_made, node_durations_ms, total_duration_ms, classifier, steps, status } }`. `classifier` says how the intent was decided (`llm`, `rules`, or `flow` for a yes/cancel answer). `steps` is the ordered workflow: `[{ node, duration_ms, tools?, intent?, confidence?, classifier?, awaiting_confirmation? }]`, with each tool listed on the node that called it.
 
 ### `GET /chat/traces?limit&offset`, `GET /chat/traces/{id}`
-Your own agent runs only (another user's trace id returns 404).
+Your own agent runs only (another user's trace id returns 404). Each run includes `classifier` and `steps` as above; the dashboard's Agent workflow screen draws them. Runs saved before steps existed have `steps: []` and are rebuilt from `agents_invoked`, `node_durations_ms` and `tool_calls_made`.
 
 ---
 

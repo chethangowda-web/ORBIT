@@ -7,47 +7,38 @@ import { Button, IconButton } from "@/components/ui/Button";
 import { RunStatusBadge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Primitives";
 import { useAgent, type ChatMessage } from "@/lib/agent-context";
-import { Waterfall } from "./Waterfall";
+import { WorkflowDiagram } from "./WorkflowDiagram";
 import { ChatText } from "@/lib/chat-text";
 import { AGENT_LABEL } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 import { formatMs, timeAgo } from "@/lib/format";
 import { useTraces } from "@/lib/hooks";
+import { agentName, normalizeSteps } from "@/lib/workflow";
 import type { AgentExecutionTrace, ChatExecutionMetadata } from "@/types";
 
-function TraceDetails({ metadata }: { metadata: ChatExecutionMetadata }) {
-  const path = metadata.agents_invoked?.map((a) => AGENT_LABEL[a] ?? a).join(" > ") || metadata.active_agent || "supervisor";
+function TraceDetails({ metadata, request, defaultOpen }: { metadata: ChatExecutionMetadata; request?: string; defaultOpen: boolean }) {
+  const steps = normalizeSteps(metadata);
+  const handler = steps.filter((s) => s.node !== "supervisor").map((s) => agentName(s.node)).join(" > ");
   return (
-    <details className="group mt-2 border-t border-line-subtle pt-1.5 text-[10px]">
+    <details className="group mt-2 border-t border-line-subtle pt-1.5 text-[10px]" open={defaultOpen}>
       <summary className="flex cursor-pointer list-none items-center justify-between text-fg-faint hover:text-fg-muted">
         <span className="flex items-center gap-1">
           <Sparkles className="h-3 w-3" aria-hidden />
-          <span className="num">{path}</span>
+          <span>How ORBIT handled this{handler ? ` · ${handler}` : ""}</span>
         </span>
         <span className="num flex items-center gap-1">
           {formatMs(metadata.total_duration_ms)}
           <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-180" aria-hidden />
         </span>
       </summary>
-      <div className="mt-1.5 space-y-1 text-fg-muted">
-        {metadata.intent && (
-          <p>
-            Intent <span className="num text-fg">{metadata.intent}</span>
-            {metadata.confidence != null && <span className="num"> ({Math.round(metadata.confidence * 100)}%)</span>}
-          </p>
-        )}
-        {metadata.tool_calls_made.length > 0 && (
-          <p>
-            Tools <span className="num text-fg">{metadata.tool_calls_made.join(", ")}</span>
-          </p>
-        )}
-        <Waterfall durations={metadata.node_durations_ms ?? {}} total={metadata.total_duration_ms} />
+      <div className="mt-2">
+        <WorkflowDiagram run={metadata} request={request} />
       </div>
     </details>
   );
 }
 
-function Message({ message, disabled, onAsk }: { message: ChatMessage; disabled: boolean; onAsk: (text: string, confirmed?: boolean) => void }) {
+function Message({ message, request, latest, disabled, onAsk }: { message: ChatMessage; request?: string; latest: boolean; disabled: boolean; onAsk: (text: string, confirmed?: boolean) => void }) {
   const mine = message.sender === "user";
   return (
     <div className={cn("flex flex-col", mine ? "items-end" : "items-start")}>
@@ -96,7 +87,7 @@ function Message({ message, disabled, onAsk }: { message: ChatMessage; disabled:
           </ul>
         )}
 
-        {!mine && message.metadata && <TraceDetails metadata={message.metadata} />}
+        {!mine && message.metadata && <TraceDetails metadata={message.metadata} request={request} defaultOpen={latest} />}
       </div>
 
       {!mine && message.suggestedActions && message.suggestedActions.length > 0 && !message.needsConfirmation && (
@@ -137,13 +128,28 @@ function ChatPanel() {
   return (
     <>
       <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3" aria-live="polite">
-        {messages.map((m) => (
-          <Message key={m.id} message={m} disabled={sending} onAsk={(text, confirmed) => void ask(text, { confirmed })} />
-        ))}
+        {messages.map((m, i) => {
+          const previous = messages[i - 1];
+          const request = previous && previous.sender === "user" ? previous.text : undefined;
+          const lastWithRun = messages.map((x) => Boolean(x.metadata)).lastIndexOf(true);
+          return (
+            <Message
+              key={m.id}
+              message={m}
+              request={request}
+              latest={i === lastWithRun}
+              disabled={sending}
+              onAsk={(text, confirmed) => void ask(text, { confirmed })}
+            />
+          );
+        })}
         {sending && (
-          <div className="flex items-center gap-2 text-xs text-fg-faint" role="status">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-info" aria-hidden />
-            Agents are working
+          <div className="rounded-control border border-line bg-surface-2 p-2.5 text-xs text-fg-muted" role="status">
+            <p className="flex items-center gap-2 font-medium text-fg">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-info" aria-hidden />
+              Agents are working
+            </p>
+            <p className="mt-1 text-[11px]">The Supervisor is reading your request, then the right agent will use your tasks to answer.</p>
           </div>
         )}
         <div ref={endRef} />
@@ -190,21 +196,15 @@ function RunRow({ run }: { run: AgentExecutionTrace }) {
           <RunStatusBadge status={run.status} />
         </div>
         <div className="mt-1 flex items-center justify-between text-[11px] text-fg-faint">
-          <span className="truncate">{run.agents_invoked.map((a) => AGENT_LABEL[a] ?? a).join(" > ") || "supervisor"}</span>
+          <span className="truncate">{run.agents_invoked.map((a) => AGENT_LABEL[a] ?? a).join(" > ") || "Supervisor"}</span>
           <span className="num shrink-0">
             {formatMs(run.total_duration_ms)} / {timeAgo(run.started_at)}
           </span>
         </div>
       </button>
       {expanded && (
-        <div className="px-3 pb-3 text-[11px] text-fg-muted">
-          {run.tool_calls_made.length > 0 && (
-            <p className="mb-1">
-              Tools <span className="num text-fg">{run.tool_calls_made.join(", ")}</span>
-            </p>
-          )}
-          {run.error_message && <p className="mb-1 text-danger">{run.error_message}</p>}
-          <Waterfall durations={run.node_durations_ms} total={run.total_duration_ms} />
+        <div className="px-3 pb-3">
+          <WorkflowDiagram run={run} />
         </div>
       )}
     </li>
@@ -228,7 +228,7 @@ function RunsPanel() {
     <div className="flex-1 overflow-y-auto">
       <ul>{data.items.map((run) => <RunRow key={run.id} run={run} />)}</ul>
       <Link href="/traces" className="block px-3 py-3 text-center text-[11px] text-accent hover:underline">
-        View all runs
+        Open the Agent workflow page
       </Link>
     </div>
   );

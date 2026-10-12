@@ -17,6 +17,7 @@ class AgentState(TypedDict, total=False):
     # === ROUTING ===
     intent: str                           # Classified intent enum value
     confidence: float                     # Intent classification confidence (0.0 to 1.0)
+    classifier: str                       # How the intent was decided: llm | rules | flow
     active_agent: str                     # Which specialist agent is running
 
     # === CONVERSATION HISTORY ===

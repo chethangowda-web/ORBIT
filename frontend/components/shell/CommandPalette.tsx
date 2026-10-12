@@ -52,7 +52,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       { id: "new-task", label: "New task", group: "Actions", keywords: ["create", "add"], run: () => openNewTask() },
       { id: "nav-board", label: "Go to Board", group: "Navigate", keywords: ["home", "kanban", "dashboard"], run: go("/") },
       { id: "nav-tasks", label: "Go to Tasks", group: "Navigate", keywords: ["table", "list"], run: go("/tasks") },
-      { id: "nav-traces", label: "Go to Agent runs", group: "Navigate", keywords: ["traces", "logs"], run: go("/traces") },
+      { id: "nav-traces", label: "Go to Agent workflow", group: "Navigate", keywords: ["traces", "logs"], run: go("/traces") },
       { id: "nav-profile", label: "Go to Profile", group: "Navigate", keywords: ["settings", "account"], run: go("/profile") },
     ];
     if (isManager) {

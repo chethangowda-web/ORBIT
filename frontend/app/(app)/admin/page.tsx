@@ -3,7 +3,7 @@
 import React, { Suspense, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, CalendarClock, Mail, Play, Users } from "lucide-react";
+import { AlertCircle, Bot, CalendarClock, CheckCircle2, CircleDashed, MessageSquare, Mail, Play, Users } from "lucide-react";
 import { Badge, type Tone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { CompactSelect } from "@/components/ui/Field";
@@ -16,16 +16,88 @@ import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import { NOTIFICATION_TYPE_LABEL, ROLE_LABEL } from "@/lib/constants";
 import { formatDateTime, timeAgo } from "@/lib/format";
-import { keys, useNotifications, useScheduler } from "@/lib/hooks";
+import { keys, useIntegrations, useNotifications, useScheduler } from "@/lib/hooks";
 import type { UserRole } from "@/types";
 
-type TabId = "scheduler" | "notifications" | "users";
+type TabId = "integrations" | "scheduler" | "notifications" | "users";
 
 const JOBS = [
   { id: "briefing", label: "Morning briefing", confirm: "Send today's briefing to every active user who has not opted out?" },
   { id: "overdue", label: "Overdue alerts", confirm: "Send overdue-task alerts to every assignee with late work?" },
   { id: "weekly", label: "Weekly summary", confirm: "Send the weekly summary to all managers and admins?" },
 ] as const;
+
+function StatusRow({ label, ok, value, hint }: { label: string; ok?: boolean; value: React.ReactNode; hint?: string }) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-2 text-[12.5px]">
+      <div className="min-w-0">
+        <p className="text-fg-muted">{label}</p>
+        {hint && <p className="text-[11px] text-fg-faint">{hint}</p>}
+      </div>
+      <p className={cn("flex shrink-0 items-center gap-1.5 text-right font-medium", ok === undefined ? "text-fg" : ok ? "text-ok" : "text-warn")}>
+        {ok !== undefined && (ok ? <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> : <CircleDashed className="h-3.5 w-3.5" aria-hidden />)}
+        {value}
+      </p>
+    </div>
+  );
+}
+
+const deliveries = (d: Record<string, number>) => `${d.sent ?? 0} sent · ${d.failed ?? 0} failed · ${d.skipped ?? 0} skipped`;
+
+function IntegrationsTab() {
+  const { data, isLoading, error, refetch } = useIntegrations();
+  if (error) return <ErrorState title="Could not load integration status" error={error} onRetry={() => void refetch()} />;
+  if (isLoading || !data) return <Skeleton className="h-64 w-full" />;
+
+  const chat = data.google_chat;
+  const active = chat.events_24h > 0;
+  const ready = chat.verification_enabled && chat.audience_configured;
+  const classified = Object.entries(data.llm.classified_24h)
+    .filter(([key]) => key !== "unknown")
+    .map(([key, n]) => `${key === "llm" ? "Gemini" : key === "rules" ? "rules" : key} ${n}`)
+    .join(" · ");
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <Panel className="lg:col-span-2">
+        <PanelHeader
+          title="Google Chat"
+          description="The bot answers in Chat and sends direct messages, using the same tasks as this dashboard."
+          icon={<MessageSquare className="h-4 w-4" />}
+          actions={<Badge tone={active ? "ok" : ready ? "info" : "warn"}>{active ? "Connected and in use" : ready ? "Ready, no messages in 24 hours" : "Needs setup"}</Badge>}
+        />
+        <div className="grid gap-x-8 divide-y divide-line-subtle px-4 md:grid-cols-2 md:divide-y-0">
+          <div className="divide-y divide-line-subtle">
+            <StatusRow label="Request verification" ok={chat.verification_enabled} value={chat.verification_enabled ? "On" : "Off"} hint="Only requests signed by Google are accepted" />
+            <StatusRow label="Verification audience" ok={chat.audience_configured} value={chat.audience_configured ? "Set" : "Missing"} />
+            <StatusRow label="Service account for direct messages" ok={chat.service_account_configured} value={chat.service_account_configured ? "Configured" : "Missing"} />
+          </div>
+          <div className="divide-y divide-line-subtle">
+            <StatusRow label="Messages received, last 24 hours" value={chat.events_24h} />
+            <StatusRow label="Last message" value={chat.last_event_at ? timeAgo(chat.last_event_at) : "None yet"} />
+            <StatusRow label="People linked to Chat" value={`${chat.linked_users} (${chat.dm_ready_users} can receive direct messages)`} />
+          </div>
+        </div>
+        <p className="border-t border-line-subtle px-4 py-2.5 text-[11px] text-fg-faint">Notifications, last 24 hours: {deliveries(chat.deliveries_24h)}</p>
+      </Panel>
+
+      <Panel>
+        <PanelHeader title="AI model" description="Understands requests and writes plans." icon={<Bot className="h-4 w-4" />} actions={<Badge tone={data.llm.configured && !data.llm.circuit_open ? "ok" : "warn"}>{!data.llm.configured ? "No API key" : data.llm.circuit_open ? "Paused (failing)" : "Available"}</Badge>} />
+        <div className="divide-y divide-line-subtle px-4">
+          <StatusRow label="Model" value={<span className="num">{data.llm.model.replace("gemini/", "")}</span>} />
+          <StatusRow label="Requests understood, last 24 hours" value={classified || "None yet"} hint="Built-in rules answer when the model is slow or unavailable" />
+        </div>
+      </Panel>
+
+      <Panel>
+        <PanelHeader title="Email" description="Optional copies of task notifications." icon={<Mail className="h-4 w-4" />} actions={<Badge tone={data.email.enabled ? "ok" : "muted"}>{data.email.enabled ? "Enabled" : "Not configured"}</Badge>} />
+        <div className="divide-y divide-line-subtle px-4">
+          <StatusRow label="Deliveries, last 24 hours" value={data.email.enabled ? deliveries(data.email.deliveries_24h) : "Off"} hint={data.email.enabled ? undefined : "Set the SMTP variables on the server to turn this on"} />
+        </div>
+      </Panel>
+    </div>
+  );
+}
 
 function SchedulerTab() {
   const toast = useToast();
@@ -269,16 +341,17 @@ function AdminScreen() {
   const { isAdmin } = useAuth();
 
   const tabs: { id: TabId; label: string }[] = [
+    { id: "integrations", label: "Integrations" },
     { id: "scheduler", label: "Scheduler" },
     { id: "notifications", label: "Notifications" },
     ...(isAdmin ? [{ id: "users" as const, label: "Users" }] : []),
   ];
   const requested = params.get("tab") as TabId | null;
-  const active = tabs.find((t) => t.id === requested)?.id ?? "scheduler";
+  const active = tabs.find((t) => t.id === requested)?.id ?? "integrations";
 
   return (
     <div className="mx-auto max-w-5xl">
-      <PageHeader title="Admin" description="Scheduler, delivery log and access control." />
+      <PageHeader title="Admin" description="Integrations, scheduled jobs, delivery log and access control." />
       <div role="tablist" aria-label="Admin sections" className="mb-4 flex gap-1 border-b border-line">
         {tabs.map((t) => (
           <button
@@ -294,6 +367,7 @@ function AdminScreen() {
         ))}
       </div>
       <div role="tabpanel">
+        {active === "integrations" && <IntegrationsTab />}
         {active === "scheduler" && <SchedulerTab />}
         {active === "notifications" && <NotificationsTab />}
         {active === "users" && isAdmin && <UsersTab />}
