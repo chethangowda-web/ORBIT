@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ArrowDown, ArrowRight, Lock, MessageSquare, Users, Wrench } from "lucide-react";
+import { Lock, Orbit } from "lucide-react";
 import { Panel, PanelHeader, Skeleton } from "@/components/ui/Primitives";
 import { cn } from "@/lib/cn";
 import { formatMs } from "@/lib/format";
@@ -11,7 +11,17 @@ import { AGENT_ICON } from "./WorkflowDiagram";
 
 const MIX_LABEL: Record<string, string> = { llm: "by AI", quick: "by quick check", rules: "by quick check", flow: "from your answers" };
 
-/** Your ORBIT team with live numbers: who does what and how much each has helped. */
+const SIZE = 400;
+const CENTER = SIZE / 2;
+const RING = 150;
+
+/** Position of helper `index` on the ring, starting at the top and going clockwise. */
+function place(index: number, count: number) {
+  const angle = -Math.PI / 2 + (index * 2 * Math.PI) / count;
+  return { x: CENTER + RING * Math.cos(angle), y: CENTER + RING * Math.sin(angle) };
+}
+
+/** ORBIT's team as a small solar system: the Coordinator in the middle, each helper on the ring around it. */
 export function AgentOverview({ runs, loading }: { runs: AgentExecutionTrace[] | undefined; loading: boolean }) {
   const summary = summarizeRuns(runs ?? []);
   const CoordinatorIcon = AGENT_ICON.supervisor;
@@ -19,80 +29,124 @@ export function AgentOverview({ runs, loading }: { runs: AgentExecutionTrace[] |
     .filter(([key]) => key !== "unknown")
     .map(([key, count]) => `${count} ${MIX_LABEL[key] ?? key}`)
     .join(" · ");
+  const pct = (n: number) => `${(n / SIZE) * 100}%`;
 
   return (
     <Panel className="mb-4">
       <PanelHeader
         title="Your ORBIT team"
-        description="Every request goes to the Coordinator, who hands it to the right helper. Helpers only see what you are allowed to see."
-        icon={<Users className="h-4 w-4" />}
+        description="Every request reaches the Coordinator at the centre, who sends it to the right helper. Helpers only see what you are allowed to see."
+        icon={<Orbit className="h-4 w-4" />}
       />
-      <div className="space-y-2 p-4">
-        <div className="flex flex-col items-stretch gap-2 md:flex-row md:items-center">
-          <div className="flex items-center gap-2 rounded-control border border-line bg-surface-2 px-3 py-2.5 md:w-56">
-            <MessageSquare className="h-4 w-4 shrink-0 text-fg-muted" aria-hidden />
-            <div>
-              <p className="text-xs font-semibold text-fg">Your request</p>
-              <p className="text-[11px] text-fg-muted">From Google Chat or this page</p>
-            </div>
-          </div>
-          <ArrowRight className="hidden h-4 w-4 shrink-0 text-fg-faint md:block" aria-hidden />
-          <ArrowDown className="mx-auto h-4 w-4 text-fg-faint md:hidden" aria-hidden />
-          <div className="flex-1 rounded-control border border-accent/40 bg-accent/5 px-3 py-2.5">
-            <div className="flex items-center gap-2">
-              <CoordinatorIcon className="h-4 w-4 shrink-0 text-accent" aria-hidden />
-              <p className="text-xs font-semibold text-fg">Coordinator</p>
-              <span className="num ml-auto text-[11px] text-fg-muted">
-                {loading ? "" : summary.total === 0 ? "No requests yet" : `${summary.total} recent request${summary.total === 1 ? "" : "s"}`}
-              </span>
-            </div>
-            <p className="mt-1 text-[11px] text-fg-muted">
-              {AGENT_ROLE.supervisor}. It uses AI, with a quick backup when the AI is busy.
-              {mix && <span className="num text-fg"> Understood {mix}.</span>}
-            </p>
-          </div>
+      {loading ? (
+        <div className="p-4">
+          <Skeleton className="h-72 w-full" />
         </div>
+      ) : (
+        <div className="grid items-center gap-6 p-4 lg:grid-cols-[minmax(0,420px)_1fr]">
+          <div role="img" aria-label="Map of ORBIT's team: the Coordinator in the middle with five helpers around it" className="relative mx-auto aspect-square w-full max-w-[420px]">
+            <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="absolute inset-0 h-full w-full" aria-hidden>
+              <defs>
+                <radialGradient id="orbit-core" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="rgb(var(--accent))" stopOpacity="0.35" />
+                  <stop offset="100%" stopColor="rgb(var(--accent))" stopOpacity="0" />
+                </radialGradient>
+              </defs>
+              <circle cx={CENTER} cy={CENTER} r={RING + 40} fill="url(#orbit-core)" opacity="0.5" />
+              <circle cx={CENTER} cy={CENTER} r={RING} fill="none" className="stroke-line" strokeWidth="1.5" strokeDasharray="3 7" />
+              <circle cx={CENTER} cy={CENTER} r={RING - 70} fill="none" className="stroke-line-subtle" strokeWidth="1" />
+              {SPECIALISTS.map((node, i) => {
+                const { x, y } = place(i, SPECIALISTS.length);
+                const latest = summary.lastAgent === node;
+                return (
+                  <line
+                    key={node}
+                    x1={CENTER}
+                    y1={CENTER}
+                    x2={x}
+                    y2={y}
+                    className={latest ? "stroke-accent" : "stroke-line"}
+                    strokeWidth={latest ? 2 : 1}
+                    strokeDasharray={latest ? "6 6" : undefined}
+                  >
+                    {latest && <animate attributeName="stroke-dashoffset" from="24" to="0" dur="1.2s" repeatCount="indefinite" />}
+                  </line>
+                );
+              })}
+            </svg>
 
-        <p className="flex items-center justify-center gap-1.5 py-1 text-[11px] text-fg-faint">
-          <ArrowDown className="h-3.5 w-3.5" aria-hidden /> hands each request to one of
-        </p>
+            <div
+              className="absolute flex h-24 w-24 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full border-2 border-accent/60 bg-surface-1 text-center shadow-lg"
+              style={{ left: pct(CENTER), top: pct(CENTER) }}
+            >
+              <CoordinatorIcon className="h-5 w-5 text-accent" aria-hidden />
+              <span className="mt-0.5 text-[11px] font-semibold text-fg">Coordinator</span>
+              <span className="num text-[10px] text-fg-muted">{summary.total === 0 ? "no requests yet" : `${summary.total} request${summary.total === 1 ? "" : "s"}`}</span>
+            </div>
 
-        {loading ? (
-          <Skeleton className="h-28 w-full" />
-        ) : (
-          <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            {SPECIALISTS.map((node) => {
+            {SPECIALISTS.map((node, i) => {
+              const { x, y } = place(i, SPECIALISTS.length);
               const Icon = AGENT_ICON[node];
               const stat = summary.byAgent[node];
               const latest = summary.lastAgent === node;
               return (
-                <li key={node} className={cn("rounded-control border p-3", latest ? "border-accent bg-accent/5" : "border-line bg-surface-2")}>
-                  <div className="flex items-center gap-2">
-                    <Icon className={cn("h-4 w-4 shrink-0", latest ? "text-accent" : "text-fg-muted")} aria-hidden />
-                    <p className="text-xs font-semibold text-fg">{agentName(node)}</p>
-                    {latest && <span className="ml-auto rounded-full bg-accent/15 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-accent">Latest</span>}
-                  </div>
-                  <p className="mt-1.5 text-[11px] leading-snug text-fg-muted">{AGENT_ROLE[node]}</p>
-                  <p className="num mt-2 text-[11px] text-fg-faint">
-                    {stat ? `Helped ${stat.runs} time${stat.runs === 1 ? "" : "s"} · usually ${formatMs(stat.avgMs)}` : "Hasn't helped yet"}
-                  </p>
-                </li>
+                <div key={node} className="absolute flex w-24 -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center" style={{ left: pct(x), top: pct(y) }}>
+                  <span className="relative flex h-12 w-12 items-center justify-center">
+                    {latest && <span className="absolute inset-0 animate-ping rounded-full bg-accent/30 motion-reduce:animate-none" aria-hidden />}
+                    <span
+                      className={cn(
+                        "relative flex h-12 w-12 items-center justify-center rounded-full border-2 bg-surface-1",
+                        latest ? "border-accent text-accent" : stat ? "border-fg-faint text-fg" : "border-line text-fg-faint"
+                      )}
+                    >
+                      <Icon className="h-5 w-5" aria-hidden />
+                    </span>
+                    {stat && (
+                      <span className="num absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-white">
+                        {stat.runs}
+                      </span>
+                    )}
+                  </span>
+                  <span className="relative mt-1 rounded bg-surface-1/80 px-1 text-[11px] font-medium leading-tight text-fg">{agentName(node)}</span>
+                </div>
               );
             })}
-          </ul>
-        )}
+          </div>
 
-        <p className="flex items-center justify-center gap-1.5 py-1 text-[11px] text-fg-faint">
-          <Lock className="h-3.5 w-3.5" aria-hidden /> and only act on what you are allowed to see
-        </p>
-        <div className="flex flex-col items-start gap-2 rounded-control border border-line bg-surface-2 px-3 py-2.5 text-[11px] text-fg-muted sm:flex-row sm:items-center">
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-fg">
-            <Wrench className="h-3.5 w-3.5 text-fg-muted" aria-hidden /> What they can do
-          </span>
-          <span>add, change, finish and find tasks, plan your day, check who is busy</span>
-          <span className="sm:ml-auto">Everything is saved safely, and ORBIT remembers the conversation.</span>
+          <div className="space-y-3">
+            <p className="text-[12px] leading-relaxed text-fg-muted">
+              {AGENT_ROLE.supervisor}. It uses AI, with a quick backup when the AI is busy.
+              {mix && <span className="num text-fg"> Understood {mix}.</span>}
+            </p>
+            <ul className="divide-y divide-line-subtle rounded-control border border-line bg-surface-2">
+              {SPECIALISTS.map((node) => {
+                const Icon = AGENT_ICON[node];
+                const stat = summary.byAgent[node];
+                const latest = summary.lastAgent === node;
+                return (
+                  <li key={node} className="flex items-start gap-3 px-3 py-2.5">
+                    <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", latest ? "text-accent" : "text-fg-muted")} aria-hidden />
+                    <div className="min-w-0 flex-1">
+                      <p className="flex items-center gap-2 text-xs font-semibold text-fg">
+                        {agentName(node)}
+                        {latest && <span className="rounded-full bg-accent/15 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-accent">Latest</span>}
+                      </p>
+                      <p className="text-[11px] leading-snug text-fg-muted">{AGENT_ROLE[node]}</p>
+                    </div>
+                    <p className="num shrink-0 text-right text-[11px] text-fg-faint">
+                      {stat ? `Helped ${stat.runs} time${stat.runs === 1 ? "" : "s"}` : "Hasn't helped yet"}
+                      {stat && <span className="block">usually {formatMs(stat.avgMs)}</span>}
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="flex items-center gap-1.5 text-[11px] text-fg-faint">
+              <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden /> Helpers only act on what you are allowed to see. Everything is saved safely, and ORBIT remembers the conversation.
+            </p>
+          </div>
         </div>
-      </div>
+      )}
     </Panel>
   );
 }
