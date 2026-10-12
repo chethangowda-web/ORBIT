@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, ShieldCheck, User, UserCog } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
+import { ApiError, apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
 
 const DEMO_ACCOUNTS = [
@@ -26,6 +27,21 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(params.get("expired") ? "Your session expired. Please sign in again." : null);
   const [busy, setBusy] = useState(false);
+  const [waking, setWaking] = useState(false);
+
+  // The free hosting plan puts the server to sleep when idle. Wake it as soon as the page opens, so by the
+  // time someone has typed a password it is ready, and say so if it takes a while.
+  useEffect(() => {
+    const notice = window.setTimeout(() => setWaking(true), 2500);
+    apiClient
+      .get("/health", { timeout: 90_000 })
+      .catch(() => undefined)
+      .finally(() => {
+        window.clearTimeout(notice);
+        setWaking(false);
+      });
+    return () => window.clearTimeout(notice);
+  }, []);
 
   useEffect(() => {
     if (status === "authenticated") router.replace("/");
@@ -34,11 +50,22 @@ function LoginForm() {
   const signIn = async (nextEmail: string, nextPassword: string) => {
     setBusy(true);
     setError(null);
-    try {
-      await login(nextEmail, nextPassword);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not sign in.");
-      setBusy(false);
+    // A request that never reached the server (status 0) usually means it was still waking up: try again.
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        await login(nextEmail, nextPassword);
+        return;
+      } catch (e) {
+        const unreachable = e instanceof ApiError && e.status === 0;
+        if (unreachable && attempt < 3) {
+          setWaking(true);
+          continue;
+        }
+        setWaking(false);
+        setError(e instanceof Error ? e.message : "Could not sign in.");
+        setBusy(false);
+        return;
+      }
     }
   };
 
@@ -55,6 +82,12 @@ function LoginForm() {
     <>
       <h1 className="text-lg font-semibold text-fg">Welcome back</h1>
       <p className="mb-5 mt-1 text-[13px] text-fg-muted">Sign in to your workspace.</p>
+
+      {waking && !error && (
+        <p role="status" className="mb-4 rounded-control border border-line bg-surface-2 p-3 text-xs text-fg-muted">
+          Waking up the ORBIT server. After a quiet spell the first sign-in can take up to a minute.
+        </p>
+      )}
 
       {error && (
         <div role="alert" className="mb-4 flex items-start gap-2 rounded-control border border-danger/30 bg-danger/10 p-3 text-xs text-fg">
