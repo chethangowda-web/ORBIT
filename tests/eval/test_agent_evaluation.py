@@ -33,7 +33,7 @@ async def test_eval_all_eight_intents_end_to_end(
     )
     assert res_create.status_code == 200
     create_data = res_create.json()["data"]
-    assert "created" in create_data["response"].lower()
+    assert "added" in create_data["response"].lower()
     created_task_id = create_data["metadata"].get("referenced_tasks", [{}])[0].get("id") if create_data.get("metadata") else None
     results["CREATE_TASK"] = "PASS"
 
@@ -137,7 +137,7 @@ async def test_eval_multi_turn_coreference_and_updates(
     )
     assert t1_res.status_code == 200
     t1_text = t1_res.json()["data"]["response"]
-    assert "created" in t1_text.lower()
+    assert "added" in t1_text.lower()
 
     # Turn 2: Follow-up: "Make it high priority"
     t2_res = await client.post(

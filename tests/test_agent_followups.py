@@ -180,7 +180,7 @@ async def test_mark_as_done_after_creating_a_task_completes_that_task(
 ):
     """The natural follow-up: no task is named, so it means the one just discussed."""
     created = await say(client, user_auth_headers, "create a task to send the invoice", "mark-done")
-    assert "created" in created["response"].lower()
+    assert "added" in created["response"].lower()
     done = await say(client, user_auth_headers, "mark as done", "mark-done")
     assert "completed" in done["response"].lower()
 

@@ -7,7 +7,7 @@ from agents.state import AgentState
 from db.base import local_today
 from services.llm import call_llm
 from services.week_plan import build_week_plan, format_week_plan
-from tools.format_tools import friendly
+from tools.format_tools import due_phrase, friendly
 from tools.task_tools import (
     get_overdue_tasks,
     get_tasks_due_today,
@@ -41,10 +41,10 @@ def _format_plan_response(ranked_items: list[tuple[dict[str, Any], str]]) -> str
     for idx, (task, reason) in enumerate(ranked_items[:5], 1):
         title = task.get("title", "Untitled")
         priority = str(task.get("priority", "MEDIUM")).split(".")[-1]
-        due = task.get("due_date") or "no due date"
+        due = due_phrase(task.get("due_date"))
         lines.append(f"*{idx}. {title}* ({friendly(priority)} priority)")
         lines.append(f"   • *Why:* {reason}")
-        lines.append(f"   • *Due:* {due}\n")
+        lines.append(f"   • {due.capitalize()}\n")
 
     lines.append("💡 Start with the first one and work down the list.")
     return "\n".join(lines)

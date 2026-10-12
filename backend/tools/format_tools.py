@@ -6,7 +6,61 @@ Builds interactive Google Chat Cards v2 and formatted Markdown text summaries.
 from typing import Any, Dict, List, Optional
 
 from services.card_actions import card_action
-from services.wording import friendly  # noqa: F401  (re-exported for the agents)
+from services.wording import due_phrase, friendly  # noqa: F401  (re-exported for the agents)
+
+
+QUICK_REPLIES = (
+    "Show my tasks",
+    "Plan my day",
+    "Plan my week",
+    "What is overdue?",
+    "Undo that",
+)
+
+
+def task_summary_line(task: Dict[str, Any]) -> str:
+    """One short line under a task title: "High priority · due Friday · with Sarah"."""
+    bits = [f"{friendly(task.get('priority', 'MEDIUM'))} priority", due_phrase(task.get("due_date"))]
+    assignee = task.get("assignee")
+    name = assignee.get("display_name") if isinstance(assignee, dict) else assignee
+    if name:
+        bits.append(f"with {name}")
+    return " · ".join(bits)
+
+
+def _task_buttons(task_id: str, status: str) -> List[Dict[str, Any]]:
+    """The one-tap actions under a task: finish, start, push to tomorrow, undo."""
+    status = status.split(".")[-1].upper()
+    params = [{"key": "task_id", "value": task_id}]
+    buttons: List[Dict[str, Any]] = []
+    if status != "DONE":
+        buttons.append({"text": "Done", "onClick": {"action": card_action("complete_task", params)}})
+        if status == "TODO":
+            buttons.append({"text": "Start", "onClick": {"action": card_action("start_task", params)}})
+        buttons.append({"text": "Due tomorrow", "onClick": {"action": card_action("snooze_task", params)}})
+    buttons.append({"text": "Undo", "onClick": {"action": card_action("undo_last", [])}})
+    return buttons
+
+
+def quick_reply_section(texts: List[str], thread_id: str = "") -> Dict[str, Any]:
+    """A row of suggested next messages. Pressing one sends that exact (allow-listed) text as the user."""
+    params_extra = [{"key": "thread_id", "value": thread_id}] if thread_id else []
+    return {
+        "widgets": [
+            {
+                "buttonList": {
+                    "buttons": [
+                        {
+                            "text": text,
+                            "onClick": {"action": card_action("quick_reply", [{"key": "text", "value": text}, *params_extra])},
+                        }
+                        for text in texts
+                        if text in QUICK_REPLIES
+                    ]
+                }
+            }
+        ]
+    }
 
 
 def format_task_card(task: Dict[str, Any]) -> Dict[str, Any]:
@@ -15,7 +69,7 @@ def format_task_card(task: Dict[str, Any]) -> Dict[str, Any]:
     title = task.get("title", "Untitled Task")
     priority = friendly(task.get("priority", "MEDIUM"))
     status = friendly(task.get("status", "TODO"))
-    due_date = str(task.get("due_date") or "No due date")
+    due_date = due_phrase(task.get("due_date")).capitalize()
     tags = task.get("tags", [])
     tags_str = ", ".join(tags) if tags else "None"
 
@@ -62,17 +116,9 @@ def format_task_card(task: Dict[str, Any]) -> Dict[str, Any]:
                                     }
                                 },
                             ],
-                        }
+                        },
+                        {"widgets": [{"buttonList": {"buttons": _task_buttons(task_id, str(task.get("status", "TODO")))}}]},
                     ],
-                    "fixedFooter": {
-                        "primaryButton": {
-                            "text": "Mark Complete",
-                            "color": {"red": 0.1, "green": 0.7, "blue": 0.3, "alpha": 1.0},
-                            "onClick": {
-                                "action": card_action("complete_task", [{"key": "task_id", "value": task_id}])
-                            },
-                        }
-                    },
                 },
             }
         ]
@@ -89,8 +135,7 @@ def format_task_list_text(tasks: List[Dict[str, Any]], title: str = "Tasks") -> 
         status_icon = "✅" if t.get("status") == "DONE" else "⏳" if t.get("status") == "IN_PROGRESS" else "⬜"
         prio = friendly(t.get("priority", "MEDIUM"))
         t_title = t.get("title", "Untitled")
-        due = t.get("due_date") or "no due date"
-        lines.append(f"{i}. {status_icon} *{t_title}*: {prio} priority, due {due}")
+        lines.append(f"{i}. {status_icon} *{t_title}*: {prio} priority, {due_phrase(t.get('due_date'))}")
 
     return "\n".join(lines)
 
@@ -110,11 +155,11 @@ def format_task_list_card(tasks: List[Dict[str, Any]], title: str = "Tasks") -> 
         task_id = str(t.get("id", ""))
         priority = friendly(t.get("priority", "MEDIUM"))
         status = friendly(t.get("status", "TODO"))
-        due = t.get("due_date") or "no due date"
+        due = due_phrase(t.get("due_date"))
         row: Dict[str, Any] = {
             "decoratedText": {
                 "text": f"<b>{t.get('title', 'Untitled')}</b>",
-                "bottomLabel": f"{priority} priority · {status} · due {due}",
+                "bottomLabel": f"{priority} priority · {status} · {due}",
                 "wrapText": True,
             }
         }

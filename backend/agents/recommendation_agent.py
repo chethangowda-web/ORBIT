@@ -10,7 +10,7 @@ from crud import users as user_crud
 from services.assignment import rank_assignees
 from services.llm import call_llm
 from tools.base import get_tool_session
-from tools.format_tools import friendly
+from tools.format_tools import due_phrase, friendly
 from tools.analytics_tools import get_task_stats
 from tools.task_tools import get_overdue_tasks
 from tools.user_tools import get_team_workload
@@ -24,7 +24,7 @@ def _format_overdue_response(tasks: list[dict[str, Any]]) -> str:
     lines = [f"⚠️ *Late tasks ({len(tasks)})*", "These are past their due date:\n"]
     for t in tasks:
         p_val = str(t.get('priority', 'MEDIUM')).split('.')[-1]
-        lines.append(f"• *{t.get('title')}* ({friendly(p_val)} priority, was due {t.get('due_date')})")
+        lines.append(f"• *{t.get('title')}* ({friendly(p_val)} priority, {due_phrase(t.get('due_date'))})")
     lines.append("\n💡 Tell me if any of these are done, or if a due date should move.")
     return "\n".join(lines)
 

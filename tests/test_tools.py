@@ -228,4 +228,9 @@ def test_format_task_card():
     assert card_body["header"]["title"] == "Deploy Next.js App"
     assert card_body["header"]["subtitle"] == "High priority • In progress"
     assert len(card_body["sections"][0]["widgets"]) == 3
-    assert card_body["fixedFooter"]["primaryButton"]["text"] == "Mark Complete"
+    buttons = [b["text"] for b in card_body["sections"][1]["widgets"][0]["buttonList"]["buttons"]]
+    assert buttons == ["Done", "Due tomorrow", "Undo"], "a task already under way has no Start button"
+    todo = format_task_card({**sample_task, "status": "TODO"})["cardsV2"][0]["card"]["sections"][1]["widgets"][0]["buttonList"]["buttons"]
+    assert [b["text"] for b in todo] == ["Done", "Start", "Due tomorrow", "Undo"]
+    done = format_task_card({**sample_task, "status": "DONE"})["cardsV2"][0]["card"]["sections"][1]["widgets"][0]["buttonList"]["buttons"]
+    assert [b["text"] for b in done] == ["Undo"]

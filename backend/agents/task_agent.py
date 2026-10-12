@@ -15,7 +15,7 @@ from tools.task_tools import (
 )
 from services.duplicate_check import check_for_duplicates, describe
 from services.undo import format_undo, undo_last_changes
-from tools.format_tools import friendly
+from tools.format_tools import due_phrase, friendly, task_summary_line
 from tools.user_tools import get_all_users
 
 HELP_TEXT = """*What ORBIT can do* 🚀
@@ -87,7 +87,7 @@ async def _handle_create_task(
 
     task_data = res.get("data", {})
     card = format_task_card(task_data)
-    text = f"✅ Created *{task_data.get('title')}*{similar_note}"
+    text = f"✅ Added *{task_data.get('title')}*\n{task_summary_line(task_data)}{similar_note}"
     return text, "card", card, str(task_data.get("id")) if task_data.get("id") else None
 
 
@@ -104,7 +104,9 @@ async def _handle_update_task(ctx: dict[str, Any], user_id: str, state_ref_id: A
                 task_id = matches[0].get("id")
             elif len(matches) > 1:
                 return (
-                    f"🤔 Multiple tasks match '{ctx.get('title_hint')}'. Please specify the exact task ID or unique title.",
+                    "🤔 Several tasks match '" + str(ctx.get('title_hint')) + "': "
+                    + ", ".join(f"*{m.get('title')}*" for m in matches[:5])
+                    + ". Which one do you mean? Tell me its full name.",
                     "text",
                     None,
                     None,
@@ -143,7 +145,7 @@ async def _handle_update_task(ctx: dict[str, Any], user_id: str, state_ref_id: A
         task_data["priority"] = p_val
         changes.append(f"priority is now *{friendly(p_val)}*")
     if ctx.get("due_date"):
-        changes.append(f"due date is now {task_data.get('due_date')}")
+        changes.append(f"it is now {due_phrase(task_data.get('due_date'))}")
     if ctx.get("assignee_name"):
         changes.append(f"it is now with *{ctx.get('assignee_name')}*")
     changes_str = ", ".join(changes) if changes else "details saved"
@@ -205,7 +207,7 @@ async def _handle_complete_task(ctx: dict[str, Any], user_id: str, state_ref_id:
     if not task_id:
         # Never guess: completing the wrong task is hard to notice and undo.
         return (
-            "🤔 Which task should I complete? Give me its title or ID (for example: 'complete the CRM deployment task').",
+            "🤔 Which task should I complete? Tell me its name, for example: 'complete the CRM deployment task'.",
             "text",
             None,
             None,
