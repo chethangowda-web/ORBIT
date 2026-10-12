@@ -13,6 +13,7 @@ from google.auth.transport.requests import Request as GoogleAuthRequest
 from google.oauth2 import id_token, service_account
 
 from config import settings
+from services.card_actions import card_action
 
 logger = logging.getLogger(__name__)
 
@@ -219,10 +220,7 @@ def build_task_card_v2(task_data: dict[str, Any], header_title: str = "ORBIT Tas
                                     {
                                         "text": "Mark Complete",
                                         "onClick": {
-                                            "action": {
-                                                "function": "complete_task",
-                                                "parameters": [{"key": "task_id", "value": task_id}],
-                                            }
+                                            "action": card_action("complete_task", [{"key": "task_id", "value": task_id}])
                                         },
                                     }
                                 ]
@@ -260,25 +258,19 @@ def build_confirmation_card_v2(
                                     {
                                         "text": "âœ… Confirm Deletion",
                                         "onClick": {
-                                            "action": {
-                                                "function": "confirm_delete_task",
-                                                "parameters": [
+                                            "action": card_action("confirm_delete_task", [
                                                     {"key": "task_id", "value": str(task_id)},
                                                     {"key": "thread_id", "value": str(thread_id)},
-                                                ],
-                                            }
+                                                ])
                                         },
                                     },
                                     {
                                         "text": "âŒ Cancel",
                                         "onClick": {
-                                            "action": {
-                                                "function": "cancel_action",
-                                                "parameters": [
+                                            "action": card_action("cancel_action", [
                                                     {"key": "task_id", "value": str(task_id)},
                                                     {"key": "thread_id", "value": str(thread_id)},
-                                                ],
-                                            }
+                                                ])
                                         },
                                     },
                                 ]

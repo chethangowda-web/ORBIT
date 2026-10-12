@@ -68,7 +68,7 @@ def test_task_list_card_has_done_button_per_open_task_only():
     card = format_task_list_card(tasks, title="Your tasks")
     widgets = card["cardsV2"][0]["card"]["sections"][0]["widgets"]
     assert "button" in widgets[0]["decoratedText"]
-    assert widgets[0]["decoratedText"]["button"]["onClick"]["action"]["parameters"] == [{"key": "task_id", "value": "a"}]
+    assert {"key": "task_id", "value": "a"} in widgets[0]["decoratedText"]["button"]["onClick"]["action"]["parameters"]
     assert "button" not in widgets[1]["decoratedText"]
     assert card["chat_text"] == "📋 *Your tasks* (2)"
 
@@ -173,3 +173,30 @@ async def test_pronouns_never_resolve_to_another_users_task_in_a_shared_thread(
     assert "Which task" in reply["text"]
     task = (await db_session.execute(select(Task).where(Task.title.ilike("%quarterly%")))).scalars().one()
     assert task.priority != "HIGH"
+
+
+async def test_done_button_works_when_google_reports_the_endpoint_address(client: AsyncClient, db_session, seed_test_user, monkeypatch):
+    """Add-on buttons carry the endpoint address as their function; the real action travels as a parameter."""
+    from config import settings
+
+    url = "https://orbit.example.com/api/chat/webhook"
+    monkeypatch.setattr(settings, "GOOGLE_CHAT_AUDIENCE", url)
+    task = await add_task(db_session, seed_test_user, title="Via address")
+
+    card = format_task_list_card([{"id": str(task.id), "title": "Via address", "status": "TODO"}])
+    action = card["cardsV2"][0]["card"]["sections"][0]["widgets"][0]["decoratedText"]["button"]["onClick"]["action"]
+    assert action["function"] == url, "Google can only call an https address"
+
+    payload = {
+        "commonEventObject": {"invokedFunction": action["function"], "parameters": {p["key"]: p["value"] for p in action["parameters"]}},
+        "chat": {
+            "user": {"name": "users/777", "displayName": "Tester", "email": seed_test_user.email},
+            "space": {"name": "spaces/DM1", "type": "DM"},
+            "eventTime": "2026-10-10T09:00:05Z",
+            "buttonClickedPayload": {},
+        },
+    }
+    reply = (await client.post("/api/chat/webhook", json=payload)).json()
+    assert "completed" in str(reply), reply
+    await db_session.refresh(task)
+    assert task.status == "DONE"

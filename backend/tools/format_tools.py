@@ -5,6 +5,7 @@ Builds interactive Google Chat Cards v2 and formatted Markdown text summaries.
 
 from typing import Any, Dict, List, Optional
 
+from services.card_actions import card_action
 from services.wording import friendly  # noqa: F401  (re-exported for the agents)
 
 
@@ -68,10 +69,7 @@ def format_task_card(task: Dict[str, Any]) -> Dict[str, Any]:
                             "text": "Mark Complete",
                             "color": {"red": 0.1, "green": 0.7, "blue": 0.3, "alpha": 1.0},
                             "onClick": {
-                                "action": {
-                                    "function": "complete_task",
-                                    "parameters": [{"key": "task_id", "value": task_id}],
-                                }
+                                "action": card_action("complete_task", [{"key": "task_id", "value": task_id}])
                             },
                         }
                     },
@@ -124,10 +122,7 @@ def format_task_list_card(tasks: List[Dict[str, Any]], title: str = "Tasks") -> 
             row["decoratedText"]["button"] = {
                 "text": "Done",
                 "onClick": {
-                    "action": {
-                        "function": "complete_task",
-                        "parameters": [{"key": "task_id", "value": task_id}],
-                    }
+                    "action": card_action("complete_task", [{"key": "task_id", "value": task_id}])
                 },
             }
         widgets.append(row)

@@ -24,6 +24,7 @@ from schemas.chat import (
 )
 import re
 from config import settings
+from services.card_actions import ACTION_KEY
 from services.google_chat import (
     build_confirmation_card_v2,
     build_task_card_v2,
@@ -395,8 +396,9 @@ async def _handle_card_click(
 ) -> dict[str, Any]:
     """Translate a card button press into the matching agent action."""
     space_id = event.space.name
-    action = event.action.actionMethodName or ""
     params = _card_params(event)
+    # The button's `function` may be the add-on endpoint address; the real name rides in a parameter.
+    action = params.get(ACTION_KEY) or event.action.actionMethodName or ""
     thread_id = space_id if _is_dm(event.space) else (params.get("thread_id") or space_id)
 
     if action in CONFIRM_ACTIONS:

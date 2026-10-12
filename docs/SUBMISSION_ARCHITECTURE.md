@@ -127,6 +127,23 @@ Known limits, stated plainly:
 
 > Reserved for the HiDevs Architecture Copilot output and your own evaluation. Not written by the assistant.
 
+**Diagram produced by the Copilot:**
+
+![Architecture diagram from the HiDevs Architecture Copilot](architecture-copilot.png)
+
+**Comparison with what was built** (facts checked against the code; edit freely):
+
+| Copilot diagram | As built |
+|---|---|
+| Five layers: communication, observability and evaluation, orchestration, external AI, data | Same layers; the build adds a scheduler for follow-ups and a tool-using agent beside the fixed specialists |
+| Supervisor routes to Task, Planning, Recommendation and Review agents | Same four, plus a multi-step tool agent and a memory step |
+| Deterministic tool gateway enforcing roles and validation | Roles are checked in the API and again inside every agent tool |
+| Autonomous scheduler "APScheduler / Celery Beat" | APScheduler with Redis locks; no Celery |
+| Observability with Prometheus, Grafana, LangSmith, OpenTelemetry | Execution traces in Postgres plus an optional Prometheus endpoint; no Grafana, LangSmith or OpenTelemetry |
+| AI evaluation layer (RAGAS, DeepEval) | Classifier and agent evaluation datasets run as tests; no RAGAS or DeepEval |
+| Postgres with pgvector | Plain Postgres; no vector search is needed yet |
+| LLM gateway over OpenAI, Anthropic and Gemini | LiteLLM with a Gemini model chain and a rules fallback |
+
 **Prompt given to the Copilot:**
 
 _(paste)_
