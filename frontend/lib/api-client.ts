@@ -106,6 +106,7 @@ export const api = {
   auth: {
     login: async (email: string, password: string) =>
       unwrap<LoginResult>(await apiClient.post("/auth/token", { email, password })),
+    refresh: async () => unwrap<LoginResult>(await apiClient.post("/auth/refresh", {})),
     logout: async () => {
       await apiClient.post("/auth/logout", {}, { withCredentials: true });
     },

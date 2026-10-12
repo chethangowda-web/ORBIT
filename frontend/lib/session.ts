@@ -13,6 +13,7 @@ export interface TokenClaims {
   email?: string;
   role?: UserRole;
   exp?: number;
+  iat?: number;
 }
 
 export function decodeTokenClaims(token: string | undefined | null): TokenClaims | null {
