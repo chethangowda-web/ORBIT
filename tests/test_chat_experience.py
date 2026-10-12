@@ -35,7 +35,7 @@ def test_lists_never_show_raw_dates_or_the_phrase_due_no_due_date():
     tasks = [{"id": "a", "title": "A", "priority": "HIGH", "status": "TODO", "due_date": local_today().isoformat()}, {"id": "b", "title": "B", "priority": "LOW", "status": "TODO"}]
     text = format_task_list_text(tasks)
     assert "due today" in text and "no due date" in text and "due no due date" not in text and "2026-" not in text
-    label = format_task_list_card(tasks)["cardsV2"][0]["card"]["sections"][0]["widgets"][1]["decoratedText"]["bottomLabel"]
+    label = format_task_list_card(tasks)["cardsV2"][0]["card"]["sections"][0]["widgets"][2]["decoratedText"]["bottomLabel"]
     assert "due no due date" not in label
 
 

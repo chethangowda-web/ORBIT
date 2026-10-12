@@ -144,7 +144,7 @@ MAX_CARD_TASKS = 8
 
 
 def format_task_list_card(tasks: List[Dict[str, Any]], title: str = "Tasks") -> Dict[str, Any]:
-    """Google Chat Card v2 listing tasks, each with a one-click Complete button.
+    """Google Chat Card v2 listing tasks, each open one with one-tap Done (and Start, while it is still to do) buttons.
 
     The returned dict also carries ``chat_text``: the short line to send alongside the card
     (the full list is already in the card).
@@ -163,14 +163,14 @@ def format_task_list_card(tasks: List[Dict[str, Any]], title: str = "Tasks") -> 
                 "wrapText": True,
             }
         }
-        if status.lower() != "done" and t.get("status") != "DONE":
-            row["decoratedText"]["button"] = {
-                "text": "Done",
-                "onClick": {
-                    "action": card_action("complete_task", [{"key": "task_id", "value": task_id}])
-                },
-            }
         widgets.append(row)
+        raw_status = str(t.get("status") or "TODO").split(".")[-1].upper()
+        if raw_status != "DONE":
+            params = [{"key": "task_id", "value": task_id}]
+            buttons = [{"text": "Done", "onClick": {"action": card_action("complete_task", params)}}]
+            if raw_status == "TODO":
+                buttons.append({"text": "Start", "onClick": {"action": card_action("start_task", params)}})
+            widgets.append({"buttonList": {"buttons": buttons}})
     if len(tasks) > len(shown):
         widgets.append({"textParagraph": {"text": f"<i>and {len(tasks) - len(shown)} more in the ORBIT dashboard</i>"}})
 

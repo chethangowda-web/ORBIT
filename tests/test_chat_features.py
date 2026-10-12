@@ -67,16 +67,19 @@ def test_task_list_card_has_done_button_per_open_task_only():
     ]
     card = format_task_list_card(tasks, title="Your tasks")
     widgets = card["cardsV2"][0]["card"]["sections"][0]["widgets"]
-    assert "button" in widgets[0]["decoratedText"]
-    assert {"key": "task_id", "value": "a"} in widgets[0]["decoratedText"]["button"]["onClick"]["action"]["parameters"]
-    assert "button" not in widgets[1]["decoratedText"]
+    buttons = widgets[1]["buttonList"]["buttons"]
+    assert [b["text"] for b in buttons] == ["Done", "Start"], "a task still to do can be finished or started"
+    assert {"key": "task_id", "value": "a"} in buttons[0]["onClick"]["action"]["parameters"]
+    assert len(widgets) == 3 and "buttonList" not in widgets[2], "a finished task has no buttons"
+    working = format_task_list_card([{"id": "c", "title": "Under way", "priority": "LOW", "status": "IN_PROGRESS"}])["cardsV2"][0]["card"]["sections"][0]["widgets"]
+    assert [b["text"] for b in working[1]["buttonList"]["buttons"]] == ["Done"], "no Start once it is in progress"
     assert card["chat_text"] == "📋 *Your tasks* (2)"
 
 
 def test_task_list_card_truncates_long_lists():
     tasks = [{"id": str(i), "title": f"T{i}", "status": "TODO", "priority": "LOW"} for i in range(MAX_CARD_TASKS + 5)]
     widgets = format_task_list_card(tasks)["cardsV2"][0]["card"]["sections"][0]["widgets"]
-    assert len(widgets) == MAX_CARD_TASKS + 1
+    assert len(widgets) == MAX_CARD_TASKS * 2 + 1  # a row and its buttons per task, plus the note
     assert "5 more" in widgets[-1]["textParagraph"]["text"]
 
 
@@ -88,7 +91,7 @@ async def test_slash_tasks_replies_with_interactive_card(client: AsyncClient, db
     assert "Write the report" not in reply["text"]  # the card carries the list
     widgets = reply["cardsV2"][0]["card"]["sections"][0]["widgets"]
     assert "Write the report" in widgets[0]["decoratedText"]["text"]
-    assert "button" in widgets[0]["decoratedText"]
+    assert "buttonList" in widgets[1]
 
 
 async def test_command_id_from_chat_console_is_honoured(client: AsyncClient, db_session, seed_test_user):
@@ -184,7 +187,7 @@ async def test_done_button_works_when_google_reports_the_endpoint_address(client
     task = await add_task(db_session, seed_test_user, title="Via address")
 
     card = format_task_list_card([{"id": str(task.id), "title": "Via address", "status": "TODO"}])
-    action = card["cardsV2"][0]["card"]["sections"][0]["widgets"][0]["decoratedText"]["button"]["onClick"]["action"]
+    action = card["cardsV2"][0]["card"]["sections"][0]["widgets"][1]["buttonList"]["buttons"][0]["onClick"]["action"]
     assert action["function"] == url, "Google can only call an https address"
 
     payload = {
