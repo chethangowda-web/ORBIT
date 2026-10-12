@@ -163,7 +163,7 @@ async def test_pronouns_never_resolve_to_another_users_task_in_a_shared_thread(
     created = event(seed_manager_user.email, "Create a task to Write the quarterly report")
     created["space"] = room
     first = (await client.post("/api/chat/webhook", json=created)).json()
-    assert "Created" in first["text"]
+    assert "Added" in first["text"]
 
     follow_up = event(seed_admin_user.email, "Make it high priority")
     follow_up["space"] = room

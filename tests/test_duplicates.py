@@ -113,7 +113,7 @@ async def count_titled(client, headers, fragment: str) -> int:
 
 async def test_chat_does_not_add_the_same_task_twice_and_explains(client, manager_auth_headers):
     first = await say(client, manager_auth_headers, "create a task to send the revised contract to Acme")
-    assert "Created" in first["response"]
+    assert "Added" in first["response"]
 
     second = await say(client, manager_auth_headers, "create a task to send the revised contract to Acme")
     assert "already" in second["response"].lower() and "create it anyway" in second["response"].lower()
@@ -124,19 +124,19 @@ async def test_saying_create_it_anyway_adds_the_second_one(client, manager_auth_
     await say(client, manager_auth_headers, "create a task to send the revised contract to Acme", thread="anyway")
     await say(client, manager_auth_headers, "create a task to send the revised contract to Acme", thread="anyway")
     done = await say(client, manager_auth_headers, "create it anyway", thread="anyway")
-    assert "Created" in done["response"]
+    assert "Added" in done["response"]
     assert await count_titled(client, manager_auth_headers, "revised contract") == 2
 
 
 async def test_create_it_anyway_does_nothing_when_nothing_was_waiting(client, manager_auth_headers):
     reply = await say(client, manager_auth_headers, "create it anyway", thread="nothing-waiting")
     assert await count_titled(client, manager_auth_headers, "anyway") == 0
-    assert "Created" not in reply["response"]
+    assert "Added" not in reply["response"]
 
 
 async def test_a_similar_but_not_identical_task_is_created_with_a_heads_up(client, manager_auth_headers):
     await say(client, manager_auth_headers, "create a task to update the website", thread="similar")
     reply = await say(client, manager_auth_headers, "create a task to update the website copy and images", thread="similar")
-    assert "Created" in reply["response"]
+    assert "Added" in reply["response"]
     assert "similar task" in reply["response"].lower()
     assert await count_titled(client, manager_auth_headers, "website") == 2

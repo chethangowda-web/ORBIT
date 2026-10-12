@@ -69,7 +69,7 @@ async def test_chat_query_creates_task_and_returns_referenced_tasks(
     response = await client.post("/api/chat/query", json=payload, headers=user_auth_headers)
     assert response.status_code == 200
     data = response.json()["data"]
-    assert "Created" in data["response"]
+    assert "Added" in data["response"]
     assert "Task #" not in data["response"], "task ids are not shown to people"
     assert len(data["referenced_tasks"]) >= 1
     ref = data["referenced_tasks"][0]

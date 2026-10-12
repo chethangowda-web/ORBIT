@@ -1,6 +1,7 @@
 import json
 import logging
 import uuid
+from datetime import timedelta
 from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Header, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,7 +38,10 @@ from services.google_chat import (
 from crud.chat_events import claim_event, compute_event_key, finalize_event
 from schemas.common import api_response
 from tools.base import get_tool_session
-from tools.task_tools import complete_task
+from db.base import local_today
+from services.undo import format_undo, undo_last_changes
+from tools.format_tools import QUICK_REPLIES, quick_reply_section
+from tools.task_tools import complete_task, update_task
 
 logger = logging.getLogger(__name__)
 
@@ -331,7 +335,51 @@ def _authenticate_request(body: bytes, authorization: Optional[str], signature: 
         )
 
 
+# Suggested next messages under a reply, by what the reply was about. Only allow-listed text can be sent.
+NEXT_STEPS: dict[str, list[str]] = {
+    "GREETING": ["Show my tasks", "Plan my day", "Plan my week"],
+    "HELP": ["Show my tasks", "Plan my day", "Plan my week"],
+    "GET_MY_TASKS": ["Plan my day", "What is overdue?"],
+    "SEARCH_TASKS": ["Show my tasks", "Plan my day"],
+    "GET_OVERDUE_TASKS": ["Plan my day", "Show my tasks"],
+    "PLAN_DAY": ["Show my tasks", "Plan my week"],
+    "PLAN_WEEK": ["Plan my day", "What is overdue?"],
+    "GET_RECOMMENDATIONS": ["Plan my day", "What is overdue?"],
+    "COMPLETE_TASK": ["Show my tasks", "Plan my day", "Undo that"],
+    "UNDO_LAST": ["Show my tasks", "Plan my day"],
+    "MULTI_STEP": ["Show my tasks", "Undo that"],
+}
+
+
+def _with_next_steps(response: dict[str, Any], intent: str, thread_id: str, is_addon: bool) -> dict[str, Any]:
+    """Add the suggested-next-message buttons to a reply, unless it already carries task buttons."""
+    texts = NEXT_STEPS.get(intent)
+    if not texts:
+        return response
+    section = quick_reply_section(texts, thread_id)
+    message = response
+    if is_addon:
+        try:
+            message = response["hostAppDataAction"]["chatDataAction"]["createMessageAction"]["message"]
+        except (KeyError, TypeError):
+            return response
+    cards = message.get("cardsV2")
+    if not cards:
+        message["cardsV2"] = [{"cardId": "next-steps", "card": {"sections": [section]}}]
+    elif cards[0].get("cardId") == "task-list-card":
+        cards[0]["card"]["sections"].append(section)
+    return response
+
+
 def _message_response(agent_state: dict[str, Any], thread_id: str, is_addon: bool) -> dict[str, Any]:
+    """Turn an agent result, with its suggested next steps, into a Chat response."""
+    response = _agent_reply(agent_state, thread_id, is_addon)
+    if agent_state.get("needs_confirmation"):
+        return response
+    return _with_next_steps(response, str(agent_state.get("intent") or ""), thread_id, is_addon)
+
+
+def _agent_reply(agent_state: dict[str, Any], thread_id: str, is_addon: bool) -> dict[str, Any]:
     """Turn an agent result into a Chat response, using cards where the agent asked for one."""
     text = agent_state.get("response", "No response generated.")
     card_data = agent_state.get("card_data")
@@ -412,6 +460,29 @@ async def _handle_card_click(
             title = (result.get("data") or {}).get("title", "Task")
             return format_chat_response(f"🎉 *{title}* marked as completed!", is_addon=is_addon)
         return format_chat_response(f"❌ {result.get('error', 'Could not complete that task.')}", is_addon=is_addon)
+    elif action == "start_task" and params.get("task_id"):
+        result = await update_task.ainvoke({"task_id": params["task_id"], "updated_by_id": user_id, "status": "IN_PROGRESS"})
+        if result.get("success"):
+            return format_chat_response(f"▶️ Started *{(result.get('data') or {}).get('title', 'the task')}*.", is_addon=is_addon)
+        return format_chat_response(f"❌ {result.get('error', 'Could not start that task.')}", is_addon=is_addon)
+    elif action == "snooze_task" and params.get("task_id"):
+        tomorrow = (local_today() + timedelta(days=1)).isoformat()
+        result = await update_task.ainvoke({"task_id": params["task_id"], "updated_by_id": user_id, "due_date": tomorrow})
+        if result.get("success"):
+            return format_chat_response(f"⏭️ *{(result.get('data') or {}).get('title', 'The task')}* is now due tomorrow.", is_addon=is_addon)
+        return format_chat_response(f"❌ {result.get('error', 'Could not move that task.')}", is_addon=is_addon)
+    elif action == "undo_last":
+        return format_chat_response(format_undo(await undo_last_changes(user_id)), is_addon=is_addon)
+    elif action == "quick_reply" and params.get("text") in QUICK_REPLIES:
+        # Only a fixed list of phrases can be sent this way, so a crafted button cannot say anything else.
+        agent_state = await process_message(
+            user_id=user_id,
+            space_id=space_id,
+            message=params["text"],
+            thread_id=conversation_key(thread_id, user_id),
+            session=session,
+        )
+        return _message_response(agent_state, thread_id, is_addon)
     else:
         # Never forward unknown button ids to the agent as free text: a crafted
         # action could otherwise be read as "confirm" against a pending delete.
