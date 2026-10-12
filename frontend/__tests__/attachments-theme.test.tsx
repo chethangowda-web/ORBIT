@@ -35,11 +35,12 @@ describe("theme", () => {
     document.cookie = "orbit_theme=; max-age=0; path=/";
   });
 
-  it("falls back to dark for unknown values", () => {
+  it("falls back to light for unknown values", () => {
     expect(parseTheme("light")).toBe("light");
     expect(parseTheme("system")).toBe("system");
-    expect(parseTheme("neon")).toBe("dark");
-    expect(parseTheme(undefined)).toBe("dark");
+    expect(parseTheme("dark")).toBe("dark");
+    expect(parseTheme("neon")).toBe("light");
+    expect(parseTheme(undefined)).toBe("light");
   });
 
   it("switching updates the document and persists the choice", () => {

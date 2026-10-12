@@ -41,9 +41,11 @@ test.describe("attachments", () => {
 test.describe("theme", () => {
   test("light theme applies, persists across reloads, and renders without a flash", async ({ page }) => {
     await signIn(page, "manager");
+    await page.goto("/profile");
+    await page.getByRole("radio", { name: "Dark" }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     const darkBg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
 
-    await page.goto("/profile");
     await page.getByRole("radio", { name: "Light" }).click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
     const lightBg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
