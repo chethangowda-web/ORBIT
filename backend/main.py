@@ -24,6 +24,7 @@ from api.analytics import router as analytics_router
 from api.auth import router as auth_router
 from api.events import router as events_router
 from api.health import router as health_router
+from api.planning import router as planning_router
 from api.tasks import router as tasks_router
 from api.users import router as users_router
 from api.webhook import router as webhook_router
@@ -102,6 +103,7 @@ api_router.include_router(analytics_router)
 api_router.include_router(webhook_router)
 api_router.include_router(admin_router)
 api_router.include_router(events_router)
+api_router.include_router(planning_router)
 
 app.include_router(api_router)
 

@@ -353,6 +353,14 @@ def resolve_context(message: str, history: list[BaseMessage]) -> dict:
 
 ---
 
+### 4.6a Smart help: duplicates, assignment and week planning
+
+Three deterministic features, deliberately not prompts: they are instant, explainable and cost no AI request, so they also work when the AI is busy or out of quota.
+
+- **Duplicate detection** (`services/duplicates.py`, `services/duplicate_check.py`). Titles are compared by meaningful words (filler removed, plurals folded, typos forgiven in words of 5+ letters), not characters, so "Q3 budget" and "Q4 budget" are different tasks. Score >= 0.92 is the same task; >= 0.75 is similar. In Chat, the same task for the same person is not added again: ORBIT names the existing one and waits for "create it anyway" (held in `pending_duplicate`, cleared by any other message); a merely similar task is created with a heads-up. The AI agent's `create_task` tool refuses an exact duplicate unless the person confirmed (`allow_duplicate`). The dashboard form warns while typing and relabels its button "Create anyway".
+- **Who should take this?** (`services/assignment.py`). Score = open tasks + 2 x late tasks + high-priority tasks (lower is freer; ties go to fewer late tasks, then name). Admins and inactive people are excluded. Managers and admins only; an employee is told politely that workloads are not shared. The AI agent can call it as a tool to follow "assign it to whoever is free".
+- **Plan my week** (`services/week_plan.py`). Earliest-deadline-first scheduling over five working days (a weekend starts on Monday): late work first, then the soonest deadline, then priority, then what is already in progress. Each task goes on the lightest day that still meets its deadline, so the week is balanced rather than piled on Monday (late work always takes the earliest day). Each day holds at most 4 tasks. A task that cannot meet its deadline stays on its due day and is flagged as a tight spot; work due after the week fills gaps but never displaces this week's deadlines; the rest goes to "later".
+
 ### 4.7 Tool-Using Agent (`agents/tool_agent.py`)
 
 The specialists above run a fixed handler for each request type. This one lets the **model plan**: it decides which tools to call, in what order, and when it is finished. It handles requests the fixed handlers cannot, such as "Move all of John's overdue tasks to Rahul and make them high priority" (search, look up the person, then update each task) or "Who has the most overdue work?".

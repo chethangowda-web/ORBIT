@@ -25,6 +25,9 @@ from agents.state import AgentState
 from config import settings
 from crud import users as user_crud
 from db.base import local_today
+from auth.rbac import is_manager
+from services.assignment import rank_assignees
+from services.duplicate_check import check_for_duplicates, describe
 from services.llm import call_llm_with_tools, llm_available
 from services.wording import friendly
 from tools.base import get_tool_session, resolve_user_reference
@@ -60,6 +63,7 @@ class RunContext:
     titles: dict[str, str] = field(default_factory=dict)  # task id -> title, learned from results
     seen: dict[str, str] = field(default_factory=dict)  # identical call -> its result, so repeats do nothing
     last_task_id: Optional[str] = None
+    notes: list[str] = field(default_factory=list)  # heads-ups added to the reply (for example similar tasks)
 
     @property
     def change_count(self) -> int:
@@ -178,12 +182,38 @@ async def _team_workload(args: dict[str, Any], ctx: RunContext) -> Any:
     return result
 
 
+async def _suggest_assignee(args: dict[str, Any], ctx: RunContext) -> Any:
+    import uuid
+
+    async with get_tool_session() as db:
+        asker = await user_crud.get_user_by_id(db, uuid.UUID(ctx.user_id))
+        if asker is None or not is_manager(asker):
+            return {"success": False, "error": "Permission denied: only managers and admins can compare workloads or hand work to others."}
+        ranked = await rank_assignees(db, limit=5)
+    return {"success": True, "data": [{"name": c.name, "reason": c.reason, "open_tasks": c.open_tasks, "late_tasks": c.overdue_tasks} for c in ranked]}
+
+
 async def _task_stats(args: dict[str, Any], ctx: RunContext) -> Any:
     return await get_task_stats.ainvoke({"viewer_id": ctx.user_id})
 
 
 async def _create(args: dict[str, Any], ctx: RunContext) -> Any:
-    return await create_task.ainvoke({**args, "created_by_id": ctx.user_id})
+    allow = bool(args.pop("allow_duplicate", False))
+    similar_note = None
+    if not allow:
+        check = await check_for_duplicates(ctx.user_id, str(args.get("title", "")), args.get("assignee_name"))
+        if check.blocking:
+            return {
+                "success": False,
+                "error": f"A very similar task already exists: {describe(check.blocking)}. Ask the person whether they still "
+                "want another one; if yes, call create_task again with allow_duplicate true.",
+            }
+        if check.similar:
+            similar_note = f"Heads-up: there is already a similar task, {describe(check.similar[0])}."
+    result = await create_task.ainvoke({**args, "created_by_id": ctx.user_id})
+    if similar_note and result.get("success"):
+        ctx.notes.append(similar_note)
+    return result
 
 
 async def _update(args: dict[str, Any], ctx: RunContext) -> Any:
@@ -230,6 +260,15 @@ REGISTRY: dict[str, ToolSpec] = {
         _team_workload,
         frozenset(),
     ),
+    "suggest_assignee": ToolSpec(
+        _fn(
+            "suggest_assignee",
+            "Who has the most room for more work, least busy first, with a reason. Use it when asked to give work to whoever is free. Managers and admins only.",
+            {},
+        ),
+        _suggest_assignee,
+        frozenset(),
+    ),
     "task_stats": ToolSpec(
         _fn("task_stats", "Totals: tasks by status and priority, completion rate, overdue count.", {}), _task_stats, frozenset()
     ),
@@ -244,11 +283,12 @@ REGISTRY: dict[str, ToolSpec] = {
                 "assignee_name": {"type": "string"},
                 "due_date": _DATE,
                 "tags": {"type": "array", "items": {"type": "string"}},
+                "allow_duplicate": {"type": "boolean", "description": "Only true after the person confirmed they want a copy of an existing task"},
             },
             ("title",),
         ),
         _create,
-        frozenset({"title", "description", "priority", "assignee_name", "due_date", "tags"}),
+        frozenset({"title", "description", "priority", "assignee_name", "due_date", "tags", "allow_duplicate"}),
         mutating=True,
     ),
     "update_task": ToolSpec(
@@ -436,6 +476,7 @@ def build_reply(text: str, ctx: RunContext, stopped_early: Optional[str] = None)
     if ctx.changes:
         lines = [("• " if c["ok"] else "⚠️ ") + c["text"] for c in ctx.changes[:MAX_CHANGES + 2]]
         parts.append("*What changed*\n" + "\n".join(lines))
+    parts.extend(ctx.notes[:2])
     if stopped_early:
         parts.append(stopped_early)
     return "\n\n".join(parts).strip() or EMPTY_REPLY

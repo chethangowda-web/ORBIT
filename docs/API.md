@@ -179,6 +179,17 @@ Your own agent runs only (another user's trace id returns 404). Each run include
 
 ---
 
+## Planning
+
+### `GET /planning/week`
+Your own open tasks arranged over the next five working days: `{ days: [{ date, label, tasks: [{ id, title, priority, status, due_date, days_late, note }] }], at_risk, later, late_count }`. Late work comes first, then the soonest deadlines; a day holds at most 4 tasks; a task that cannot meet its deadline stays on its due day, listed in `at_risk` with a `note`; what does not fit goes to `later`.
+
+### `GET /planning/suggest-assignee?limit=3` (manager, admin)
+People with the most room, least busy first: `[{ user_id, display_name, role, open_tasks, overdue_tasks, reason }]`. `reason` is a plain sentence such as "2 open tasks, none late". Admins and inactive users are never suggested.
+
+### `GET /tasks/similar?title=...`
+Open tasks you can see whose title is close to `title`: `[{ id, title, status, priority, due_date, assignee, score, same }]`. `same` is true for effectively the same task. Creating through the API is never blocked; the dashboard form uses this to warn first.
+
 ## Live updates
 
 ### `GET /events/stream`

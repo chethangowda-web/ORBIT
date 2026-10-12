@@ -1,7 +1,7 @@
 """Task Management Agent: Handles CRUD actions, searches, updates, and card responses."""
 
 import re
-from typing import Any
+from typing import Any, Optional
 from agents.intents import Intent
 from agents.state import AgentState
 from tools.format_tools import format_task_card, format_task_list_card, format_task_list_text
@@ -13,6 +13,7 @@ from tools.task_tools import (
     search_tasks,
     update_task,
 )
+from services.duplicate_check import check_for_duplicates, describe
 from tools.format_tools import friendly
 from tools.user_tools import get_all_users
 
@@ -43,9 +44,29 @@ def greeting_reply(raw_message: str, first_name: str = "") -> str:
     )
 
 
-async def _handle_create_task(ctx: dict[str, Any], user_id: str, tools_used: list[str]) -> tuple[str, str, Any, Any]:
-    """Execute task creation and generate response payload."""
+async def _handle_create_task(
+    ctx: dict[str, Any], user_id: str, tools_used: list[str], extra: Optional[dict[str, Any]] = None
+) -> tuple[str, str, Any, Any]:
+    """Execute task creation and generate response payload.
+
+    The very same task for the same person is not added twice: ORBIT says so and waits for "create it
+    anyway" (kept in `extra["pending_duplicate"]`). A merely similar task is created, with a heads-up."""
     title = ctx.get("title") or "New Task"
+    similar_note = ""
+    if not ctx.get("allow_duplicate"):
+        check = await check_for_duplicates(user_id, title, ctx.get("assignee_name"))
+        if check.blocking:
+            if extra is not None:
+                extra["pending_duplicate"] = {k: v for k, v in ctx.items() if k != "allow_duplicate"}
+            return (
+                f"👀 {describe(check.blocking)} is already on the list, so I didn't add another. "
+                "Say *create it anyway* if you want a second one.",
+                "text",
+                None,
+                check.blocking["id"],
+            )
+        if check.similar:
+            similar_note = f"\n\n👀 Heads-up: there is already a similar task, {describe(check.similar[0])}."
     priority = ctx.get("priority") or "MEDIUM"
     assignee = ctx.get("assignee_name")
     due_date = ctx.get("due_date")
@@ -64,7 +85,7 @@ async def _handle_create_task(ctx: dict[str, Any], user_id: str, tools_used: lis
 
     task_data = res.get("data", {})
     card = format_task_card(task_data)
-    text = f"✅ Created *{task_data.get('title')}*"
+    text = f"✅ Created *{task_data.get('title')}*{similar_note}"
     return text, "card", card, str(task_data.get("id")) if task_data.get("id") else None
 
 
@@ -229,12 +250,13 @@ async def task_agent_node(state: AgentState) -> dict[str, Any]:
     user_id = state.get("user_id", "")
     tools_used: list[str] = list(state.get("tool_calls_made", []))
     ref_task_id = state.get("referenced_task_id")
+    extra: dict[str, Any] = {}
 
     if state.get("response") and (state.get("pending_confirmation") or {}).get("status") == "CANCELLED":
         resp_text = state.get("response", "❌ Action cancelled.")
         resp_type, card_data = "text", None
     elif intent == Intent.CREATE_TASK.value:
-        resp_text, resp_type, card_data, ref_task_id = await _handle_create_task(ctx, user_id, tools_used)
+        resp_text, resp_type, card_data, ref_task_id = await _handle_create_task(ctx, user_id, tools_used, extra)
     elif intent == Intent.UPDATE_TASK.value:
         resp_text, resp_type, card_data, ref_task_id = await _handle_update_task(ctx, user_id, ref_task_id, state.get("raw_message", ""), tools_used)
     elif intent == Intent.GET_TASK_DETAIL.value:
@@ -252,6 +274,7 @@ async def task_agent_node(state: AgentState) -> dict[str, Any]:
         resp_type, card_data = "text", None
 
     result: dict[str, Any] = {
+        **extra,
         "response": resp_text,
         "response_type": resp_type,
         "card_data": card_data,

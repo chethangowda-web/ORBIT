@@ -19,6 +19,9 @@ import type {
   PaginationMeta,
   SchedulerStatus,
   SessionUser,
+  SimilarTask,
+  AssigneeSuggestion,
+  WeekPlan,
   Task,
   TaskAttachment,
   TaskAuditLog,
@@ -143,6 +146,7 @@ export const api = {
       unwrap<TaskComment>(await apiClient.post(`/tasks/${id}/comments`, { body })),
     deleteComment: async (id: string, commentId: string) =>
       unwrap<{ message: string }>(await apiClient.delete(`/tasks/${id}/comments/${commentId}`)),
+    similar: async (title: string) => (unwrap<SimilarTask[]>(await apiClient.get("/tasks/similar", { params: { title } })) ?? []),
     attachments: async (id: string) => (unwrap<TaskAttachment[]>(await apiClient.get(`/tasks/${id}/attachments`)) ?? []),
     uploadAttachment: async (id: string, file: File) => {
       const form = new FormData();
@@ -173,6 +177,11 @@ export const api = {
       unwrap<{ message: string }>(await apiClient.patch("/users/me/preferences", { preferences })),
     adminUpdate: async (id: string, body: { role?: UserRole; is_active?: boolean }) =>
       unwrap<User>(await apiClient.patch(`/users/${id}`, body)),
+  },
+
+  planning: {
+    week: async () => unwrap<WeekPlan>(await apiClient.get("/planning/week")),
+    suggestAssignee: async () => (unwrap<AssigneeSuggestion[]>(await apiClient.get("/planning/suggest-assignee", { params: { limit: 3 } })) ?? []),
   },
 
   analytics: {

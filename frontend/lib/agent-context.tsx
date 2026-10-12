@@ -48,7 +48,7 @@ const WELCOME: ChatMessage = {
   sender: "orbit",
   at: now(),
   text: "I can plan your day, find overdue work, and create, update or complete tasks. Try one of these.",
-  suggestedActions: ["Plan my day", "Show my pending tasks", "What are my overdue tasks?"],
+  suggestedActions: ["Plan my day", "Plan my week", "What are my overdue tasks?"],
 };
 
 function newThreadId(): string {

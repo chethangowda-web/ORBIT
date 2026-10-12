@@ -12,6 +12,7 @@ Employees manage tasks in plain language inside **Google Chat**; managers get a 
 - **Google Chat bot**: natural-language task management, interactive confirmation cards, direct-message notifications, idempotent webhook handling.
 - **Mission Control dashboard** (Next.js 14): drag-and-drop board, dense task table with URL-synced filters, task detail with a readable audit trail, insights charts, agent run traces, admin console, command palette (`Ctrl+K`) and an always-available agent panel.
 - **Collaboration**: comments on tasks (assignee and creator notified in Chat), bulk actions on the task table (complete, status, priority, assign, delete) with per-task permission checks.
+- **Smart help**: duplicate-task detection (the form warns, Chat will not add the same task twice and says so, "create it anyway" overrides), "who should take this?" suggestions from real workloads, and "plan my week", a day-by-day schedule that puts late work first and flags deadlines that cannot be met. All three are algorithms, so they are instant and use no AI request.
 - **Live dashboard**: changes made anywhere (another browser, Google Chat, the scheduler) appear instantly via Server-Sent Events, with polling as a fallback.
 - **Attachments**: files on tasks (documents, images, spreadsheets, zip), validated by type and size, always downloaded as attachments.
 - **Email notifications** (optional): the same assignment, update and comment notices as Chat, per-user opt-out, enabled by setting SMTP variables.

@@ -26,6 +26,7 @@ class AgentState(TypedDict, total=False):
     # === EXTRACTED CONTEXT ===
     task_context: dict[str, Any]          # Extracted fields {title, assignee_name, priority, due_date, ...}
     referenced_task_id: Optional[str]     # If user referenced a specific task UUID / ID
+    pending_duplicate: Optional[dict[str, Any]]  # A create request held back because the same task exists
 
     # === CONTROL FLOW ===
     needs_confirmation: bool              # HITL — requires user confirmation

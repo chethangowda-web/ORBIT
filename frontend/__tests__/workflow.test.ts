@@ -26,6 +26,7 @@ describe("stepLabel", () => {
     expect(stepLabel("get_tasks_due_today")).toBe("Checked what is due today");
     expect(stepLabel("create_task")).toBe("Added the task");
     expect(stepLabel("get_overdue_tasks")).toBe("Checked what is late");
+    expect(stepLabel("suggest_assignee")).toBe("Checked who has room");
   });
 
   it("falls back to readable words for an action it does not know", () => {
@@ -38,6 +39,8 @@ describe("intentLabel", () => {
     expect(intentLabel("PLAN_DAY")).toBe("Planning your day");
     expect(intentLabel("GET_OVERDUE_TASKS")).toBe("Checking late work");
     expect(intentLabel("UNKNOWN")).toBe("Not sure what you meant");
+    expect(intentLabel("PLAN_WEEK")).toBe("Planning your week");
+    expect(intentLabel("SUGGEST_ASSIGNEE")).toBe("Finding who has room");
     expect(intentLabel(null)).toBe("Not sure what you meant");
     expect(intentLabel("SOMETHING_NEW")).toBe("Something new");
   });

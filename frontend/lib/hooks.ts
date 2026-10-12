@@ -19,6 +19,7 @@ export const keys = {
   comments: (id: string) => ["tasks", "comments", id] as const,
   attachments: (id: string) => ["tasks", "attachments", id] as const,
   stats: ["stats"] as const,
+  week: ["week"] as const,
   workload: ["workload"] as const,
   users: ["users"] as const,
   traces: ["traces"] as const,
@@ -44,6 +45,10 @@ export function useTask(id: string) {
 
 export function useTaskHistory(id: string) {
   return useQuery({ queryKey: keys.taskHistory(id), queryFn: () => api.tasks.history(id) });
+}
+
+export function useWeekPlan() {
+  return useQuery({ queryKey: keys.week, queryFn: api.planning.week, refetchInterval: POLL_MS });
 }
 
 export function useStats() {

@@ -45,6 +45,7 @@ export function invalidateForEvents(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: keys.tasks });
   queryClient.invalidateQueries({ queryKey: keys.stats });
   queryClient.invalidateQueries({ queryKey: keys.workload });
+  queryClient.invalidateQueries({ queryKey: keys.week });
 }
 
 const MIN_BACKOFF_MS = 1_000;

@@ -100,7 +100,7 @@ test.describe("ORBIT activity is visible, in everyday words", () => {
 
   test("every main screen is free of technical words", async ({ page }) => {
     await signIn(page, "manager");
-    for (const path of ["/", "/tasks", "/insights", "/profile"]) {
+    for (const path of ["/", "/tasks", "/week", "/insights", "/profile"]) {
       await page.goto(path);
       await page.waitForLoadState("load");
       await page.waitForTimeout(800);
