@@ -20,6 +20,9 @@ const PREFERENCES = [
   { key: "daily_briefing", label: "Morning briefing", description: "A prioritised plan for your day, sent at 9:00.", managerOnly: false },
   { key: "overdue_alert", label: "Overdue alerts", description: "An evening reminder when assigned tasks are past due.", managerOnly: false },
   { key: "email_notifications", label: "Email notifications", description: "Email copies of assignments, updates and comments. Only sent when the server has email set up.", managerOnly: false },
+  { key: "due_soon_reminder", label: "Due-tomorrow reminders", description: "A heads-up at 4:00 pm about tasks that are due the next day.", managerOnly: false },
+  { key: "stale_nudge", label: "Check-ins on quiet tasks", description: "A nudge on weekdays when a task you are working on has not changed for 3 days.", managerOnly: false },
+  { key: "manager_escalation", label: "Late work summary", description: "A weekday evening summary of tasks that are 3 or more days late.", managerOnly: true },
   { key: "weekly_summary", label: "Weekly team summary", description: "Team throughput digest on Monday mornings.", managerOnly: true },
 ] as const;
 

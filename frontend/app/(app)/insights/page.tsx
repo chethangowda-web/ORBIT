@@ -42,7 +42,7 @@ export default function InsightsPage() {
 
   return (
     <div className="mx-auto max-w-6xl">
-      <PageHeader title="Insights" description="Live aggregates from the task database." />
+      <PageHeader title="Insights" description="Live numbers from your team's tasks." />
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <MetricTile label="Completion rate" value={percent(data?.completion_rate)} tone="ok" loading={stats.isLoading} hint={data ? `${data.completed_tasks} of ${data.total_tasks} tasks done` : undefined} />

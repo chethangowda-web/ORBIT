@@ -3,7 +3,7 @@
 export interface Command {
   id: string;
   label: string;
-  group: "Navigate" | "Actions" | "Tasks" | "Agent";
+  group: "Navigate" | "Actions" | "Tasks" | "Ask ORBIT";
   /** Extra words that should match the command but are not shown. */
   keywords?: string[];
   hint?: string;

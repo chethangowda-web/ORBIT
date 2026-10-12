@@ -1,8 +1,8 @@
-/** Pure helpers for showing how the agents handled a request. */
+/** Pure helpers for showing how ORBIT's helpers handled a request, in everyday words. */
 
 import type { AgentExecutionTrace, AgentStep } from "@/types";
 
-/** The parts of a run (a chat reply's metadata or a stored trace) the diagram needs. */
+/** The parts of a run (a chat reply's metadata or a stored record) the diagram needs. */
 export interface RunLike {
   steps?: AgentStep[] | null;
   agents_invoked?: string[];
@@ -16,47 +16,91 @@ export interface RunLike {
   error_message?: string | null;
 }
 
+/** The members of the ORBIT team, by their internal id. */
 export const AGENT_NAME: Record<string, string> = {
-  supervisor: "Supervisor",
-  task_agent: "Task agent",
-  planner_agent: "Planner agent",
-  recommendation_agent: "Recommendation agent",
-  review_agent: "Review agent",
+  supervisor: "Coordinator",
+  task_agent: "Task helper",
+  planner_agent: "Day planner",
+  recommendation_agent: "Advisor",
+  review_agent: "Reviewer",
 };
 
 export const AGENT_ROLE: Record<string, string> = {
-  supervisor: "Reads the request and decides which agent handles it",
-  task_agent: "Creates, updates, completes and finds tasks",
-  planner_agent: "Builds your day plan from your real tasks",
-  recommendation_agent: "Finds overdue work and workload problems",
-  review_agent: "Asks for your approval before anything is deleted",
+  supervisor: "Reads your request and decides who helps",
+  task_agent: "Adds, changes, finishes and finds tasks",
+  planner_agent: "Plans your day from your real tasks",
+  recommendation_agent: "Spots late work and busy teammates",
+  review_agent: "Checks with you before anything is deleted",
 };
 
 export const SPECIALISTS = ["task_agent", "planner_agent", "recommendation_agent", "review_agent"] as const;
 
-const CLASSIFIER_LABEL: Record<string, string> = {
-  llm: "Gemini AI",
-  rules: "built-in rules",
-  flow: "approval answer",
+const INTENT_LABEL: Record<string, string> = {
+  CREATE_TASK: "Adding a task",
+  UPDATE_TASK: "Changing a task",
+  DELETE_TASK: "Deleting a task",
+  COMPLETE_TASK: "Finishing a task",
+  GET_MY_TASKS: "Showing your tasks",
+  GET_OVERDUE_TASKS: "Checking late work",
+  SEARCH_TASKS: "Finding a task",
+  GET_TASK_DETAIL: "Showing a task",
+  PLAN_DAY: "Planning your day",
+  GET_RECOMMENDATIONS: "Team advice",
+  HELP: "Help",
+  GREETING: "Saying hello",
+  UNKNOWN: "Not sure what you meant",
 };
 
-export function classifierLabel(classifier: string | null | undefined): string {
-  return classifier ? (CLASSIFIER_LABEL[classifier] ?? classifier) : "unknown";
+export function intentLabel(intent: string | null | undefined): string {
+  if (!intent) return INTENT_LABEL.UNKNOWN;
+  return INTENT_LABEL[intent] ?? sentence(intent.replace(/_/g, " ").toLowerCase());
 }
 
-/** "get_tasks_due_today" -> "Get tasks due today". */
-export function toolLabel(name: string): string {
-  const spaced = name.replace(/_/g, " ").trim();
+const CLASSIFIER_LABEL: Record<string, string> = {
+  llm: "AI",
+  rules: "a quick check (the AI was busy)",
+  flow: "your answer",
+};
+
+/** How the request was understood, as a short phrase that completes "Understood by ...". */
+export function classifierLabel(classifier: string | null | undefined): string {
+  return classifier ? (CLASSIFIER_LABEL[classifier] ?? classifier) : "ORBIT";
+}
+
+/** What each internal action looks like to a person: a short past-tense sentence. */
+const STEP_LABEL: Record<string, string> = {
+  create_task: "Added the task",
+  update_task: "Changed the task",
+  complete_task: "Marked the task as done",
+  delete_task: "Deleted the task",
+  get_task_by_id: "Opened the task",
+  search_tasks: "Looked for matching tasks",
+  get_user_tasks: "Checked your tasks",
+  get_overdue_tasks: "Checked what is late",
+  get_tasks_due_today: "Checked what is due today",
+  get_task_stats: "Counted tasks by status",
+  get_team_workload: "Checked who is busy",
+  get_user_by_name: "Looked up a teammate",
+  get_all_users: "Looked up the team",
+};
+
+function sentence(text: string): string {
+  const spaced = text.replace(/_/g, " ").trim();
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
+/** "get_overdue_tasks" -> "Checked what is late". Unknown actions fall back to readable words. */
+export function stepLabel(name: string): string {
+  return STEP_LABEL[name] ?? sentence(name);
+}
+
 export function agentName(node: string): string {
-  return AGENT_NAME[node] ?? node;
+  return AGENT_NAME[node] ?? sentence(node);
 }
 
 /**
- * The ordered steps of a run. Runs stored before steps were recorded are rebuilt from the agent
- * list, per-agent timings and tool list, so old history still draws a diagram.
+ * The ordered steps of a run. Runs saved before steps were recorded are rebuilt from the helper
+ * list, per-helper timings and action list, so old history still draws a diagram.
  */
 export function normalizeSteps(run: RunLike): AgentStep[] {
   if (run.steps && run.steps.length > 0) return run.steps;
@@ -83,13 +127,13 @@ export function outcomeOf(run: RunLike): Outcome {
     case "TIMEOUT":
       return { tone: "danger", label: "Took too long" };
     case "FAILURE":
-      return { tone: "danger", label: "Failed" };
+      return { tone: "danger", label: "Didn't work" };
     default:
-      return { tone: "ok", label: "Replied" };
+      return { tone: "ok", label: "Done" };
   }
 }
 
-/** The agent that did the work: the last non-supervisor step. */
+/** The team member that did the work: the last step that is not the Coordinator. */
 export function specialistOf(run: RunLike): string | null {
   const steps = normalizeSteps(run).filter((s) => s.node !== "supervisor");
   return steps.length > 0 ? steps[steps.length - 1].node : null;
@@ -103,7 +147,7 @@ export interface RunSummary {
   lastAgent: string | null;
 }
 
-/** Counts per agent, average time per agent, and how intents were classified. */
+/** Counts per helper, average time per helper, and how requests were understood. */
 export function summarizeRuns(runs: AgentExecutionTrace[]): RunSummary {
   const byAgent: RunSummary["byAgent"] = {};
   const classifier: Record<string, number> = {};

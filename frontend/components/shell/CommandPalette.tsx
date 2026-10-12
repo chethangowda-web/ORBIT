@@ -52,17 +52,17 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       { id: "new-task", label: "New task", group: "Actions", keywords: ["create", "add"], run: () => openNewTask() },
       { id: "nav-board", label: "Go to Board", group: "Navigate", keywords: ["home", "kanban", "dashboard"], run: go("/") },
       { id: "nav-tasks", label: "Go to Tasks", group: "Navigate", keywords: ["table", "list"], run: go("/tasks") },
-      { id: "nav-traces", label: "Go to Agent workflow", group: "Navigate", keywords: ["traces", "logs"], run: go("/traces") },
+      { id: "nav-traces", label: "Go to ORBIT activity", group: "Navigate", keywords: ["history", "what orbit did", "assistant"], run: go("/traces") },
       { id: "nav-profile", label: "Go to Profile", group: "Navigate", keywords: ["settings", "account"], run: go("/profile") },
     ];
     if (isManager) {
       list.push(
         { id: "nav-insights", label: "Go to Insights", group: "Navigate", keywords: ["analytics", "charts"], run: go("/insights") },
-        { id: "nav-admin", label: "Go to Admin", group: "Navigate", keywords: ["scheduler", "users", "notifications"], run: go("/admin") },
+        { id: "nav-admin", label: "Go to Admin", group: "Navigate", keywords: ["reminders", "users", "connections", "notifications"], run: go("/admin") },
       );
     }
     for (const prompt of ["Plan my day", "Show my pending tasks", "What are my overdue tasks?"]) {
-      list.push({ id: `ask-${prompt}`, label: prompt, group: "Agent", hint: "Ask ORBIT", keywords: ["ask", "orbit"], run: () => void ask(prompt) });
+      list.push({ id: `ask-${prompt}`, label: prompt, group: "Ask ORBIT", hint: "Ask ORBIT", keywords: ["ask", "orbit"], run: () => void ask(prompt) });
     }
     for (const task of taskResults) {
       list.push({ id: `task-${task.id}`, label: task.title, group: "Tasks", hint: task.status.replace("_", " ").toLowerCase(), run: go(`/tasks/${task.id}`) });
@@ -73,9 +73,9 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const results = useMemo(() => {
     const matches = filterCommands(commands, query);
     const trimmed = query.trim();
-    // Free text can always be sent to the agent.
+    // Free text can always be sent to ORBIT.
     if (trimmed.length > 2) {
-      matches.push({ id: "ask-free", label: `Ask ORBIT: ${trimmed}`, group: "Agent", run: () => void ask(trimmed) });
+      matches.push({ id: "ask-free", label: `Ask ORBIT: ${trimmed}`, group: "Ask ORBIT", run: () => void ask(trimmed) });
     }
     return matches;
   }, [commands, query, ask]);

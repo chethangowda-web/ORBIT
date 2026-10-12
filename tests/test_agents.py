@@ -168,7 +168,7 @@ async def test_review_agent_hitl_delete_flow(db_session: AsyncSession, seed_mana
 
     assert del_state.get("active_agent") == "review_agent"
     assert del_state.get("needs_confirmation") is True
-    assert "Confirmation Required" in del_state.get("response", "")
+    assert "Please confirm" in del_state.get("response", "")
 
     # 2. Second attempt with confirmed=True
     conf_state = await process_message(
@@ -180,7 +180,7 @@ async def test_review_agent_hitl_delete_flow(db_session: AsyncSession, seed_mana
     )
 
     assert conf_state.get("needs_confirmation") is False
-    assert "successfully deleted" in conf_state.get("response", "").lower()
+    assert "has been deleted" in conf_state.get("response", "").lower()
 
     # Verify task is soft-deleted
     deleted_task = await get_task(db_session, target_id)

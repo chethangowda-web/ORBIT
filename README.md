@@ -17,7 +17,7 @@ Employees manage tasks in plain language inside **Google Chat**; managers get a 
 - **Email notifications** (optional): the same assignment, update and comment notices as Chat, per-user opt-out, enabled by setting SMTP variables.
 - **Light, dark and system themes**, remembered per browser and rendered without a flash.
 - **Role-based access** (employee, manager, admin) enforced identically in the REST API *and* in the chat agents' tools.
-- **Proactive assistance**: 9:00 morning briefing, 18:00 overdue alerts, Monday weekly summary; per-user opt-outs honoured; honest delivery logging (`sent`, `failed`, `skipped`).
+- **ORBIT acts on its own**: a 9:00 morning plan, a 16:00 reminder for tasks due tomorrow, a weekday check-in on tasks that went quiet, 18:00 late-work alerts, a late-work summary for managers and a Monday team summary. Everyone can switch each one off; delivery is logged honestly (delivered, not delivered, not sent).
 - **Conversation memory**: Redis-backed LangGraph checkpoints, so "make it high priority" resolves across turns.
 - **Offline-safe**: with no LLM key configured, a deterministic classifier keeps the whole system working.
 

@@ -175,7 +175,7 @@ async def process_message(
             "agents_invoked": agents_invoked,
             "intent": "UNKNOWN",
             "needs_confirmation": False,
-            "response": "⚠️ Request timed out while coordinating between agents. Please try again.",
+            "response": "⚠️ That took longer than expected. Please try again in a moment.",
             "response_type": "text",
             "tool_calls_made": accumulated_state.get("tool_calls_made", []),
             "node_durations_ms": node_durations_ms,

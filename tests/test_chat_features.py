@@ -145,13 +145,13 @@ async def test_users_sharing_a_space_do_not_share_conversation_state(
     manager_msg = event(seed_manager_user.email, "Delete the Doomed task")
     manager_msg["space"] = room
     first = (await client.post("/api/chat/webhook", json=manager_msg)).json()
-    assert "Confirmation Required" in first["text"]
+    assert "Please confirm" in first["text"]
 
     employee_msg = event(seed_test_user.email, "/tasks")
     employee_msg["space"] = room
     reply = (await client.post("/api/chat/webhook", json=employee_msg)).json()
     assert reply["text"].startswith("📋"), reply
-    assert "Confirmation" not in reply["text"]
+    assert "Please confirm" not in reply["text"]
 
 
 async def test_pronouns_never_resolve_to_another_users_task_in_a_shared_thread(

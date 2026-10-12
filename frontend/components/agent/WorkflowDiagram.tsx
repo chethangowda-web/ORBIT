@@ -22,9 +22,10 @@ import {
   AGENT_ROLE,
   agentName,
   classifierLabel,
+  intentLabel,
   normalizeSteps,
   outcomeOf,
-  toolLabel,
+  stepLabel,
   type RunLike,
 } from "@/lib/workflow";
 
@@ -76,11 +77,9 @@ function Stage({
   );
 }
 
-const intentLabel = (intent: string) => toolLabel(intent.toLowerCase());
-
 /**
- * One request, drawn as the path it took: your message, the Supervisor's decision, the specialist
- * agent with the tools it called (numbered, in order), and the outcome.
+ * One request, drawn as the path it took: what you asked, how the Coordinator understood it, which
+ * helper took over and what it did (in order), and how it ended.
  */
 export function WorkflowDiagram({
   run,
@@ -99,7 +98,7 @@ export function WorkflowDiagram({
     {
       key: "request",
       node: (
-        <Stage icon={MessageSquare} tone="neutral" title="Your request" subtitle={request ? <span className="line-clamp-3 break-words">&ldquo;{request}&rdquo;</span> : "Sent from Chat or the dashboard"} />
+        <Stage icon={MessageSquare} tone="neutral" title="Your request" subtitle={request ? <span className="line-clamp-3 break-words">&ldquo;{request}&rdquo;</span> : "Asked in Google Chat or here"} />
       ),
     },
   ];
@@ -107,7 +106,6 @@ export function WorkflowDiagram({
   steps.forEach((step, index) => {
     const Icon = AGENT_ICON[step.node] ?? Network;
     if (step.node === "supervisor") {
-      const pct = step.confidence != null ? ` (${Math.round(step.confidence * 100)}%)` : "";
       items.push({
         key: `step-${index}`,
         node: (
@@ -120,39 +118,38 @@ export function WorkflowDiagram({
               step.intent ? (
                 <>
                   Understood: <span className="font-medium text-fg">{intentLabel(step.intent)}</span>
-                  {pct}
                 </>
               ) : (
                 AGENT_ROLE.supervisor
               )
             }
           >
-            <p className="mt-1.5 text-[10px] text-fg-faint">Decided by {classifierLabel(step.classifier)}</p>
+            <p className="mt-1.5 text-[10px] text-fg-faint">Understood by {classifierLabel(step.classifier)}</p>
           </Stage>
         ),
       });
       return;
     }
 
-    const tools = step.tools ?? [];
+    const actions = step.tools ?? [];
     items.push({
       key: `step-${index}`,
       node: (
         <Stage icon={Icon} tone="accent" title={agentName(step.node)} ms={step.duration_ms} subtitle={AGENT_ROLE[step.node]}>
-          {tools.length > 0 ? (
-            <ol className="mt-2 space-y-1" aria-label="Tools used, in order">
-              {tools.map((tool, i) => (
-                <li key={`${tool}-${i}`} className="flex items-center gap-1.5 rounded-control bg-surface-1 px-1.5 py-1 text-[11px] text-fg-muted" title={tool}>
+          {actions.length > 0 ? (
+            <ol className="mt-2 space-y-1" aria-label="What it did, in order">
+              {actions.map((action, i) => (
+                <li key={`${action}-${i}`} className="flex items-center gap-1.5 rounded-control bg-surface-1 px-1.5 py-1 text-[11px] text-fg-muted">
                   <span className="num flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-surface-3 text-[9px] text-fg-faint">{i + 1}</span>
                   <Wrench className="h-3 w-3 shrink-0 text-fg-faint" aria-hidden />
-                  <span className="truncate">{toolLabel(tool)}</span>
+                  <span className="truncate">{stepLabel(action)}</span>
                 </li>
               ))}
             </ol>
           ) : (
             <p className="mt-1.5 text-[10px] text-fg-faint">{step.awaiting_confirmation ? "Asked for your approval first" : "Answered without looking anything up"}</p>
           )}
-          {tools.length > 0 && step.awaiting_confirmation && <p className="mt-1.5 text-[10px] text-warn">Asked for your approval</p>}
+          {actions.length > 0 && step.awaiting_confirmation && <p className="mt-1.5 text-[10px] text-warn">Asked for your approval</p>}
         </Stage>
       ),
     });
@@ -165,15 +162,15 @@ export function WorkflowDiagram({
         icon={outcome.tone === "ok" ? CheckCircle2 : outcome.tone === "warn" ? Clock : AlertTriangle}
         tone={outcome.tone}
         title={outcome.label}
-        subtitle={run.total_duration_ms ? `Total ${formatMs(run.total_duration_ms)}` : undefined}
+        subtitle={run.total_duration_ms ? `Took ${formatMs(run.total_duration_ms)}` : undefined}
       >
-        {run.error_message && <p className="mt-1.5 break-words text-[10px] text-danger">{run.error_message}</p>}
+        {run.error_message && <p className="mt-1.5 text-[10px] text-danger">Something went wrong on our side. Please try again.</p>}
       </Stage>
     ),
   });
 
   return (
-    <ol aria-label="Agent workflow" className={cn("flex flex-col gap-1", horizontal && "lg:flex-row lg:items-stretch lg:gap-1.5")}>
+    <ol aria-label="How this was handled" className={cn("flex flex-col gap-1", horizontal && "lg:flex-row lg:items-stretch lg:gap-1.5")}>
       {items.map((item, i) => (
         <React.Fragment key={item.key}>
           {i > 0 && (

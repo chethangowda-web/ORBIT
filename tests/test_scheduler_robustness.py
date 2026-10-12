@@ -17,7 +17,14 @@ def test_registered_jobs_keep_their_lock_when_restored_from_a_job_store():
     sched = AsyncIOScheduler(timezone="Asia/Kolkata")
     sched_module.register_default_jobs(sched)
     jobs = sched.get_jobs()
-    assert {j.id for j in jobs} == {"daily_briefing", "overdue_alert", "weekly_summary"}
+    assert {j.id for j in jobs} == {
+        "daily_briefing",
+        "overdue_alert",
+        "weekly_summary",
+        "due_soon_reminder",
+        "stale_nudge",
+        "manager_escalation",
+    }
     for job in jobs:
         restored = ref_to_obj(job.func_ref)
         assert getattr(restored, "__orbit_locked__", False), f"{job.id} would run unlocked after a restart"

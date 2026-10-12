@@ -87,6 +87,7 @@ Each semantic color has a `-soft` variant at 12% alpha for badge backgrounds.
    called, status and error. Source: `/chat/traces`.
 6. **Admin** (`/admin`): scheduler jobs, manual triggers, notification delivery log, users
    and roles. Admin and manager only; user management admin only.
+**Language rule.** Nothing a user can see uses engineering terms. The assistants are the Coordinator, Task helper, Day planner, Advisor and Reviewer; internal actions read as sentences ("Checked what is late"); request types read as "Planning your day"; statuses read as Done, Needs your approval, Took too long, Didn't work. The labels live in `frontend/lib/workflow.ts` and the browser tests scan every main screen for technical words.
 7. **Auth** (`/login`): email and password. The dashboard has no Google sign-in; the backend OAuth routes remain but nothing in the UI calls them. An optional demo-accounts panel appears when `NEXT_PUBLIC_DEMO_PASSWORD` is set at build time (always in development).
 
 ## Component kit (`frontend/components/ui`)

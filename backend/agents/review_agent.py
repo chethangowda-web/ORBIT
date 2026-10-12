@@ -123,7 +123,7 @@ async def review_agent_node(state: AgentState) -> dict[str, Any]:
             }
 
         return {
-            "response": f"🗑️ Task #{target_task_id} (*{target_title}*) has been successfully deleted.",
+            "response": f"🗑️ *{target_title}* has been deleted.",
             "response_type": "text",
             "needs_confirmation": False,
             "pending_confirmation": pending_updated,
@@ -170,7 +170,7 @@ async def review_agent_node(state: AgentState) -> dict[str, Any]:
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    prompt_text = f"⚠️ *Confirmation Required*\nAre you sure you want to delete Task #{task_id} (*{task_title}*)?\nReply 'yes' or click Confirm."
+    prompt_text = f"⚠️ *Please confirm*\nDelete *{task_title}*? Reply 'yes' to delete it, or 'cancel' to keep it."
     return {
         "response": prompt_text,
         "response_type": "confirmation_dialog",

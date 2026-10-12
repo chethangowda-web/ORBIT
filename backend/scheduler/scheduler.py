@@ -12,6 +12,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from config import settings
 from scheduler.jobs.daily_briefing import run_daily_briefing
+from scheduler.jobs.follow_ups import run_due_soon_reminders, run_manager_escalations, run_stale_nudges
 from scheduler.jobs.overdue_alert import run_overdue_alerts
 from scheduler.jobs.weekly_summary import run_weekly_summary
 
@@ -111,10 +112,16 @@ def with_job_lock(name: str, job: Callable[..., Awaitable[Any]]) -> Callable[...
 locked_daily_briefing = with_job_lock("daily_briefing", run_daily_briefing)
 locked_overdue_alerts = with_job_lock("overdue_alert", run_overdue_alerts)
 locked_weekly_summary = with_job_lock("weekly_summary", run_weekly_summary)
+locked_due_soon = with_job_lock("due_soon_reminder", run_due_soon_reminders)
+locked_stale_nudges = with_job_lock("stale_nudge", run_stale_nudges)
+locked_escalations = with_job_lock("manager_escalation", run_manager_escalations)
 for _fn, _name in (
     (locked_daily_briefing, "locked_daily_briefing"),
     (locked_overdue_alerts, "locked_overdue_alerts"),
     (locked_weekly_summary, "locked_weekly_summary"),
+    (locked_due_soon, "locked_due_soon"),
+    (locked_stale_nudges, "locked_stale_nudges"),
+    (locked_escalations, "locked_escalations"),
 ):
     _fn.__name__ = _name
     _fn.__qualname__ = _name
@@ -147,6 +154,33 @@ def register_default_jobs(sched: AsyncIOScheduler) -> None:
         trigger=CronTrigger(day_of_week="mon", hour=9, minute=30, timezone=TIMEZONE),
         id="weekly_summary",
         name="Weekly Productivity Digest",
+        replace_existing=True,
+    )
+
+    # 4. Reminder about tasks due tomorrow, every day at 4:00 PM
+    sched.add_job(
+        locked_due_soon,
+        trigger=CronTrigger(hour=16, minute=0, timezone=TIMEZONE),
+        id="due_soon_reminder",
+        name="Due-Tomorrow Reminder",
+        replace_existing=True,
+    )
+
+    # 5. Check-in on tasks that went quiet, weekdays at 11:00 AM
+    sched.add_job(
+        locked_stale_nudges,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=11, minute=0, timezone=TIMEZONE),
+        id="stale_nudge",
+        name="Quiet Task Check-in",
+        replace_existing=True,
+    )
+
+    # 6. Late-work summary for managers, weekdays at 5:30 PM
+    sched.add_job(
+        locked_escalations,
+        trigger=CronTrigger(day_of_week="mon-fri", hour=17, minute=30, timezone=TIMEZONE),
+        id="manager_escalation",
+        name="Late Work Summary",
         replace_existing=True,
     )
 

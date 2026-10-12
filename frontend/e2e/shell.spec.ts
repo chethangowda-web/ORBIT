@@ -23,23 +23,23 @@ test.describe("app shell", () => {
     await expect(page.getByRole("dialog", { name: "Command palette" })).toBeHidden();
   });
 
-  test("the agent panel answers and records a run", async ({ page }) => {
+  test("Ask ORBIT answers and records what it did", async ({ page }) => {
     await signIn(page, "employee");
-    const rail = page.getByRole("complementary", { name: "ORBIT agent" });
-    if (!(await rail.isVisible())) await page.getByRole("button", { name: /Agent/ }).click();
+    const rail = page.getByRole("complementary", { name: "Ask ORBIT" });
+    if (!(await rail.isVisible())) await page.getByRole("button", { name: /Ask ORBIT/ }).click();
     await expect(rail).toBeVisible();
 
     await rail.getByLabel("Message ORBIT").fill("help");
     await rail.getByRole("button", { name: "Send message" }).click();
-    await expect(rail.getByText(/ORBIT AI Task Assistant/)).toBeVisible();
+    await expect(rail.getByText(/What ORBIT can do/)).toBeVisible();
 
-    await rail.getByRole("tab", { name: "runs" }).click();
-    await expect(rail.getByText("HELP").first()).toBeVisible();
+    await rail.getByRole("tab", { name: "History" }).click();
+    await expect(rail.getByText("Help", { exact: true }).first()).toBeVisible();
   });
 
   test("the health indicator reflects a reachable API", async ({ page }) => {
     await signIn(page, "employee");
-    await expect(page.getByRole("status").filter({ hasText: /All systems normal|Cache offline|Live/ })).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: /All good|Running slower|Live/ })).toBeVisible();
   });
 
   test("the profile page saves a preference", async ({ page }) => {

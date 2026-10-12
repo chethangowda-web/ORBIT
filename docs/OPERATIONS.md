@@ -72,6 +72,9 @@ The same rules apply in chat: the agent tools take the caller's identity and app
 | Morning briefing | 09:00 daily | `daily_briefing` |
 | Overdue alerts | 18:00 daily | `overdue_alert` |
 | Weekly summary (managers, admins) | Monday 09:30 | `weekly_summary` |
+| Due-tomorrow reminder (assignees of tasks due the next day) | 16:00 daily | `due_soon_reminder` |
+| Check-in on quiet tasks (in progress, no change or comment for 3 days; at most every 3 days per person) | 11:00 weekdays | `stale_nudge` |
+| Late work summary (managers, admins: tasks 3 or more days overdue) | 17:30 weekdays | `manager_escalation` |
 
 - Each user toggles these on the Profile page (stored as `user_preferences`).
 - A Redis lock (`orbit:lock:scheduler:<job>`, 5 minute TTL) stops several workers from running the same firing; if Redis is down the job still runs and the per-day dedupe in `notification_logs` limits duplicates.

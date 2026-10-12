@@ -226,6 +226,6 @@ def test_format_task_card():
     assert "cardsV2" in card
     card_body = card["cardsV2"][0]["card"]
     assert card_body["header"]["title"] == "Deploy Next.js App"
-    assert "HIGH" in card_body["header"]["subtitle"]
+    assert card_body["header"]["subtitle"] == "High priority • In progress"
     assert len(card_body["sections"][0]["widgets"]) == 3
     assert card_body["fixedFooter"]["primaryButton"]["text"] == "Mark Complete"

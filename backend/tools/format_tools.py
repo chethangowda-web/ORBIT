@@ -5,14 +5,16 @@ Builds interactive Google Chat Cards v2 and formatted Markdown text summaries.
 
 from typing import Any, Dict, List, Optional
 
+from services.wording import friendly  # noqa: F401  (re-exported for the agents)
+
 
 def format_task_card(task: Dict[str, Any]) -> Dict[str, Any]:
     """Format a task dictionary into a Google Chat Card v2 JSON structure."""
     task_id = str(task.get("id", ""))
     title = task.get("title", "Untitled Task")
-    priority = str(task.get("priority", "MEDIUM")).split(".")[-1]
-    status = str(task.get("status", "TODO")).split(".")[-1]
-    due_date = str(task.get("due_date", "No due date"))
+    priority = friendly(task.get("priority", "MEDIUM"))
+    status = friendly(task.get("status", "TODO"))
+    due_date = str(task.get("due_date") or "No due date")
     tags = task.get("tags", [])
     tags_str = ", ".join(tags) if tags else "None"
 
@@ -30,12 +32,12 @@ def format_task_card(task: Dict[str, Any]) -> Dict[str, Any]:
                 "card": {
                     "header": {
                         "title": title,
-                        "subtitle": f"Priority: {priority} • Status: {status}",
+                        "subtitle": f"{priority} priority • {status}",
                         "imageType": "CIRCLE",
                     },
                     "sections": [
                         {
-                            "header": "Task Details",
+                            "header": "Details",
                             "widgets": [
                                 {
                                     "decoratedText": {
@@ -87,10 +89,10 @@ def format_task_list_text(tasks: List[Dict[str, Any]], title: str = "Tasks") -> 
     lines = [f"📋 *{title}* ({len(tasks)} items):"]
     for i, t in enumerate(tasks, 1):
         status_icon = "✅" if t.get("status") == "DONE" else "⏳" if t.get("status") == "IN_PROGRESS" else "⬜"
-        prio = t.get("priority", "MEDIUM")
+        prio = friendly(t.get("priority", "MEDIUM"))
         t_title = t.get("title", "Untitled")
-        due = t.get("due_date", "No due date")
-        lines.append(f"{i}. {status_icon} *{t_title}* — [{prio}] (Due: {due})")
+        due = t.get("due_date") or "no due date"
+        lines.append(f"{i}. {status_icon} *{t_title}*: {prio} priority, due {due}")
 
     return "\n".join(lines)
 
@@ -108,17 +110,17 @@ def format_task_list_card(tasks: List[Dict[str, Any]], title: str = "Tasks") -> 
     widgets: List[Dict[str, Any]] = []
     for t in shown:
         task_id = str(t.get("id", ""))
-        priority = str(t.get("priority", "MEDIUM")).split(".")[-1]
-        status = str(t.get("status", "TODO")).split(".")[-1].replace("_", " ").title()
-        due = t.get("due_date") or "No due date"
+        priority = friendly(t.get("priority", "MEDIUM"))
+        status = friendly(t.get("status", "TODO"))
+        due = t.get("due_date") or "no due date"
         row: Dict[str, Any] = {
             "decoratedText": {
                 "text": f"<b>{t.get('title', 'Untitled')}</b>",
-                "bottomLabel": f"{priority} · {status} · due {due}",
+                "bottomLabel": f"{priority} priority · {status} · due {due}",
                 "wrapText": True,
             }
         }
-        if status.lower() != "done":
+        if status.lower() != "done" and t.get("status") != "DONE":
             row["decoratedText"]["button"] = {
                 "text": "Done",
                 "onClick": {

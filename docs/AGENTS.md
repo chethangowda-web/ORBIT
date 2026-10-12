@@ -433,6 +433,8 @@ app = workflow.compile(checkpointer=AsyncRedisSaver(redis_client))
 
 ## 6. Proactive Agent Flows
 
+Beyond the flows below, three follow-ups run without being asked (`backend/scheduler/jobs/follow_ups.py`): a reminder at 16:00 for tasks due tomorrow, a weekday 11:00 check-in on "in progress" tasks that have had no change or comment for 3 days (at most every 3 days per person), and a weekday 17:30 summary for managers of tasks 3 or more days overdue. Each honours per-person opt-outs, sends at most once per period, and records the real delivery outcome. Delete is the only action that asks for approval; everything else the agents do immediately.
+
 ### 6.1 Daily Briefing Flow (9:00 AM)
 ```
 APScheduler fires

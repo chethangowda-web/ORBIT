@@ -17,6 +17,7 @@ from db.models import NotificationLog, Task, User
 from metrics import record_notification
 from services.email import email_enabled, send_email
 from services.google_chat import send_dm, send_text_message
+from services.wording import friendly
 
 logger = logging.getLogger(__name__)
 
@@ -40,15 +41,15 @@ def _format_task_event_message(event_type: str, task: Task, actor_name: str, det
 
     if event_type == "task_assigned":
         return (
-            f"📌 *New Task Assigned*\n"
-            f"{icon} *{task.title}* (Priority: {task.priority})\n"
+            f"📌 *New task for you*\n"
+            f"{icon} *{task.title}* ({friendly(task.priority)} priority)\n"
             f"Assigned by: {actor_name}\n"
             f"Due: {due}"
         )
     if event_type == "task_updated":
         return (
-            f"✏️ *Task Updated*\n"
-            f"{icon} *{task.title}* (Priority: {task.priority}, Status: {task.status})\n"
+            f"✏️ *Task updated*\n"
+            f"{icon} *{task.title}* ({friendly(task.priority)} priority, {friendly(task.status).lower()})\n"
             f"Updated by: {actor_name}\n"
             f"Due: {due}"
         )
@@ -57,7 +58,7 @@ def _format_task_event_message(event_type: str, task: Task, actor_name: str, det
         return f"💬 *New comment* on *{task.title}*\n{actor_name} wrote:{quoted}"
     if event_type == "task_completed":
         return (
-            f"✅ *Task Completed*\n"
+            f"✅ *Task done*\n"
             f"*{task.title}* was marked done by {actor_name}."
         )
     return f"ℹ️ Task *{task.title}* changed."
