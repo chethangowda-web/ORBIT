@@ -13,6 +13,7 @@ from crud.users import get_opted_out_user_ids
 from metrics import record_notification
 from services.notifications import deliver_with_retry
 from tools.base import get_tool_session
+from tools.format_tools import friendly
 from tools.task_tools import get_overdue_tasks, get_tasks_due_today, get_user_tasks
 from agents.planner_agent import _format_plan_response, _rank_priority_score
 
@@ -56,7 +57,7 @@ async def _generate_user_briefing_text(user_id_str: str) -> str:
         if is_tod:
             reason_parts.append("Due today")
         if t.get("priority") in ("HIGH", "CRITICAL"):
-            reason_parts.append(f"{t.get('priority')} priority impact")
+            reason_parts.append(f"{friendly(t.get('priority'))} priority")
 
         reason = " | ".join(reason_parts) if reason_parts else "Standard queue item"
         scored_tasks.append((t, reason, score))

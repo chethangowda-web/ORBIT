@@ -18,7 +18,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Board", icon: LayoutDashboard },
   { href: "/tasks", label: "Tasks", icon: ListChecks },
   { href: "/insights", label: "Insights", icon: BarChart3, managerOnly: true },
-  { href: "/traces", label: "Agent workflow", icon: Activity },
+  { href: "/traces", label: "ORBIT activity", icon: Activity },
   { href: "/admin", label: "Admin", icon: Settings2, managerOnly: true },
 ];
 

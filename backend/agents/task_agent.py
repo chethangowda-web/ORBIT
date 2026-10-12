@@ -13,19 +13,20 @@ from tools.task_tools import (
     search_tasks,
     update_task,
 )
+from tools.format_tools import friendly
 from tools.user_tools import get_all_users
 
-HELP_TEXT = """*ORBIT AI Task Assistant* 🚀
+HELP_TEXT = """*What ORBIT can do* 🚀
 
-Here are things you can ask me:
-• *Create task:* "Create a high priority task for John to deploy frontend by Friday"
-• *View tasks:* "Show my pending tasks" or "What are my overdue tasks?"
-• *Plan day:* "What should I focus on today?"
-• *Complete task:* "Mark the CRM deployment task as completed"
-• *Update task:* "Make it high priority" or "Change the API testing deadline to tomorrow"
-• *Assign task:* "Assign that to Sarah"
-• *Search:* "Search for database migration"
-• *Delete task:* "Delete the old login page task"
+Just tell me in your own words, for example:
+• *Add a task:* "Create a high priority task for John to prepare the client deck by Friday"
+• *See your work:* "Show my tasks" or "What is overdue?"
+• *Plan your day:* "What should I focus on today?"
+• *Finish a task:* "Mark the budget report as done"
+• *Change a task:* "Make it high priority" or "Move the deadline to tomorrow"
+• *Hand over a task:* "Assign that to Sarah"
+• *Find a task:* "Search for budget report"
+• *Remove a task:* "Delete the old brochure task" (I will ask you to confirm first)
 """
 
 
@@ -63,7 +64,7 @@ async def _handle_create_task(ctx: dict[str, Any], user_id: str, tools_used: lis
 
     task_data = res.get("data", {})
     card = format_task_card(task_data)
-    text = f"✅ Created Task #{task_data.get('id')}: *{task_data.get('title')}*"
+    text = f"✅ Created *{task_data.get('title')}*"
     return text, "card", card, str(task_data.get("id")) if task_data.get("id") else None
 
 
@@ -88,7 +89,7 @@ async def _handle_update_task(ctx: dict[str, Any], user_id: str, state_ref_id: A
 
     if not task_id:
         return (
-            "🤔 Which task would you like to update? Please specify the task title or ID (e.g. 'Make Task #123 high priority').",
+            "🤔 Which task do you mean? Tell me its name, for example: 'Make the budget report high priority'.",
             "text",
             None,
             None,
@@ -117,16 +118,16 @@ async def _handle_update_task(ctx: dict[str, Any], user_id: str, state_ref_id: A
     if ctx.get("priority"):
         p_val = str(task_data.get("priority", "")).split(".")[-1]
         task_data["priority"] = p_val
-        changes.append(f"priority → `[{p_val}]`")
+        changes.append(f"priority is now *{friendly(p_val)}*")
     if ctx.get("due_date"):
-        changes.append(f"deadline → {task_data.get('due_date')}")
+        changes.append(f"due date is now {task_data.get('due_date')}")
     if ctx.get("assignee_name"):
-        changes.append(f"assignee → *{ctx.get('assignee_name')}*")
-    changes_str = ", ".join(changes) if changes else "details updated"
+        changes.append(f"it is now with *{ctx.get('assignee_name')}*")
+    changes_str = ", ".join(changes) if changes else "details saved"
 
     card = format_task_card(task_data)
     return (
-        f"✏️ Updated Task #{task_data.get('id')} (*{task_data.get('title')}*): {changes_str}.",
+        f"✏️ Updated *{task_data.get('title')}*: {changes_str}.",
         "card",
         card,
         str(task_data.get("id")),
@@ -143,7 +144,7 @@ async def _handle_get_task_detail(ctx: dict[str, Any], user_id: str, state_ref_i
             task_id = s_res["data"][0].get("id")
 
     if not task_id:
-        return "🤔 Which task would you like to view? Please specify the task title or ID.", "text", None, None
+        return "🤔 Which task do you mean? Tell me its name.", "text", None, None
 
     tools_used.append("get_task_by_id")
     res = await get_task_by_id.ainvoke({"task_id": task_id, "viewer_id": user_id})
@@ -153,7 +154,7 @@ async def _handle_get_task_detail(ctx: dict[str, Any], user_id: str, state_ref_i
     task_data = res.get("data", {})
     card = format_task_card(task_data)
     return (
-        f"📌 Details for Task #{task_data.get('id')}: *{task_data.get('title')}* `[{task_data.get('status')}]`",
+        f"📌 *{task_data.get('title')}* is {friendly(task_data.get('status'))}.",
         "card",
         card,
         str(task_data.get("id")),

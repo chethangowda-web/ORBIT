@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifierLabel, normalizeSteps, outcomeOf, specialistOf, summarizeRuns, toolLabel } from "@/lib/workflow";
+import { classifierLabel, intentLabel, normalizeSteps, outcomeOf, specialistOf, stepLabel, summarizeRuns } from "@/lib/workflow";
 import type { AgentExecutionTrace } from "@/types";
 
 const run = (over: Partial<AgentExecutionTrace> = {}): AgentExecutionTrace => ({
@@ -21,19 +21,34 @@ const run = (over: Partial<AgentExecutionTrace> = {}): AgentExecutionTrace => ({
   ...over,
 });
 
-describe("toolLabel", () => {
-  it("turns tool ids into readable names", () => {
-    expect(toolLabel("get_tasks_due_today")).toBe("Get tasks due today");
-    expect(toolLabel("create_task")).toBe("Create task");
+describe("stepLabel", () => {
+  it("turns internal action ids into everyday sentences", () => {
+    expect(stepLabel("get_tasks_due_today")).toBe("Checked what is due today");
+    expect(stepLabel("create_task")).toBe("Added the task");
+    expect(stepLabel("get_overdue_tasks")).toBe("Checked what is late");
+  });
+
+  it("falls back to readable words for an action it does not know", () => {
+    expect(stepLabel("archive_old_tasks")).toBe("Archive old tasks");
+  });
+});
+
+describe("intentLabel", () => {
+  it("describes what the person asked for", () => {
+    expect(intentLabel("PLAN_DAY")).toBe("Planning your day");
+    expect(intentLabel("GET_OVERDUE_TASKS")).toBe("Checking late work");
+    expect(intentLabel("UNKNOWN")).toBe("Not sure what you meant");
+    expect(intentLabel(null)).toBe("Not sure what you meant");
+    expect(intentLabel("SOMETHING_NEW")).toBe("Something new");
   });
 });
 
 describe("classifierLabel", () => {
-  it("names how the intent was decided", () => {
-    expect(classifierLabel("llm")).toBe("Gemini AI");
-    expect(classifierLabel("rules")).toBe("built-in rules");
-    expect(classifierLabel("flow")).toBe("approval answer");
-    expect(classifierLabel(null)).toBe("unknown");
+  it("says how the request was understood, without technical terms", () => {
+    expect(classifierLabel("llm")).toBe("AI");
+    expect(classifierLabel("rules")).toBe("a quick check (the AI was busy)");
+    expect(classifierLabel("flow")).toBe("your answer");
+    expect(classifierLabel(null)).toBe("ORBIT");
   });
 });
 
@@ -60,7 +75,7 @@ describe("outcomeOf and specialistOf", () => {
     expect(outcomeOf({ status: "SUCCESS" }).tone).toBe("ok");
     expect(outcomeOf({ status: "NEEDS_CONFIRMATION" }).label).toMatch(/approval/);
     expect(outcomeOf({ status: "TIMEOUT" }).tone).toBe("danger");
-    expect(outcomeOf({ status: "FAILURE" }).label).toBe("Failed");
+    expect(outcomeOf({ status: "FAILURE" }).label).toBe("Didn't work");
   });
 
   it("finds the agent that did the work", () => {

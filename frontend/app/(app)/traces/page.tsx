@@ -11,7 +11,7 @@ import { EmptyState, ErrorState, PageHeader, Panel, PanelHeader, Skeleton } from
 import { api } from "@/lib/api-client";
 import { formatDateTime, formatMs, timeAgo } from "@/lib/format";
 import { keys, POLL_MS } from "@/lib/hooks";
-import { agentName, classifierLabel, specialistOf } from "@/lib/workflow";
+import { agentName, classifierLabel, intentLabel, specialistOf } from "@/lib/workflow";
 import type { AgentExecutionTrace } from "@/types";
 
 const PAGE_SIZE = 15;
@@ -23,15 +23,15 @@ function Row({ run }: { run: AgentExecutionTrace }) {
     <>
       <tr className="cursor-pointer transition-colors hover:bg-surface-2/60" onClick={() => setOpen((v) => !v)}>
         <td className="w-8 pl-3">
-          <button type="button" aria-expanded={open} aria-label={open ? "Hide workflow" : "Show workflow"} className="text-fg-faint">
+          <button type="button" aria-expanded={open} aria-label={open ? "Hide details" : "Show details"} className="text-fg-faint">
             {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
           </button>
         </td>
         <td className="whitespace-nowrap px-3 py-2.5 text-fg-muted">
           <time dateTime={run.started_at} title={formatDateTime(run.started_at)}>{timeAgo(run.started_at)}</time>
         </td>
-        <td className="num px-3 py-2.5 text-fg">{run.intent ?? "UNKNOWN"}</td>
-        <td className="px-3 py-2.5 text-fg-muted">{agent ? agentName(agent) : "Supervisor only"}</td>
+        <td className="px-3 py-2.5 text-fg">{intentLabel(run.intent)}</td>
+        <td className="px-3 py-2.5 text-fg-muted">{agent ? agentName(agent) : "Answered directly"}</td>
         <td className="px-3 py-2.5 text-fg-muted">{classifierLabel(run.classifier)}</td>
         <td className="num px-3 py-2.5 text-right text-fg-muted">{run.tool_calls_made.length}</td>
         <td className="num px-3 py-2.5 text-right">{formatMs(run.total_duration_ms)}</td>
@@ -42,7 +42,6 @@ function Row({ run }: { run: AgentExecutionTrace }) {
           <td />
           <td colSpan={7} className="px-3 pb-4 pt-2">
             <WorkflowDiagram run={run} orientation="horizontal" />
-            <p className="num mt-2 text-[10px] text-fg-faint">Run {run.request_id}</p>
           </td>
         </tr>
       )}
@@ -70,21 +69,21 @@ export default function TracesPage() {
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader
-        title="Agent workflow"
-        description="See what the agents did: who understood each request, which agent handled it, which tools ran, and how long every step took."
+        title="ORBIT activity"
+        description="See how ORBIT handled each request: how it was understood, who helped, what they did, and how long it took."
       />
 
       <AgentOverview runs={overview.data?.items} loading={overview.isLoading} />
 
       <Panel>
-        <PanelHeader title="Run history" description="Open a run to see its workflow." />
+        <PanelHeader title="Recent requests" description="Open one to see what happened step by step." />
         {error ? (
-          <div className="p-4"><ErrorState title="Could not load agent runs" error={error} onRetry={() => void refetch()} /></div>
+          <div className="p-4"><ErrorState title="Could not load activity" error={error} onRetry={() => void refetch()} /></div>
         ) : isLoading ? (
           <div className="p-4"><Skeleton className="h-40 w-full" /></div>
         ) : !data || data.items.length === 0 ? (
           <div className="p-4">
-            <EmptyState title="No agent runs yet" description="Ask ORBIT something from the agent panel or Google Chat and its workflow appears here." />
+            <EmptyState title="Nothing here yet" description="Ask ORBIT something in Google Chat or with Ask ORBIT, and what it did appears here." />
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -93,12 +92,12 @@ export default function TracesPage() {
                 <tr>
                   <th className="w-8" />
                   <th scope="col" className="px-3 py-2">When</th>
-                  <th scope="col" className="px-3 py-2">Intent</th>
+                  <th scope="col" className="px-3 py-2">What you asked</th>
                   <th scope="col" className="px-3 py-2">Handled by</th>
-                  <th scope="col" className="px-3 py-2">Understood with</th>
-                  <th scope="col" className="px-3 py-2 text-right">Tools</th>
-                  <th scope="col" className="px-3 py-2 text-right">Duration</th>
-                  <th scope="col" className="px-3 py-2">Status</th>
+                  <th scope="col" className="px-3 py-2">Understood by</th>
+                  <th scope="col" className="px-3 py-2 text-right">Steps</th>
+                  <th scope="col" className="px-3 py-2 text-right">Time</th>
+                  <th scope="col" className="px-3 py-2">Result</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line-subtle">{data.items.map((run) => <Row key={run.id} run={run} />)}</tbody>
@@ -106,7 +105,7 @@ export default function TracesPage() {
           </div>
         )}
       </Panel>
-      {meta && meta.total_pages > 1 && <Pagination meta={meta} noun="runs" onPageChange={setPage} />}
+      {meta && meta.total_pages > 1 && <Pagination meta={meta} noun="requests" onPageChange={setPage} />}
     </div>
   );
 }

@@ -13,7 +13,7 @@ import { AGENT_LABEL } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 import { formatMs, timeAgo } from "@/lib/format";
 import { useTraces } from "@/lib/hooks";
-import { agentName, normalizeSteps } from "@/lib/workflow";
+import { agentName, intentLabel, normalizeSteps } from "@/lib/workflow";
 import type { AgentExecutionTrace, ChatExecutionMetadata } from "@/types";
 
 function TraceDetails({ metadata, request, defaultOpen }: { metadata: ChatExecutionMetadata; request?: string; defaultOpen: boolean }) {
@@ -147,9 +147,9 @@ function ChatPanel() {
           <div className="rounded-control border border-line bg-surface-2 p-2.5 text-xs text-fg-muted" role="status">
             <p className="flex items-center gap-2 font-medium text-fg">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-info" aria-hidden />
-              Agents are working
+              ORBIT is working on it
             </p>
-            <p className="mt-1 text-[11px]">The Supervisor is reading your request, then the right agent will use your tasks to answer.</p>
+            <p className="mt-1 text-[11px]">Reading your request, then the right helper will check your tasks and answer.</p>
           </div>
         )}
         <div ref={endRef} />
@@ -192,11 +192,11 @@ function RunRow({ run }: { run: AgentExecutionTrace }) {
         className="w-full px-3 py-2.5 text-left transition-colors hover:bg-surface-2/60"
       >
         <div className="flex items-center justify-between gap-2">
-          <span className="num truncate text-xs font-medium text-fg">{run.intent ?? "UNKNOWN"}</span>
+          <span className="truncate text-xs font-medium text-fg">{intentLabel(run.intent)}</span>
           <RunStatusBadge status={run.status} />
         </div>
         <div className="mt-1 flex items-center justify-between text-[11px] text-fg-faint">
-          <span className="truncate">{run.agents_invoked.map((a) => AGENT_LABEL[a] ?? a).join(" > ") || "Supervisor"}</span>
+          <span className="truncate">{run.agents_invoked.map((a) => AGENT_LABEL[a] ?? a).join(" > ") || "Coordinator"}</span>
           <span className="num shrink-0">
             {formatMs(run.total_duration_ms)} / {timeAgo(run.started_at)}
           </span>
@@ -223,12 +223,12 @@ function RunsPanel() {
     );
   if (isError) return <p className="p-4 text-xs text-fg-muted">Could not load recent runs.</p>;
   if (!data || data.items.length === 0)
-    return <p className="p-4 text-xs text-fg-muted">No agent runs yet. Ask ORBIT something to see how it routes the request.</p>;
+    return <p className="p-4 text-xs text-fg-muted">Nothing yet. Ask ORBIT something to see how it was handled.</p>;
   return (
     <div className="flex-1 overflow-y-auto">
       <ul>{data.items.map((run) => <RunRow key={run.id} run={run} />)}</ul>
       <Link href="/traces" className="block px-3 py-3 text-center text-[11px] text-accent hover:underline">
-        Open the Agent workflow page
+        Open ORBIT activity
       </Link>
     </div>
   );
@@ -243,7 +243,7 @@ export function AgentRail() {
     <>
       <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setOpen(false)} aria-hidden />
       <aside
-        aria-label="ORBIT agent"
+        aria-label="Ask ORBIT"
         className="fixed inset-y-0 right-0 z-40 flex w-full max-w-sm flex-col border-l border-line bg-surface-1 animate-slide-in-right lg:static lg:z-auto lg:w-[320px] lg:max-w-none lg:animate-none"
       >
         <header className="flex items-center justify-between border-b border-line px-3 py-2">
@@ -251,7 +251,7 @@ export function AgentRail() {
             <span className="flex h-7 w-7 items-center justify-center rounded-control border border-line bg-surface-2 text-accent">
               <Bot className="h-4 w-4" aria-hidden />
             </span>
-            <div role="tablist" aria-label="Agent panel" className="flex gap-0.5">
+            <div role="tablist" aria-label="Ask ORBIT sections" className="flex gap-0.5">
               {(["chat", "runs"] as const).map((id) => (
                 <button
                   key={id}
@@ -264,12 +264,12 @@ export function AgentRail() {
                     tab === id ? "bg-surface-3 text-fg" : "text-fg-muted hover:text-fg",
                   )}
                 >
-                  {id}
+                  {id === "chat" ? "Ask" : "History"}
                 </button>
               ))}
             </div>
           </div>
-          <IconButton label="Close agent panel" size="sm" onClick={() => setOpen(false)}>
+          <IconButton label="Close Ask ORBIT" size="sm" onClick={() => setOpen(false)}>
             <PanelRightClose className="h-4 w-4" />
           </IconButton>
         </header>

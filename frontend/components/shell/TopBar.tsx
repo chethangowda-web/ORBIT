@@ -20,7 +20,7 @@ const TITLES: Record<string, string> = {
   "/": "Board",
   "/tasks": "Tasks",
   "/insights": "Insights",
-  "/traces": "Agent workflow",
+  "/traces": "ORBIT activity",
   "/admin": "Admin",
   "/profile": "Profile",
 };
@@ -40,16 +40,16 @@ function HealthPill() {
   if (!isLoading) {
     if (isError || !data) {
       tone = "bg-danger";
-      label = "API unreachable";
+      label = "Can't connect";
     } else if (data.database !== "connected") {
       tone = "bg-danger";
-      label = "Database down";
+      label = "Service problem";
     } else if (data.redis !== "connected") {
       tone = "bg-warn";
-      label = "Cache offline";
+      label = "Running slower";
     } else {
       tone = "bg-ok";
-      label = live ? "Live" : "All systems normal";
+      label = live ? "Live" : "All good";
     }
   }
   return (
@@ -144,8 +144,8 @@ export function TopBar({ onOpenPalette }: { onOpenPalette: () => void }) {
         </Button>
         <Button size="sm" aria-pressed={open} onClick={() => setOpen(!open)}>
           <Bot className="h-3.5 w-3.5" aria-hidden />
-          <span className="hidden sm:inline">Agent</span>
-          <span className="sr-only sm:hidden">Toggle agent panel</span>
+          <span className="hidden sm:inline">Ask ORBIT</span>
+          <span className="sr-only sm:hidden">Show or hide Ask ORBIT</span>
         </Button>
         <UserMenu />
       </div>

@@ -31,7 +31,7 @@ describe("badges", () => {
 
   it("describe agent run outcomes", () => {
     render(<RunStatusBadge status="NEEDS_CONFIRMATION" />);
-    expect(screen.getByText("Needs confirmation")).toBeInTheDocument();
+    expect(screen.getByText("Needs your approval")).toBeInTheDocument();
   });
 });
 
@@ -163,34 +163,37 @@ describe("WorkflowDiagram", () => {
     total_duration_ms: 8500,
   };
 
-  it("draws the request, the supervisor's decision, the agent with numbered tools, and the outcome", () => {
-    render(<WorkflowDiagram run={planRun} request="plan my day" />);
+  it("tells the story in everyday words, with no technical terms", () => {
+    const { container } = render(<WorkflowDiagram run={planRun} request="plan my day" />);
     expect(screen.getByText(/plan my day/)).toBeInTheDocument();
-    expect(screen.getByText("Supervisor")).toBeInTheDocument();
-    expect(screen.getByText("Plan day")).toBeInTheDocument();
-    expect(screen.getByText(/92%/)).toBeInTheDocument();
-    expect(screen.getByText(/Decided by Gemini AI/)).toBeInTheDocument();
-    expect(screen.getByText("Planner agent")).toBeInTheDocument();
-    const tools = within(screen.getByRole("list", { name: "Tools used, in order" })).getAllByRole("listitem");
-    expect(tools.map((li) => li.textContent)).toEqual([expect.stringContaining("Get overdue tasks"), expect.stringContaining("Get user tasks")]);
-    expect(screen.getByText("Replied")).toBeInTheDocument();
-    expect(screen.getByText(/Total 8.5s/)).toBeInTheDocument();
+    expect(screen.getByText("Coordinator")).toBeInTheDocument();
+    expect(screen.getByText("Planning your day")).toBeInTheDocument();
+    expect(screen.getByText(/Understood by AI/)).toBeInTheDocument();
+    expect(screen.getByText("Day planner")).toBeInTheDocument();
+    const steps = within(screen.getByRole("list", { name: "What it did, in order" })).getAllByRole("listitem");
+    expect(steps.map((li) => li.textContent)).toEqual([expect.stringContaining("Checked what is late"), expect.stringContaining("Checked your tasks")]);
+    expect(screen.getByText("Done")).toBeInTheDocument();
+    expect(screen.getByText(/Took 8.5s/)).toBeInTheDocument();
+    for (const jargon of [/supervisor/i, /intent/i, /\btools?\b/i, /get_overdue_tasks/, /PLAN_DAY/, /gemini/i, /\bllm\b/i, /confidence/i, /\d+%/]) {
+      expect(container.textContent).not.toMatch(jargon);
+    }
   });
 
-  it("says when approval is needed or the run failed", () => {
-    const { rerender } = render(<WorkflowDiagram run={{ ...planRun, status: "NEEDS_CONFIRMATION" }} />);
+  it("says when approval is needed or the request did not work, without exposing the error", () => {
+    const { rerender, container } = render(<WorkflowDiagram run={{ ...planRun, status: "NEEDS_CONFIRMATION" }} />);
     expect(screen.getByText("Waiting for your approval")).toBeInTheDocument();
-    rerender(<WorkflowDiagram run={{ ...planRun, status: "FAILURE", error_message: "boom" }} />);
-    expect(screen.getByText("Failed")).toBeInTheDocument();
-    expect(screen.getByText("boom")).toBeInTheDocument();
+    rerender(<WorkflowDiagram run={{ ...planRun, status: "FAILURE", error_message: "sqlalchemy.exc.OperationalError" }} />);
+    expect(screen.getByText("Didn't work")).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/sqlalchemy/i);
+    expect(screen.getByText(/Something went wrong on our side/)).toBeInTheDocument();
   });
 
-  it("still draws a run that was stored before steps were recorded", () => {
+  it("still draws a request that was saved before steps were recorded", () => {
     render(<WorkflowDiagram run={{ agents_invoked: ["supervisor", "task_agent"], tool_calls_made: ["create_task"], intent: "CREATE_TASK", status: "SUCCESS" }} />);
-    expect(screen.getByText("Task agent")).toBeInTheDocument();
-    const tools = within(screen.getByRole("list", { name: "Tools used, in order" })).getAllByRole("listitem");
-    expect(tools).toHaveLength(1);
-    expect(tools[0]).toHaveTextContent("Create task");
+    expect(screen.getByText("Task helper")).toBeInTheDocument();
+    const steps = within(screen.getByRole("list", { name: "What it did, in order" })).getAllByRole("listitem");
+    expect(steps).toHaveLength(1);
+    expect(steps[0]).toHaveTextContent("Added the task");
   });
 });
 

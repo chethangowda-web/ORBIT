@@ -40,7 +40,7 @@ export default function BoardPage() {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Board"
-        description="Drag cards between lanes, or use the arrow on a card. Updates here are audited and sent to Google Chat."
+        description="Drag cards between lanes, or use the arrow on a card. Every change is recorded and shared in Google Chat."
         actions={
           <div role="group" aria-label="Scope" className="flex rounded-control border border-line bg-surface-1 p-0.5">
             {(["all", "mine"] as const).map((s) => (

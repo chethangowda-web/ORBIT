@@ -6,7 +6,7 @@ import { Providers } from "./providers";
 
 export const metadata: Metadata = {
   title: { default: "ORBIT", template: "%s | ORBIT" },
-  description: "Multi-agent task management with Google Chat integration.",
+  description: "Smart task management that works with Google Chat.",
 };
 
 export const viewport: Viewport = {

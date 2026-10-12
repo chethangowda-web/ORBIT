@@ -182,11 +182,14 @@ export const api = {
 
   admin: {
     schedulerStatus: async () => unwrap<SchedulerStatus>(await apiClient.get("/admin/scheduler/status")),
-    trigger: async (job: "briefing" | "overdue" | "weekly") => {
+    trigger: async (job: "briefing" | "overdue" | "weekly" | "dueSoon" | "stale" | "escalation") => {
       const path = {
         briefing: "/admin/trigger-briefing",
         overdue: "/admin/trigger-overdue-alerts",
         weekly: "/admin/trigger-weekly-summary",
+        dueSoon: "/admin/trigger-due-soon",
+        stale: "/admin/trigger-stale-nudges",
+        escalation: "/admin/trigger-escalations",
       }[job];
       return unwrap<Record<string, number>>(await apiClient.post(path, null, { params: { force: true } }));
     },

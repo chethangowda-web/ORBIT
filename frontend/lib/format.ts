@@ -146,7 +146,7 @@ export function sourceLabel(source: string): string {
     case "api":
       return "Dashboard";
     case "scheduler":
-      return "Scheduler";
+      return "Automatic";
     default:
       return humanize(source);
   }

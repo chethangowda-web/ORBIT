@@ -91,12 +91,15 @@ export const NOTIFICATION_TYPE_LABEL: Record<string, string> = {
   task_updated: "Task updated",
   task_completed: "Task completed",
   task_commented: "New comment",
+  due_soon_reminder: "Due-tomorrow reminder",
+  stale_nudge: "Check-in on a quiet task",
+  manager_escalation: "Late work summary",
 };
 
 export const AGENT_LABEL: Record<string, string> = {
-  supervisor: "Supervisor",
-  task_agent: "Tasks",
-  planner_agent: "Planner",
-  recommendation_agent: "Insights",
-  review_agent: "Review",
+  supervisor: "Coordinator",
+  task_agent: "Task helper",
+  planner_agent: "Day planner",
+  recommendation_agent: "Advisor",
+  review_agent: "Reviewer",
 };

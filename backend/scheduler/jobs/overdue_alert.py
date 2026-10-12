@@ -13,6 +13,7 @@ from crud.users import get_opted_out_user_ids
 from metrics import record_notification
 from services.notifications import deliver_with_retry
 from tools.base import get_tool_session
+from tools.format_tools import friendly
 
 logger = logging.getLogger(__name__)
 
@@ -41,17 +42,15 @@ async def _has_already_received_overdue_alert(session: AsyncSession, user_id: An
 def _format_overdue_message(user_name: str, tasks: List[Task]) -> str:
     """Formats overdue notification text with priority indicators."""
     lines = [
-        f"🚨 *Overdue Tasks Alert for {user_name}*",
-        f"You have {len(tasks)} overdue item(s) that require prompt attention:\n",
+        f"🚨 *Late tasks, {user_name.split()[0] if user_name else 'there'}*",
+        f"You have {len(tasks)} task{'s' if len(tasks) != 1 else ''} past the due date:\n",
     ]
     for idx, task in enumerate(tasks, start=1):
         icon = PRIORITY_ICONS.get(task.priority, "⚪")
         due_str = task.due_date.isoformat() if task.due_date else "Unknown"
-        lines.append(f"{idx}. {icon} *{task.title}* (Due: {due_str}, Priority: {task.priority})")
+        lines.append(f"{idx}. {icon} *{task.title}* (was due {due_str}, {friendly(task.priority)} priority)")
 
-    lines.append(
-        "\n💡 *Action items:* Please update task status in ORBIT or request a deadline extension."
-    )
+    lines.append("\n💡 Tell me if any of these are done, or if a due date should move.")
     return "\n".join(lines)
 
 

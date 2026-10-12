@@ -135,7 +135,7 @@ export function TaskFormModal({ open, onClose, task, defaultStatus = "TODO" }: P
           data-autofocus
           value={form.title}
           maxLength={255}
-          placeholder="Deploy the frontend to staging"
+          placeholder="Prepare the Friday client presentation"
           error={submitted ? errors.title : null}
           onChange={(e) => set("title", e.target.value)}
         />

@@ -69,8 +69,8 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
     threadRef.current = window.sessionStorage.getItem(THREAD_KEY) || newThreadId();
     window.sessionStorage.setItem(THREAD_KEY, threadRef.current);
     const stored = window.localStorage.getItem(OPEN_KEY);
-    // First visit: open only where there is room beside the board.
-    setOpenState(stored === null ? window.innerWidth >= 1536 : stored === "1");
+    // Google Chat is the main place to talk to ORBIT, so this panel stays closed until opened.
+    setOpenState(stored === "1");
   }, []);
 
   const setOpen = useCallback((value: boolean) => {

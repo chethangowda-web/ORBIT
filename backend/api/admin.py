@@ -20,6 +20,7 @@ from db.session import get_db
 from dependencies import require_role
 from schemas.common import PaginationMeta, api_response
 from scheduler.jobs.daily_briefing import run_daily_briefing
+from scheduler.jobs.follow_ups import run_due_soon_reminders, run_manager_escalations, run_stale_nudges
 from scheduler.jobs.overdue_alert import run_overdue_alerts
 from scheduler.jobs.weekly_summary import run_weekly_summary
 from scheduler.scheduler import get_scheduler_status
@@ -38,6 +39,36 @@ async def trigger_daily_briefing(
         data=summary,
         meta={"action": "trigger_daily_briefing", "force": force, "triggered_by": str(current_user.id)},
     )
+
+
+@router.post("/trigger-due-soon", status_code=status.HTTP_200_OK)
+async def trigger_due_soon(
+    force: bool = Query(True, description="Bypass duplicate check if True"),
+    current_user: User = Depends(require_role("admin", "manager")),
+) -> Dict[str, Any]:
+    """Manually sends the due-tomorrow reminders."""
+    summary = await run_due_soon_reminders(force=force)
+    return api_response(data=summary, meta={"action": "trigger_due_soon", "force": force, "triggered_by": str(current_user.id)})
+
+
+@router.post("/trigger-stale-nudges", status_code=status.HTTP_200_OK)
+async def trigger_stale_nudges(
+    force: bool = Query(True, description="Bypass duplicate check if True"),
+    current_user: User = Depends(require_role("admin", "manager")),
+) -> Dict[str, Any]:
+    """Manually sends the check-ins about tasks that went quiet."""
+    summary = await run_stale_nudges(force=force)
+    return api_response(data=summary, meta={"action": "trigger_stale_nudges", "force": force, "triggered_by": str(current_user.id)})
+
+
+@router.post("/trigger-escalations", status_code=status.HTTP_200_OK)
+async def trigger_escalations(
+    force: bool = Query(True, description="Bypass duplicate check if True"),
+    current_user: User = Depends(require_role("admin", "manager")),
+) -> Dict[str, Any]:
+    """Manually sends the late-work summary to managers."""
+    summary = await run_manager_escalations(force=force)
+    return api_response(data=summary, meta={"action": "trigger_escalations", "force": force, "triggered_by": str(current_user.id)})
 
 
 @router.post("/trigger-overdue-alerts", status_code=status.HTTP_200_OK)

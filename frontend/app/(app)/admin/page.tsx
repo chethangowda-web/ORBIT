@@ -25,6 +25,9 @@ const JOBS = [
   { id: "briefing", label: "Morning briefing", confirm: "Send today's briefing to every active user who has not opted out?" },
   { id: "overdue", label: "Overdue alerts", confirm: "Send overdue-task alerts to every assignee with late work?" },
   { id: "weekly", label: "Weekly summary", confirm: "Send the weekly summary to all managers and admins?" },
+  { id: "dueSoon", label: "Due-tomorrow reminders", confirm: "Remind everyone who has a task due tomorrow?" },
+  { id: "stale", label: "Check-ins on quiet tasks", confirm: "Ask assignees about tasks that have not changed for 3 days?" },
+  { id: "escalation", label: "Late work summary", confirm: "Send managers a summary of tasks that are 3 or more days late?" },
 ] as const;
 
 function StatusRow({ label, ok, value, hint }: { label: string; ok?: boolean; value: React.ReactNode; hint?: string }) {
@@ -42,19 +45,28 @@ function StatusRow({ label, ok, value, hint }: { label: string; ok?: boolean; va
   );
 }
 
-const deliveries = (d: Record<string, number>) => `${d.sent ?? 0} sent · ${d.failed ?? 0} failed · ${d.skipped ?? 0} skipped`;
+const deliveries = (d: Record<string, number>) => `${d.sent ?? 0} delivered · ${d.failed ?? 0} not delivered · ${d.skipped ?? 0} not sent`;
+
+const SCHEDULE_TEXT: Record<string, string> = {
+  daily_briefing: "Every day at 9:00 am",
+  overdue_alert: "Every day at 6:00 pm",
+  weekly_summary: "Every Monday at 9:30 am",
+  due_soon_reminder: "Every day at 4:00 pm",
+  stale_nudge: "Weekdays at 11:00 am",
+  manager_escalation: "Weekdays at 5:30 pm",
+};
 
 function IntegrationsTab() {
   const { data, isLoading, error, refetch } = useIntegrations();
-  if (error) return <ErrorState title="Could not load integration status" error={error} onRetry={() => void refetch()} />;
+  if (error) return <ErrorState title="Could not load connections" error={error} onRetry={() => void refetch()} />;
   if (isLoading || !data) return <Skeleton className="h-64 w-full" />;
 
   const chat = data.google_chat;
   const active = chat.events_24h > 0;
   const ready = chat.verification_enabled && chat.audience_configured;
-  const classified = Object.entries(data.llm.classified_24h)
+  const understood = Object.entries(data.llm.classified_24h)
     .filter(([key]) => key !== "unknown")
-    .map(([key, n]) => `${key === "llm" ? "Gemini" : key === "rules" ? "rules" : key} ${n}`)
+    .map(([key, n]) => `${n} ${key === "llm" ? "by AI" : "by quick check"}`)
     .join(" · ");
 
   return (
@@ -62,37 +74,35 @@ function IntegrationsTab() {
       <Panel className="lg:col-span-2">
         <PanelHeader
           title="Google Chat"
-          description="The bot answers in Chat and sends direct messages, using the same tasks as this dashboard."
+          description="ORBIT answers in Chat and sends private messages, using the same tasks as this page."
           icon={<MessageSquare className="h-4 w-4" />}
           actions={<Badge tone={active ? "ok" : ready ? "info" : "warn"}>{active ? "Connected and in use" : ready ? "Ready, no messages in 24 hours" : "Needs setup"}</Badge>}
         />
         <div className="grid gap-x-8 divide-y divide-line-subtle px-4 md:grid-cols-2 md:divide-y-0">
           <div className="divide-y divide-line-subtle">
-            <StatusRow label="Request verification" ok={chat.verification_enabled} value={chat.verification_enabled ? "On" : "Off"} hint="Only requests signed by Google are accepted" />
-            <StatusRow label="Verification audience" ok={chat.audience_configured} value={chat.audience_configured ? "Set" : "Missing"} />
-            <StatusRow label="Service account for direct messages" ok={chat.service_account_configured} value={chat.service_account_configured ? "Configured" : "Missing"} />
+            <StatusRow label="Only real Google messages are accepted" ok={chat.verification_enabled && chat.audience_configured} value={chat.verification_enabled && chat.audience_configured ? "Protected" : "Not protected"} hint="Keeps other people from pretending to be your team" />
+            <StatusRow label="Can send private messages" ok={chat.service_account_configured} value={chat.service_account_configured ? "Yes" : "Not set up"} hint="Needed for reminders and task alerts" />
           </div>
           <div className="divide-y divide-line-subtle">
-            <StatusRow label="Messages received, last 24 hours" value={chat.events_24h} />
+            <StatusRow label="Messages in the last 24 hours" value={chat.events_24h} />
             <StatusRow label="Last message" value={chat.last_event_at ? timeAgo(chat.last_event_at) : "None yet"} />
-            <StatusRow label="People linked to Chat" value={`${chat.linked_users} (${chat.dm_ready_users} can receive direct messages)`} />
+            <StatusRow label="People using Chat" value={`${chat.linked_users} (${chat.dm_ready_users} can get private messages)`} />
           </div>
         </div>
-        <p className="border-t border-line-subtle px-4 py-2.5 text-[11px] text-fg-faint">Notifications, last 24 hours: {deliveries(chat.deliveries_24h)}</p>
+        <p className="border-t border-line-subtle px-4 py-2.5 text-[11px] text-fg-faint">Alerts in the last 24 hours: {deliveries(chat.deliveries_24h)}</p>
       </Panel>
 
       <Panel>
-        <PanelHeader title="AI model" description="Understands requests and writes plans." icon={<Bot className="h-4 w-4" />} actions={<Badge tone={data.llm.configured && !data.llm.circuit_open ? "ok" : "warn"}>{!data.llm.configured ? "No API key" : data.llm.circuit_open ? "Paused (failing)" : "Available"}</Badge>} />
+        <PanelHeader title="AI" description="Understands requests and writes plans." icon={<Bot className="h-4 w-4" />} actions={<Badge tone={data.llm.configured && !data.llm.circuit_open ? "ok" : "warn"}>{!data.llm.configured ? "Not set up" : data.llm.circuit_open ? "Busy, using backup" : "Working"}</Badge>} />
         <div className="divide-y divide-line-subtle px-4">
-          <StatusRow label="Model" value={<span className="num">{data.llm.model.replace("gemini/", "")}</span>} />
-          <StatusRow label="Requests understood, last 24 hours" value={classified || "None yet"} hint="Built-in rules answer when the model is slow or unavailable" />
+          <StatusRow label="Requests understood, last 24 hours" value={understood || "None yet"} hint="When the AI is busy, ORBIT still understands common requests with a quick check" />
         </div>
       </Panel>
 
       <Panel>
-        <PanelHeader title="Email" description="Optional copies of task notifications." icon={<Mail className="h-4 w-4" />} actions={<Badge tone={data.email.enabled ? "ok" : "muted"}>{data.email.enabled ? "Enabled" : "Not configured"}</Badge>} />
+        <PanelHeader title="Email" description="Optional copies of task alerts." icon={<Mail className="h-4 w-4" />} actions={<Badge tone={data.email.enabled ? "ok" : "muted"}>{data.email.enabled ? "On" : "Off"}</Badge>} />
         <div className="divide-y divide-line-subtle px-4">
-          <StatusRow label="Deliveries, last 24 hours" value={data.email.enabled ? deliveries(data.email.deliveries_24h) : "Off"} hint={data.email.enabled ? undefined : "Set the SMTP variables on the server to turn this on"} />
+          <StatusRow label="Emails in the last 24 hours" value={data.email.enabled ? deliveries(data.email.deliveries_24h) : "Off"} hint={data.email.enabled ? undefined : "Ask your administrator to set up email to turn this on"} />
         </div>
       </Panel>
     </div>
@@ -106,44 +116,44 @@ function SchedulerTab() {
   const [pending, setPending] = useState<(typeof JOBS)[number] | null>(null);
 
   const trigger = useMutation({
-    mutationFn: (job: "briefing" | "overdue" | "weekly") => api.admin.trigger(job),
+    mutationFn: (job: (typeof JOBS)[number]["id"]) => api.admin.trigger(job),
     onSuccess: (result) => {
       const summary = ["sent", "skipped", "failed"].filter((k) => k in result).map((k) => `${result[k]} ${k}`).join(", ");
-      toast.success(`Job finished: ${summary || "done"}`);
+      toast.success(`Done: ${summary || "finished"}`);
       void queryClient.invalidateQueries({ queryKey: keys.notifications });
       setPending(null);
     },
     onError: (e) => {
-      toast.error(e instanceof Error ? e.message : "The job failed.");
+      toast.error(e instanceof Error ? e.message : "That did not work. Please try again.");
       setPending(null);
     },
   });
 
-  if (error) return <ErrorState title="Could not load the scheduler" error={error} onRetry={() => void refetch()} />;
+  if (error) return <ErrorState title="Could not load reminders" error={error} onRetry={() => void refetch()} />;
 
   return (
     <div className="space-y-4">
       <Panel>
         <PanelHeader
-          title="Scheduled jobs"
-          description="Cron jobs run in the product timezone and skip anyone who opted out."
+          title="Automatic reminders"
+          description="ORBIT sends these on its own, in your team's time zone, and skips anyone who turned them off."
           icon={<CalendarClock className="h-4 w-4" />}
-          actions={data && <Badge tone={data.running ? "ok" : "warn"}>{data.running ? "Running" : "Stopped"}</Badge>}
+          actions={data && <Badge tone={data.running ? "ok" : "warn"}>{data.running ? "On" : "Off"}</Badge>}
         />
         {isLoading ? (
           <Skeleton className="m-4 h-20" />
         ) : !data || data.jobs.length === 0 ? (
-          <p className="p-4 text-xs text-fg-muted">No jobs are registered. Is the scheduler enabled for this environment?</p>
+          <p className="p-4 text-xs text-fg-muted">No automatic reminders are set up.</p>
         ) : (
           <ul className="divide-y divide-line-subtle">
             {data.jobs.map((job) => (
               <li key={job.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
                 <div>
                   <p className="text-[13px] font-medium text-fg">{job.name}</p>
-                  <p className="num text-[11px] text-fg-faint">{job.trigger}</p>
+                  <p className="text-[11px] text-fg-faint">{SCHEDULE_TEXT[job.id] ?? ""}</p>
                 </div>
                 <p className="text-xs text-fg-muted">
-                  Next run <span className="num text-fg">{job.next_run_time ? formatDateTime(job.next_run_time) : "pending"}</span>
+                  Next one <span className="num text-fg">{job.next_run_time ? formatDateTime(job.next_run_time) : "not scheduled"}</span>
                   <span className="ml-1 text-fg-faint">({data.timezone})</span>
                 </p>
               </li>
@@ -153,7 +163,7 @@ function SchedulerTab() {
       </Panel>
 
       <Panel>
-        <PanelHeader title="Run now" description="Sends real messages. Duplicate protection is bypassed; opt-outs are still honoured." icon={<Play className="h-4 w-4" />} />
+        <PanelHeader title="Send now" description="Sends real messages right away, even if they were already sent today. People who turned them off are still skipped." icon={<Play className="h-4 w-4" />} />
         <div className="flex flex-wrap gap-2 p-4">
           {JOBS.map((job) => (
             <Button key={job.id} onClick={() => setPending(job)} disabled={trigger.isPending}>
@@ -165,11 +175,11 @@ function SchedulerTab() {
 
       <ConfirmDialog
         open={pending !== null}
-        title={pending ? `Run: ${pending.label}` : ""}
+        title={pending ? `Send now: ${pending.label}` : ""}
         description={pending?.confirm ?? ""}
-        confirmLabel="Run now"
+        confirmLabel="Send now"
         tone="primary"
-        note="Delivery results appear in the Notifications tab."
+        note="You can see what was delivered in the Notifications tab."
         loading={trigger.isPending}
         onClose={() => setPending(null)}
         onConfirm={() => pending && trigger.mutate(pending.id)}
@@ -179,6 +189,20 @@ function SchedulerTab() {
 }
 
 const DELIVERY_TONE: Record<string, Tone> = { sent: "ok", failed: "danger", skipped: "muted" };
+const DELIVERY_LABEL: Record<string, string> = { sent: "Delivered", failed: "Not delivered", skipped: "Not sent" };
+
+/** A system error turned into a sentence a person can act on. */
+function deliveryNote(status: string, error: string | null | undefined): string | null {
+  if (!error) return null;
+  const text = error.toLowerCase();
+  if (status === "skipped") {
+    if (text.includes("chat")) return "This person has not used Google Chat with ORBIT yet.";
+    if (text.includes("email")) return "Email is not set up for this person.";
+    return "Not sent.";
+  }
+  if (text.includes("timed out")) return "Google Chat took too long to answer.";
+  return "Google Chat did not accept the message.";
+}
 
 function NotificationsTab() {
   const [status, setStatus] = useState("");
@@ -189,12 +213,12 @@ function NotificationsTab() {
   return (
     <Panel>
       <PanelHeader
-        title="Delivery log"
-        description="Every proactive and task-event message, with its real outcome."
+        title="Messages sent"
+        description="Every reminder and task alert, and whether it was really delivered."
         icon={<Mail className="h-4 w-4" />}
         actions={
           <>
-            <CompactSelect label="Delivery status" value={status} onChange={(v) => { setStatus(v); setPage(1); }} options={[{ value: "", label: "Any status" }, { value: "sent", label: "Sent" }, { value: "failed", label: "Failed" }, { value: "skipped", label: "Skipped" }]} />
+            <CompactSelect label="Delivery status" value={status} onChange={(v) => { setStatus(v); setPage(1); }} options={[{ value: "", label: "Any status" }, { value: "sent", label: "Delivered" }, { value: "failed", label: "Not delivered" }, { value: "skipped", label: "Not sent" }]} />
             <CompactSelect label="Notification type" value={type} onChange={(v) => { setType(v); setPage(1); }} options={[{ value: "", label: "Any type" }, ...Object.entries(NOTIFICATION_TYPE_LABEL).map(([value, label]) => ({ value, label }))]} />
           </>
         }
@@ -224,9 +248,9 @@ function NotificationsTab() {
                     <td className="whitespace-nowrap px-4 py-2.5 text-fg-muted" title={formatDateTime(n.sent_at)}>{timeAgo(n.sent_at)}</td>
                     <td className="px-3 py-2.5 text-fg">{n.user_name}</td>
                     <td className="px-3 py-2.5 text-fg-muted">{NOTIFICATION_TYPE_LABEL[n.type] ?? n.type}</td>
-                    <td className="px-3 py-2.5"><Badge tone={DELIVERY_TONE[n.status] ?? "muted"}>{n.status}</Badge></td>
-                    <td className="max-w-[320px] truncate px-3 py-2.5 text-fg-muted" title={n.error_msg ?? n.message}>
-                      {n.error_msg ? <span className="inline-flex items-center gap-1 text-danger"><AlertCircle className="h-3 w-3" aria-hidden />{n.error_msg}</span> : n.message.split("\n")[0]}
+                    <td className="px-3 py-2.5"><Badge tone={DELIVERY_TONE[n.status] ?? "muted"}>{DELIVERY_LABEL[n.status] ?? n.status}</Badge></td>
+                    <td className="max-w-[320px] truncate px-3 py-2.5 text-fg-muted" title={n.message}>
+                      {n.error_msg ? <span className={cn("inline-flex items-center gap-1", n.status === "failed" ? "text-danger" : "text-fg-muted")}><AlertCircle className="h-3 w-3" aria-hidden />{deliveryNote(n.status, n.error_msg)}</span> : n.message.split("\n")[0]}
                     </td>
                   </tr>
                 ))}
@@ -341,8 +365,8 @@ function AdminScreen() {
   const { isAdmin } = useAuth();
 
   const tabs: { id: TabId; label: string }[] = [
-    { id: "integrations", label: "Integrations" },
-    { id: "scheduler", label: "Scheduler" },
+    { id: "integrations", label: "Connections" },
+    { id: "scheduler", label: "Reminders" },
     { id: "notifications", label: "Notifications" },
     ...(isAdmin ? [{ id: "users" as const, label: "Users" }] : []),
   ];
@@ -351,7 +375,7 @@ function AdminScreen() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <PageHeader title="Admin" description="Integrations, scheduled jobs, delivery log and access control." />
+      <PageHeader title="Admin" description="Connections, automatic reminders, messages sent and who can do what." />
       <div role="tablist" aria-label="Admin sections" className="mb-4 flex gap-1 border-b border-line">
         {tabs.map((t) => (
           <button

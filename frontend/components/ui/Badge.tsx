@@ -76,6 +76,13 @@ export function PriorityBadge({ priority }: { priority: TaskPriority | string })
   );
 }
 
+const RUN_STATUS_LABEL: Record<string, string> = {
+  SUCCESS: "Done",
+  NEEDS_CONFIRMATION: "Needs your approval",
+  TIMEOUT: "Took too long",
+  FAILURE: "Didn't work",
+};
+
 export function RunStatusBadge({ status }: { status: string }) {
   const tone: Tone =
     status === "SUCCESS" ? "ok" : status === "NEEDS_CONFIRMATION" ? "warn" : status === "TIMEOUT" ? "high" : "danger";
@@ -83,7 +90,7 @@ export function RunStatusBadge({ status }: { status: string }) {
   return (
     <Badge tone={tone}>
       {icon}
-      {status === "NEEDS_CONFIRMATION" ? "Needs confirmation" : status.charAt(0) + status.slice(1).toLowerCase()}
+      {RUN_STATUS_LABEL[status] ?? status.charAt(0) + status.slice(1).toLowerCase()}
     </Badge>
   );
 }
