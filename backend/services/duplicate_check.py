@@ -8,7 +8,7 @@ from auth.rbac import Role
 from crud import tasks as task_crud
 from crud import users as user_crud
 from services.duplicates import SAME, SIMILAR, find_similar
-from services.wording import friendly
+from services.wording import due_phrase, friendly
 from sqlalchemy import or_, select
 from sqlalchemy.orm import selectinload
 from tools.base import get_tool_session
@@ -84,9 +84,10 @@ async def check_for_duplicates(user_id: str, title: str, assignee_name: Optional
 
 
 def describe(view: dict[str, Any]) -> str:
-    """"*Send contract* (in progress, with Rahul, due 2026-10-14)" for a message."""
-    bits = [friendly(view.get("status")).lower()]
+    """"*Send contract* (in progress, with Rahul, due Wednesday)" for a message."""
+    status = str(view.get("status") or "").split(".")[-1].upper()
+    bits = ["to do" if status == "TODO" else friendly(status).lower()]
     bits.append(f"with {view['assignee']}" if view.get("assignee") else "not assigned")
     if view.get("due_date"):
-        bits.append(f"due {view['due_date']}")
+        bits.append(due_phrase(view["due_date"]))
     return f"*{view['title']}* ({', '.join(bits)})"
