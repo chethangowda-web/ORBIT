@@ -13,6 +13,7 @@ import {
   MessageSquare,
   Network,
   ShieldCheck,
+  Sparkles,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
@@ -35,6 +36,7 @@ export const AGENT_ICON: Record<string, LucideIcon> = {
   planner_agent: CalendarClock,
   recommendation_agent: Lightbulb,
   review_agent: ShieldCheck,
+  tool_agent: Sparkles,
 };
 
 const TONE = {
@@ -150,6 +152,18 @@ export function WorkflowDiagram({
             <p className="mt-1.5 text-[10px] text-fg-faint">{step.awaiting_confirmation ? "Asked for your approval first" : "Answered without looking anything up"}</p>
           )}
           {actions.length > 0 && step.awaiting_confirmation && <p className="mt-1.5 text-[10px] text-warn">Asked for your approval</p>}
+          {step.actions && step.actions.length > 0 && (
+            <div className="mt-2 border-t border-line-subtle pt-1.5">
+              <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-faint">Changes made</p>
+              <ul aria-label="Changes made" className="space-y-0.5">
+                {step.actions.map((line, i) => (
+                  <li key={`${line}-${i}`} className="text-[11px] leading-snug text-fg-muted">
+                    {line.replace(/\*/g, "")}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </Stage>
       ),
     });

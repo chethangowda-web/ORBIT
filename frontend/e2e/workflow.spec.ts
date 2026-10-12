@@ -59,7 +59,7 @@ test.describe("ORBIT activity is visible, in everyday words", () => {
     await expect(page).toHaveURL(/\/traces/);
     await expect(page.getByRole("heading", { name: "ORBIT activity", level: 1 }).first()).toBeVisible();
     await expect(page.getByText("Your ORBIT team").first()).toBeVisible();
-    for (const helper of ["Task helper", "Day planner", "Advisor", "Reviewer"]) {
+    for (const helper of ["Task helper", "Day planner", "Advisor", "Reviewer", "Multi-step helper"]) {
       await expect(page.getByRole("listitem").filter({ hasText: helper }).first()).toBeVisible();
     }
 

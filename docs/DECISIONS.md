@@ -257,6 +257,26 @@ result = await supervisor_chain.ainvoke(messages)
 
 ---
 
+## ADR-020: A tool-using agent next to fixed specialists, with hard guardrails
+
+**Date**: 2026-10-12  **Status**: Accepted
+
+**Context**: The specialists run a fixed handler per request type. That is fast, cheap and predictable, but it cannot do "move all of John's overdue tasks to Rahul and make them high priority": the work is open-ended and needs several tool calls whose later steps depend on earlier results.
+
+**Decision**: Add one agent where the LLM plans with function calling (a bounded loop over a small set of tools), and keep the fixed specialists for common requests. The Supervisor chooses: model-classified multi-step requests, and bulk or compound requests that ask for a change, go to the tool agent; everything else keeps the fast path. Safety does not rely on the model behaving: identity is injected, every tool re-checks permissions, deleting is not offered, runs are bounded, and the reply is built from the tools' real results.
+
+**Consequences**: Bigger requests work in Chat and the dashboard. They cost several model calls each (3 to 5), so on a free key they need the fallback chain (ADR-021). If the model is unavailable the fixed specialists still handle simple requests and the tool agent says so honestly.
+
+## ADR-021: A chain of models, each with its own quota
+
+**Date**: 2026-10-12  **Status**: Accepted
+
+**Context**: A free Gemini key allows about 20 requests a day per model, and one multi-step request needs several. A single model runs out within minutes of real use. Quotas are tracked per model.
+
+**Decision**: `DEFAULT_LLM_MODEL` plus `LLM_FALLBACK_MODELS`, tried in order. A model that returns a rate-limit or not-found error rests for the time the provider suggests (capped by `LLM_MAX_BLOCK_SECONDS`), a busy (503) model is skipped for that call, and the next model is tried at once. The circuit breaker only counts a failure when the whole chain fails.
+
+**Consequences**: Daily capacity multiplies by the number of models. Avoid "thinking" models for interactive use (15 seconds or more per answer). A paid key or a self-hosted model removes the limit; the settings do not change.
+
 ## ADR-016: Mission Control dashboard
 
 **Date**: 2026-10-10  **Status**: Accepted

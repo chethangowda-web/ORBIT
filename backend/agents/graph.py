@@ -10,12 +10,15 @@ from agents.review_agent import review_agent_node
 from agents.state import AgentState
 from agents.supervisor import supervisor_node
 from agents.task_agent import task_agent_node
+from agents.tool_agent import tool_agent_node
 
 
-def route_to_agent(state: AgentState) -> Literal["task_agent", "planner_agent", "recommendation_agent", "review_agent"]:
+def route_to_agent(
+    state: AgentState,
+) -> Literal["task_agent", "planner_agent", "recommendation_agent", "review_agent", "tool_agent"]:
     """Conditional routing function after supervisor classification."""
     active = state.get("active_agent", "task_agent")
-    if active in ("task_agent", "planner_agent", "recommendation_agent", "review_agent"):
+    if active in ("task_agent", "planner_agent", "recommendation_agent", "review_agent", "tool_agent"):
         return active  # type: ignore
     return "task_agent"
 
@@ -30,6 +33,7 @@ def build_agent_graph(checkpointer=None):
     workflow.add_node("planner_agent", planner_agent_node)
     workflow.add_node("recommendation_agent", recommendation_agent_node)
     workflow.add_node("review_agent", review_agent_node)
+    workflow.add_node("tool_agent", tool_agent_node)
 
     # 2. Add entry edge
     workflow.add_edge(START, "supervisor")
@@ -43,6 +47,7 @@ def build_agent_graph(checkpointer=None):
             "planner_agent": "planner_agent",
             "recommendation_agent": "recommendation_agent",
             "review_agent": "review_agent",
+            "tool_agent": "tool_agent",
         },
     )
 
@@ -51,6 +56,7 @@ def build_agent_graph(checkpointer=None):
     workflow.add_edge("planner_agent", END)
     workflow.add_edge("recommendation_agent", END)
     workflow.add_edge("review_agent", END)
+    workflow.add_edge("tool_agent", END)
 
     cp = checkpointer if checkpointer is not None else get_checkpointer()
     return workflow.compile(checkpointer=cp)

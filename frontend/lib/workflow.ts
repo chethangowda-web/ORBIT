@@ -23,6 +23,7 @@ export const AGENT_NAME: Record<string, string> = {
   planner_agent: "Day planner",
   recommendation_agent: "Advisor",
   review_agent: "Reviewer",
+  tool_agent: "Multi-step helper",
 };
 
 export const AGENT_ROLE: Record<string, string> = {
@@ -31,9 +32,10 @@ export const AGENT_ROLE: Record<string, string> = {
   planner_agent: "Plans your day from your real tasks",
   recommendation_agent: "Spots late work and busy teammates",
   review_agent: "Checks with you before anything is deleted",
+  tool_agent: "Works through bigger requests step by step",
 };
 
-export const SPECIALISTS = ["task_agent", "planner_agent", "recommendation_agent", "review_agent"] as const;
+export const SPECIALISTS = ["task_agent", "planner_agent", "recommendation_agent", "review_agent", "tool_agent"] as const;
 
 const INTENT_LABEL: Record<string, string> = {
   CREATE_TASK: "Adding a task",
@@ -48,6 +50,7 @@ const INTENT_LABEL: Record<string, string> = {
   GET_RECOMMENDATIONS: "Team advice",
   HELP: "Help",
   GREETING: "Saying hello",
+  MULTI_STEP: "Working through several steps",
   UNKNOWN: "Not sure what you meant",
 };
 
@@ -58,6 +61,7 @@ export function intentLabel(intent: string | null | undefined): string {
 
 const CLASSIFIER_LABEL: Record<string, string> = {
   llm: "AI",
+  quick: "a quick check",
   rules: "a quick check (the AI was busy)",
   flow: "your answer",
 };
@@ -82,6 +86,11 @@ const STEP_LABEL: Record<string, string> = {
   get_team_workload: "Checked who is busy",
   get_user_by_name: "Looked up a teammate",
   get_all_users: "Looked up the team",
+  get_task: "Opened the task",
+  find_person: "Looked up a teammate",
+  list_team: "Looked up the team",
+  team_workload: "Checked who is busy",
+  task_stats: "Counted tasks by status",
 };
 
 function sentence(text: string): string {

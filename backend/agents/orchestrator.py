@@ -86,6 +86,8 @@ async def process_message(
                         step["classifier"] = updates.get("classifier")
                     elif updates.get("needs_confirmation"):
                         step["awaiting_confirmation"] = True
+                    if updates.get("actions_summary"):
+                        step["actions"] = list(updates["actions_summary"])
                     accumulated_state.update(updates)
                 steps.append(step)
         return accumulated_state

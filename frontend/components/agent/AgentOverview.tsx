@@ -9,7 +9,7 @@ import { AGENT_ROLE, SPECIALISTS, agentName, summarizeRuns } from "@/lib/workflo
 import type { AgentExecutionTrace } from "@/types";
 import { AGENT_ICON } from "./WorkflowDiagram";
 
-const MIX_LABEL: Record<string, string> = { llm: "by AI", rules: "by quick check", flow: "from your answers" };
+const MIX_LABEL: Record<string, string> = { llm: "by AI", quick: "by quick check", rules: "by quick check", flow: "from your answers" };
 
 /** Your ORBIT team with live numbers: who does what and how much each has helped. */
 export function AgentOverview({ runs, loading }: { runs: AgentExecutionTrace[] | undefined; loading: boolean }) {
@@ -60,7 +60,7 @@ export function AgentOverview({ runs, loading }: { runs: AgentExecutionTrace[] |
         {loading ? (
           <Skeleton className="h-28 w-full" />
         ) : (
-          <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {SPECIALISTS.map((node) => {
               const Icon = AGENT_ICON[node];
               const stat = summary.byAgent[node];

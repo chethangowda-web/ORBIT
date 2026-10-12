@@ -188,6 +188,37 @@ describe("WorkflowDiagram", () => {
     expect(screen.getByText(/Something went wrong on our side/)).toBeInTheDocument();
   });
 
+  it("lists, in plain words, what the multi-step helper changed", () => {
+    render(
+      <WorkflowDiagram
+        run={{
+          steps: [
+            { node: "supervisor", duration_ms: 1500, intent: "MULTI_STEP", classifier: "llm" },
+            {
+              node: "tool_agent",
+              duration_ms: 9000,
+              tools: ["search_tasks", "find_person", "update_task"],
+              actions: ["Changed *Renew the licence*: priority is now high, now with Rahul"],
+            },
+          ],
+          status: "SUCCESS",
+        }}
+      />,
+    );
+    expect(screen.getByText("Multi-step helper")).toBeInTheDocument();
+    expect(screen.getByText("Working through several steps")).toBeInTheDocument();
+    const changes = within(screen.getByRole("list", { name: "Changes made" })).getAllByRole("listitem");
+    expect(changes).toHaveLength(1);
+    expect(changes[0]).toHaveTextContent("Changed Renew the licence: priority is now high, now with Rahul");
+    expect(changes[0].textContent).not.toContain("*");
+    const steps = within(screen.getByRole("list", { name: "What it did, in order" })).getAllByRole("listitem");
+    expect(steps.map((li) => li.textContent)).toEqual([
+      expect.stringContaining("Looked for matching tasks"),
+      expect.stringContaining("Looked up a teammate"),
+      expect.stringContaining("Changed the task"),
+    ]);
+  });
+
   it("still draws a request that was saved before steps were recorded", () => {
     render(<WorkflowDiagram run={{ agents_invoked: ["supervisor", "task_agent"], tool_calls_made: ["create_task"], intent: "CREATE_TASK", status: "SUCCESS" }} />);
     expect(screen.getByText("Task helper")).toBeInTheDocument();

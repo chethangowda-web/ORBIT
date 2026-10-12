@@ -8,7 +8,7 @@ Employees manage tasks in plain language inside **Google Chat**; managers get a 
 
 ## Features
 
-- **Six cooperating agents**: Supervisor, Task, Planner, Recommendation, Review (human-in-the-loop) and Memory, orchestrated with LangGraph.
+- **Cooperating agents**: a Supervisor routes each request to a Task, Planner, Recommendation, Review (human approval before deletes) or **Multi-step** agent, with conversation memory, orchestrated with LangGraph. The Multi-step agent lets the AI plan and chain tools for bigger requests such as "move all of John's overdue tasks to Rahul and make them high priority", inside hard safety limits.
 - **Google Chat bot**: natural-language task management, interactive confirmation cards, direct-message notifications, idempotent webhook handling.
 - **Mission Control dashboard** (Next.js 14): drag-and-drop board, dense task table with URL-synced filters, task detail with a readable audit trail, insights charts, agent run traces, admin console, command palette (`Ctrl+K`) and an always-available agent panel.
 - **Collaboration**: comments on tasks (assignee and creator notified in Chat), bulk actions on the task table (complete, status, priority, assign, delete) with per-task permission checks.
@@ -52,6 +52,8 @@ flowchart LR
         PA[Planner Agent<br/>daily plan]
         RA[Recommendation Agent<br/>priorities, workload]
         RV[Review Agent<br/>validate + human confirmation]
+        MS[Multi-step Agent<br/>AI plans and chains tools<br/>bounded, no deletes]
+        SUP --> MS
         SUP --> TA
         SUP --> PA
         SUP --> RA
@@ -61,7 +63,7 @@ flowchart LR
     WH --> SUP
     API -- "Ask ORBIT /chat/query" --> SUP
 
-    TA & PA & RA & RV --> TOOLS[Tools scoped to the requesting user<br/>same RBAC as the REST API]
+    TA & PA & RA & RV & MS --> TOOLS[Tools scoped to the requesting user<br/>same RBAC as the REST API]
     API --> SVC[CRUD services]
     TOOLS --> SVC
     SVC --> PG[(PostgreSQL<br/>tasks, history, traces)]

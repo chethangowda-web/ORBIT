@@ -174,6 +174,8 @@ export interface AgentStep {
   /** How the intent was decided: llm, rules, or flow (an approval answer). */
   classifier?: string | null;
   awaiting_confirmation?: boolean;
+  /** Plain-language list of what the multi-step helper changed. */
+  actions?: string[];
 }
 
 export interface ChatExecutionMetadata {
