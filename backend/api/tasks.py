@@ -21,6 +21,7 @@ from db.models import User
 from db.session import get_db
 from dependencies import get_current_user, require_role
 from services import storage
+from services.duplicate_check import similar_open_tasks, task_view
 from services.notifications import notify_task_event
 from exceptions import EntityNotFoundException, OrbitException, PermissionDeniedException
 from schemas.common import PaginationMeta, api_response
@@ -40,6 +41,18 @@ from schemas.task import (
 )
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
+
+
+@router.get("/similar", status_code=status.HTTP_200_OK)
+async def similar_tasks(
+    title: str = Query(..., min_length=1, max_length=255),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Open tasks you can see whose title is close to `title`: ask before creating, to avoid doubles.
+    Creating is never blocked by the API; this only informs the form."""
+    found = await similar_open_tasks(db, current_user, title)
+    return api_response(data=[task_view(task, score) for score, task in found])
 
 
 @router.get("", status_code=status.HTTP_200_OK)

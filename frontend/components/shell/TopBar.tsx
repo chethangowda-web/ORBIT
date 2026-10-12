@@ -19,6 +19,7 @@ import { useShell } from "./ShellContext";
 const TITLES: Record<string, string> = {
   "/": "Board",
   "/tasks": "Tasks",
+  "/week": "My week",
   "/insights": "Insights",
   "/traces": "ORBIT activity",
   "/admin": "Admin",

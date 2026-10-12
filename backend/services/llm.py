@@ -70,6 +70,23 @@ TASK_DETAIL_PHRASE = (
 )
 
 
+_PLAN_WEEK_RE = re.compile(
+    r"\b(?:plan|schedule|organi[sz]e|map\s+out|sort\s+out|prioriti[sz]e)\b.{0,25}\bweek\b"
+    r"|\bweekly\s+plan\b|\bweek\s+ahead\b"
+    r"|\b(?:what(?:'s|\s+does|\s+is)?|how)\b.{0,15}\bmy\s+week\b.{0,10}\b(?:look|like|ahead)\b"
+    r"|\bnext\s+(?:five|5)\s+days\b",
+    re.IGNORECASE,
+)
+_SUGGEST_ASSIGNEE_RE = re.compile(
+    r"\bwho\s+(?:should|could|can|would|might)\s+(?:take|do|handle|own|pick\s+up|work\s+on|get|be\s+assigned)\b"
+    r"|\bwho(?:'s|\s+is|\s+has|\s+have|\s+got)\s+(?:the\s+)?(?:free|available|capacity|bandwidth|time|room|least|lowest|less\s+busy|not\s+busy|most\s+free)\b"
+    r"|\b(?:least|less)\s+busy\b|\bmost\s+available\b"
+    r"|\bsuggest\s+(?:an?\s+)?(?:assignee|owner|someone|who)\b"
+    r"|\bwho\s+should\s+i\s+(?:assign|give)\b",
+    re.IGNORECASE,
+)
+
+
 def fallback_intent_classifier(user_message: str) -> IntentClassificationResult:
     """Deterministic rule-based intent and context extractor for offline/test reliability."""
     msg = user_message.strip().lower()
@@ -123,6 +140,10 @@ def fallback_intent_classifier(user_message: str) -> IntentClassificationResult:
                 ctx.assignee_name = cand
 
     # Intent routing
+    if _PLAN_WEEK_RE.search(msg):
+        return IntentClassificationResult(intent=Intent.PLAN_WEEK, confidence=0.95, task_context=ctx)
+    if _SUGGEST_ASSIGNEE_RE.search(msg):
+        return IntentClassificationResult(intent=Intent.SUGGEST_ASSIGNEE, confidence=0.95, task_context=ctx)
     plan_phrases = [
         "what should i focus on", "plan my day", "daily plan", "plan for today", "priorities today", "focus today",
         "prioritize", "prioritise", "work on first", "work on next", "what should i work on", "what should i do",

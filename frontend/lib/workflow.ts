@@ -47,6 +47,8 @@ const INTENT_LABEL: Record<string, string> = {
   SEARCH_TASKS: "Finding a task",
   GET_TASK_DETAIL: "Showing a task",
   PLAN_DAY: "Planning your day",
+  PLAN_WEEK: "Planning your week",
+  SUGGEST_ASSIGNEE: "Finding who has room",
   GET_RECOMMENDATIONS: "Team advice",
   HELP: "Help",
   GREETING: "Saying hello",
@@ -91,6 +93,7 @@ const STEP_LABEL: Record<string, string> = {
   list_team: "Looked up the team",
   team_workload: "Checked who is busy",
   task_stats: "Counted tasks by status",
+  suggest_assignee: "Checked who has room",
 };
 
 function sentence(text: string): string {

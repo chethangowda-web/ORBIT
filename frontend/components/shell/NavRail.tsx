@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, BarChart3, LayoutDashboard, ListChecks, Orbit, Settings2 } from "lucide-react";
+import { Activity, BarChart3, LayoutDashboard, ListChecks, Orbit, Settings2, CalendarDays } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 
@@ -17,6 +17,7 @@ interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Board", icon: LayoutDashboard },
   { href: "/tasks", label: "Tasks", icon: ListChecks },
+  { href: "/week", label: "My week", icon: CalendarDays },
   { href: "/insights", label: "Insights", icon: BarChart3, managerOnly: true },
   { href: "/traces", label: "ORBIT activity", icon: Activity },
   { href: "/admin", label: "Admin", icon: Settings2, managerOnly: true },

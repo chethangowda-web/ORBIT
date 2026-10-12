@@ -21,6 +21,8 @@ ROUTING_MAP: dict[Intent, str] = {
     Intent.SEARCH_TASKS: "task_agent",
     Intent.GET_TASK_DETAIL: "task_agent",
     Intent.PLAN_DAY: "planner_agent",
+    Intent.PLAN_WEEK: "planner_agent",
+    Intent.SUGGEST_ASSIGNEE: "recommendation_agent",
     Intent.GET_RECOMMENDATIONS: "recommendation_agent",
     Intent.HELP: "task_agent",
     Intent.GREETING: "task_agent",
@@ -48,6 +50,7 @@ def _meaningful_hint(hint: Any) -> bool:
 # model is available to do the multi-step work.
 _BULK_OR_COMPOUND = re.compile(
     r"\b(all|every|each|everything|both)\b"
+    r"|\b(whoever|whomever|someone who|the person who)\b"
     r"|\b(and then|then)\b"
     r"|\band\s+(also\s+)?(make|set|assign|reassign|move|mark|change|create|add|complete|update)\b",
     re.IGNORECASE,
@@ -59,7 +62,10 @@ _CHANGES_SOMETHING = re.compile(
 )
 _UPGRADABLE = {Intent.CREATE_TASK, Intent.UPDATE_TASK, Intent.COMPLETE_TASK}
 # Requests that must keep their own flow even if the wording looks bulk.
-_NEVER_UPGRADED = {Intent.DELETE_TASK, Intent.HELP, Intent.GREETING, Intent.PLAN_DAY, Intent.GET_RECOMMENDATIONS}
+_NEVER_UPGRADED = {
+    Intent.DELETE_TASK, Intent.HELP, Intent.GREETING, Intent.PLAN_DAY, Intent.PLAN_WEEK,
+    Intent.SUGGEST_ASSIGNEE, Intent.GET_RECOMMENDATIONS,
+}
 
 
 def needs_multi_step(intent: Intent, classifier: str, raw_message: str) -> bool:
@@ -77,6 +83,14 @@ def needs_multi_step(intent: Intent, classifier: str, raw_message: str) -> bool:
     return bool(_CHANGES_SOMETHING.search(raw_message))
 
 
+# "create it anyway": the answer to "that task is already on the list".
+_CREATE_ANYWAY = re.compile(
+    r"^\s*(yes[,.!]?\s*)?(please\s*)?(do\s+)?(create|add|make)\s*(it|one|another|a\s+new\s+one|a\s+copy|the\s+task)?\s*(anyway|regardless)[.!]*\s*$",
+    re.IGNORECASE,
+)
+_PLAIN_YES = {"yes", "y", "yep", "yeah", "ok", "okay", "do it", "go ahead", "sure"}
+
+
 # Intents that may continue with "the task we were just talking about" when no task is named.
 FOLLOW_UP_INTENTS = {Intent.UPDATE_TASK, Intent.COMPLETE_TASK, Intent.GET_TASK_DETAIL}
 
@@ -84,7 +98,14 @@ FOLLOW_UP_INTENTS = {Intent.UPDATE_TASK, Intent.COMPLETE_TASK, Intent.GET_TASK_D
 # Requests the quick built-in check recognises with certainty. They need no entity extraction, so the
 # AI adds nothing, and skipping it saves a request from a small daily quota (and several seconds when a
 # model is slow).
-_QUICK_INTENTS = {Intent.HELP, Intent.GREETING, Intent.GET_MY_TASKS, Intent.GET_OVERDUE_TASKS}
+_QUICK_INTENTS = {
+    Intent.HELP,
+    Intent.GREETING,
+    Intent.GET_MY_TASKS,
+    Intent.GET_OVERDUE_TASKS,
+    Intent.PLAN_WEEK,  # an algorithm, not a prompt
+    Intent.SUGGEST_ASSIGNEE,  # arithmetic on task counts
+}
 _QUICK_MIN_CONFIDENCE = 0.85
 
 
@@ -148,6 +169,37 @@ async def supervisor_node(state: AgentState) -> dict[str, Any]:
             "tool_calls_made": state.get("tool_calls_made", []),
         }
 
+    # A create request was held back because the same task exists; this message answers that question.
+    pending_duplicate = state.get("pending_duplicate")
+    if pending_duplicate and (_CREATE_ANYWAY.match(raw_message) or msg_clean in _PLAIN_YES) and not needs_conf:
+        return {
+            "intent": Intent.CREATE_TASK.value,
+            "confidence": 1.0,
+            "classifier": "flow",
+            "active_agent": "task_agent",
+            "task_context": {**pending_duplicate, "allow_duplicate": True},
+            "referenced_task_id": None,
+            "confirmed": False,
+            "needs_confirmation": False,
+            "pending_confirmation": None,
+            "pending_duplicate": None,
+            "response": "",
+            "tool_calls_made": state.get("tool_calls_made", []),
+        }
+    if _CREATE_ANYWAY.match(raw_message) and not needs_conf:
+        # Nothing was waiting: never invent a task called "it anyway".
+        return {
+            "intent": Intent.UNKNOWN.value,
+            "confidence": 1.0,
+            "classifier": "flow",
+            "active_agent": "task_agent",
+            "task_context": {},
+            "referenced_task_id": None,
+            "pending_duplicate": None,
+            "response": "",
+            "tool_calls_made": state.get("tool_calls_made", []),
+        }
+
     # Handle Confirmation requests
     is_confirm_attempt = confirmed or (needs_conf and msg_clean in ("yes", "confirm", "proceed", "y", "ok", "true"))
 
@@ -208,5 +260,6 @@ async def supervisor_node(state: AgentState) -> dict[str, Any]:
         "needs_confirmation": False,
         "confirmed": False,
         "pending_confirmation": None,
+        "pending_duplicate": None,
         "response": "",
     }

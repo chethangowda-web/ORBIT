@@ -1,13 +1,16 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Copy, UserSearch } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea } from "@/components/ui/Field";
 import { Modal } from "@/components/ui/Overlay";
+import { api } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
 import { ALL_STATUSES, PRIORITIES, PRIORITY_LABEL, STATUS_LABEL } from "@/lib/constants";
 import { useCreateTask, useUpdateTask, useUsers } from "@/lib/hooks";
-import type { Task, TaskPriority, TaskStatus } from "@/types";
+import type { AssigneeSuggestion, Task, TaskPriority, TaskStatus } from "@/types";
 
 interface Props {
   open: boolean;
@@ -85,6 +88,38 @@ export function TaskFormModal({ open, onClose, task, defaultStatus = "TODO" }: P
     setForm(task ? fromTask(task) : { ...EMPTY, status: defaultStatus, assigneeId: isManager ? "" : (user?.id ?? "") });
   }, [open, task, defaultStatus, isManager, user?.id]);
 
+  // Ask before creating a double: look for the same or a very similar open task as the title is typed.
+  const [typedTitle, setTypedTitle] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setTypedTitle(form.title.trim()), 400);
+    return () => clearTimeout(timer);
+  }, [form.title]);
+  const similarQuery = useQuery({
+    queryKey: ["similar-tasks", typedTitle],
+    queryFn: () => api.tasks.similar(typedTitle),
+    enabled: open && !editing && typedTitle.length >= 3,
+    staleTime: 15_000,
+  });
+  const similar = !editing && typedTitle.length >= 3 ? (similarQuery.data ?? []) : [];
+  const hasSame = similar.some((s) => s.same);
+
+  // Managers can ask who has room before choosing an assignee.
+  const [suggestions, setSuggestions] = useState<AssigneeSuggestion[] | null>(null);
+  const [suggesting, setSuggesting] = useState(false);
+  useEffect(() => {
+    if (!open) setSuggestions(null);
+  }, [open]);
+  const suggest = async () => {
+    setSuggesting(true);
+    try {
+      setSuggestions(await api.planning.suggestAssignee());
+    } catch {
+      setSuggestions([]);
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((f) => ({ ...f, [key]: value }));
   const errors = validateTask(form);
   // Employees can only pick themselves, plus whoever the task is already assigned to, so the form
@@ -123,7 +158,7 @@ export function TaskFormModal({ open, onClose, task, defaultStatus = "TODO" }: P
             Cancel
           </Button>
           <Button variant="primary" type="submit" form="task-form" loading={pending}>
-            {editing ? "Save changes" : "Create task"}
+            {editing ? "Save changes" : hasSame ? "Create anyway" : "Create task"}
           </Button>
         </>
       }
@@ -139,6 +174,23 @@ export function TaskFormModal({ open, onClose, task, defaultStatus = "TODO" }: P
           error={submitted ? errors.title : null}
           onChange={(e) => set("title", e.target.value)}
         />
+        {similar.length > 0 && (
+          <div role="status" aria-label="Similar tasks" className="rounded-control border border-warn/40 bg-warn/5 p-2.5 text-xs">
+            <p className="flex items-center gap-1.5 font-medium text-fg">
+              <Copy className="h-3.5 w-3.5 text-warn" aria-hidden />
+              {hasSame ? "This task already exists" : "A similar task already exists"}
+            </p>
+            <ul className="mt-1.5 space-y-1">
+              {similar.map((s) => (
+                <li key={s.id} className="text-fg-muted">
+                  <span className="text-fg">{s.title}</span> ({STATUS_LABEL[s.status as TaskStatus] ?? s.status}
+                  {s.assignee ? `, with ${s.assignee}` : ", not assigned"})
+                </li>
+              ))}
+            </ul>
+            <p className="mt-1.5 text-fg-faint">{hasSame ? "Create it only if you really want a second copy." : "Check it is not the same piece of work."}</p>
+          </div>
+        )}
         <Textarea
           label="Description"
           rows={3}
@@ -180,6 +232,30 @@ export function TaskFormModal({ open, onClose, task, defaultStatus = "TODO" }: P
             <Input label="Due date" type="date" value={form.dueDate} onChange={(e) => set("dueDate", e.target.value)} />
           )}
         </div>
+        {isManager && (
+          <div className="-mt-1">
+            <Button type="button" size="sm" onClick={() => void suggest()} loading={suggesting}>
+              <UserSearch className="h-3.5 w-3.5" aria-hidden /> Who has room?
+            </Button>
+            {suggestions !== null && (
+              <div role="group" aria-label="People with room" className="mt-2 flex flex-wrap gap-1.5">
+                {suggestions.length === 0 && <p className="text-xs text-fg-muted">No suggestions right now.</p>}
+                {suggestions.map((s) => (
+                  <button
+                    key={s.user_id}
+                    type="button"
+                    aria-label={`Assign to ${s.display_name}`}
+                    onClick={() => set("assigneeId", s.user_id)}
+                    className="rounded-control border border-line bg-surface-2 px-2 py-1 text-left text-xs transition-colors hover:border-accent/60"
+                  >
+                    <span className="font-medium text-fg">{s.display_name}</span>
+                    <span className="ml-1.5 text-fg-muted">{s.reason}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <Input
           label="Tags"
           hint="Comma separated, up to 10."

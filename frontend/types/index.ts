@@ -87,6 +87,45 @@ export interface TaskAttachment {
   uploader?: UserPublic | null;
 }
 
+export interface SimilarTask {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  due_date: string | null;
+  assignee: string | null;
+  score: number;
+  /** True when it is effectively the same task, not just a close one. */
+  same: boolean;
+}
+
+export interface AssigneeSuggestion {
+  user_id: string;
+  display_name: string;
+  role: string;
+  open_tasks: number;
+  overdue_tasks: number;
+  /** A plain sentence such as "2 open tasks, none late". */
+  reason: string;
+}
+
+export interface PlannedTask {
+  id: string;
+  title: string;
+  priority: string;
+  status: string;
+  due_date: string | null;
+  days_late: number;
+  note: string | null;
+}
+
+export interface WeekPlan {
+  days: { date: string; label: string; tasks: PlannedTask[] }[];
+  at_risk: PlannedTask[];
+  later: PlannedTask[];
+  late_count: number;
+}
+
 export type BulkAction = "complete" | "set_status" | "set_priority" | "assign" | "delete";
 
 export interface BulkResult {

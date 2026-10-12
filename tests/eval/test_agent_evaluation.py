@@ -245,7 +245,7 @@ async def test_eval_llm_synthesis_and_fallback_resilience(
             headers=user_auth_headers,
         )
         assert res_fb.status_code == 200
-        assert "Your Daily Action Plan" in res_fb.json()["data"]["response"]
+        assert "Your plan for today" in res_fb.json()["data"]["response"]
         assert "Prepare Investor Presentation" in res_fb.json()["data"]["response"]
 
 

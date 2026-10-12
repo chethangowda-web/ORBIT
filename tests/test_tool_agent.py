@@ -338,3 +338,32 @@ async def test_end_to_end_through_chat_the_run_shows_its_steps(client, db_sessio
     assert agent_step["tools"] == ["search_tasks", "update_task"]
     assert agent_step["actions"] == ["Changed *Renew the licence*: now with Rahul"]
     assert "Handed John's task" in data["response"] and "What changed" in data["response"]
+
+
+# --- duplicates ---------------------------------------------------------------------------------------------
+
+
+async def test_the_agent_is_told_when_the_same_task_already_exists_and_can_go_ahead_when_asked(
+    db_session, seed_manager_user, model
+):
+    await make_task(db_session, seed_manager_user, "Send the revised contract to Acme", seed_manager_user)
+    script = model(
+        turn(calls=[call("create_task", "a", title="Send revised contract to Acme")]),
+        turn(calls=[call("create_task", "b", title="Send revised contract to Acme", allow_duplicate=True)]),
+        turn("Added a second copy as you asked."),
+    )
+    result = await run(seed_manager_user, "create the Acme contract task again, I do want a copy")
+
+    first_output = json.loads([m for m in script.seen[1] if m["role"] == "tool"][-1]["content"])
+    assert first_output["ok"] is False and "very similar task already exists" in first_output["error"]
+    rows = (await db_session.execute(select(Task).where(Task.title.like("%contract to Acme%")))).scalars().all()
+    assert len(rows) == 2
+    assert result["response"].count("Added *") == 1
+
+
+async def test_a_merely_similar_task_is_created_and_the_reply_adds_a_heads_up(db_session, seed_manager_user, model):
+    await make_task(db_session, seed_manager_user, "Update the website", seed_manager_user)
+    model(turn(calls=[call("create_task", title="Update the website copy and images")]), turn("Done."))
+    result = await run(seed_manager_user, "add a task to update the website copy and images")
+    assert "Heads-up: there is already a similar task" in result["response"]
+    assert "Update the website" in result["response"]

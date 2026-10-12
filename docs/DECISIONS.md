@@ -277,6 +277,16 @@ result = await supervisor_chain.ainvoke(messages)
 
 **Consequences**: Daily capacity multiplies by the number of models. Avoid "thinking" models for interactive use (15 seconds or more per answer). A paid key or a self-hosted model removes the limit; the settings do not change.
 
+## ADR-022: Planning, assignment and duplicate checks are algorithms, not prompts
+
+**Date**: 2026-10-12  **Status**: Accepted
+
+**Context**: Smart assignment, week planning and duplicate detection are tempting to hand to the LLM. But they have a right answer that can be computed, people want to know why ("2 open tasks, none late"), and the AI quota is small.
+
+**Decision**: Implement each as a small pure module with tests (`services/duplicates.py`, `services/assignment.py`, `services/week_plan.py`) and let the LLM do what it is good at: understanding the request and writing prose. The same functions serve the REST API, the dashboard, Chat and the AI agent's tools.
+
+**Consequences**: Instant, deterministic and free of AI requests, so they keep working when the AI is down. The trade-off is that the heuristics are fixed (daily limit of 4 tasks, one load formula); they are plain constants meant to be tuned.
+
 ## ADR-016: Mission Control dashboard
 
 **Date**: 2026-10-10  **Status**: Accepted

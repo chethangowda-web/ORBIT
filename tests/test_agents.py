@@ -122,7 +122,8 @@ async def test_planner_agent_daily_plan(db_session: AsyncSession, seed_test_user
 
     assert state.get("intent") == Intent.PLAN_DAY.value
     assert state.get("active_agent") == "planner_agent"
-    assert "Daily Action Plan" in state.get("response", "")
+    assert "plan for today" in state.get("response", "")
+    assert "Due: None" not in state.get("response", "")
     assert "Urgent Security Patch" in state.get("response", "")
 
 
@@ -138,7 +139,7 @@ async def test_recommendation_agent_insights(db_session: AsyncSession, seed_test
 
     assert rec_state.get("intent") == Intent.GET_RECOMMENDATIONS.value
     assert rec_state.get("active_agent") == "recommendation_agent"
-    assert "Productivity Insights" in rec_state.get("response", "")
+    assert "How things are going" in rec_state.get("response", "")
 
 
 @pytest.mark.asyncio
