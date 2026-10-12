@@ -164,6 +164,18 @@ export interface HealthStatus {
   checkpoint?: { backend: string; is_durable: boolean; connected: boolean; mode: string };
 }
 
+/** One step of an agent run, in the order it happened. */
+export interface AgentStep {
+  node: string;
+  duration_ms: number;
+  tools?: string[];
+  intent?: string | null;
+  confidence?: number | null;
+  /** How the intent was decided: llm, rules, or flow (an approval answer). */
+  classifier?: string | null;
+  awaiting_confirmation?: boolean;
+}
+
 export interface ChatExecutionMetadata {
   request_id?: string | null;
   active_agent?: string | null;
@@ -173,7 +185,24 @@ export interface ChatExecutionMetadata {
   tool_calls_made: string[];
   node_durations_ms?: Record<string, number>;
   total_duration_ms?: number;
+  classifier?: string | null;
+  steps?: AgentStep[];
   status?: string;
+}
+
+export interface IntegrationsStatus {
+  google_chat: {
+    verification_enabled: boolean;
+    audience_configured: boolean;
+    service_account_configured: boolean;
+    events_24h: number;
+    last_event_at: string | null;
+    linked_users: number;
+    dm_ready_users: number;
+    deliveries_24h: Record<string, number>;
+  };
+  email: { enabled: boolean; deliveries_24h: Record<string, number> };
+  llm: { configured: boolean; model: string; circuit_open: boolean; classified_24h: Record<string, number> };
 }
 
 export interface AgentExecutionTrace {
@@ -188,6 +217,8 @@ export interface AgentExecutionTrace {
   tool_calls_made: string[];
   node_durations_ms: Record<string, number>;
   total_duration_ms: number;
+  classifier?: string | null;
+  steps?: AgentStep[];
   status: string;
   error_code?: string | null;
   error_message?: string | null;

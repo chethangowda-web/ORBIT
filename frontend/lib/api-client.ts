@@ -14,6 +14,7 @@ import type {
   ChatQueryRequest,
   ChatQueryResponse,
   HealthStatus,
+  IntegrationsStatus,
   NotificationLogEntry,
   PaginationMeta,
   SchedulerStatus,
@@ -189,6 +190,7 @@ export const api = {
       }[job];
       return unwrap<Record<string, number>>(await apiClient.post(path, null, { params: { force: true } }));
     },
+    integrations: async () => unwrap<IntegrationsStatus>(await apiClient.get("/admin/integrations")),
     notifications: async (params: { status?: string; type?: string; page?: number; page_size?: number } = {}) => {
       const res = await apiClient.get<APIResponse<NotificationLogEntry[]>>("/admin/notifications", { params });
       return { items: res.data.data ?? [], meta: (res.data.meta as PaginationMeta) ?? EMPTY_META } as Paged<NotificationLogEntry>;

@@ -5,8 +5,17 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from datetime import timedelta
+from pathlib import Path
+
+from sqlalchemy import func, select
+
+from config import settings
 from crud.notifications import list_notification_logs
-from db.models import User
+from db.base import utc_now
+from db.models import AgentExecutionTrace, ChatEventLedger, NotificationLog, User
+from services.email import email_enabled
+from services.llm import llm_breaker
 from db.session import get_db
 from dependencies import require_role
 from schemas.common import PaginationMeta, api_response
@@ -86,3 +95,70 @@ async def list_notifications(
         total_pages=math.ceil(total / page_size) if total else 0,
     )
     return api_response(data=items, meta=meta)
+
+
+async def _delivery_counts(db: AsyncSession, email: bool) -> Dict[str, int]:
+    """Notification outcomes in the last 24 hours (sent, failed, skipped) for Chat or for email."""
+    since = utc_now() - timedelta(hours=24)
+    is_email = NotificationLog.type.like("email:%")
+    rows = await db.execute(
+        select(NotificationLog.status, func.count())
+        .where(NotificationLog.sent_at >= since, is_email if email else ~is_email)
+        .group_by(NotificationLog.status)
+    )
+    counts = {"sent": 0, "failed": 0, "skipped": 0}
+    for status_value, total in rows.all():
+        counts[status_value] = counts.get(status_value, 0) + total
+    return counts
+
+
+def _has_chat_credentials() -> bool:
+    inline = settings.GOOGLE_SERVICE_ACCOUNT_JSON.strip()
+    return inline.startswith("{") or bool(settings.GOOGLE_SERVICE_ACCOUNT_FILE and Path(settings.GOOGLE_SERVICE_ACCOUNT_FILE).exists())
+
+
+@router.get("/integrations", status_code=status.HTTP_200_OK)
+async def integrations_status(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "manager")),
+) -> Dict[str, Any]:
+    """Is each integration connected, and is it actually being used? Counts and booleans only: no
+    secrets, addresses or message content."""
+    since = utc_now() - timedelta(hours=24)
+
+    events_24h = (await db.execute(select(func.count()).select_from(ChatEventLedger).where(ChatEventLedger.created_at >= since))).scalar_one()
+    last_event = (await db.execute(select(func.max(ChatEventLedger.created_at)))).scalar_one()
+    linked = (await db.execute(select(func.count()).select_from(User).where(User.google_id.is_not(None)))).scalar_one()
+    dm_ready = (await db.execute(select(func.count()).select_from(User).where(User.google_space_id.is_not(None)))).scalar_one()
+
+    classifier_rows = await db.execute(
+        select(AgentExecutionTrace.classifier, func.count())
+        .where(AgentExecutionTrace.created_at >= since)
+        .group_by(AgentExecutionTrace.classifier)
+    )
+    classified = {(name or "unknown"): total for name, total in classifier_rows.all()}
+
+    return api_response(
+        data={
+            "google_chat": {
+                "verification_enabled": settings.GOOGLE_CHAT_VERIFY_AUTH,
+                "audience_configured": bool(settings.GOOGLE_CHAT_AUDIENCE),
+                "service_account_configured": _has_chat_credentials(),
+                "events_24h": events_24h,
+                "last_event_at": last_event.isoformat() if last_event else None,
+                "linked_users": linked,
+                "dm_ready_users": dm_ready,
+                "deliveries_24h": await _delivery_counts(db, email=False),
+            },
+            "email": {
+                "enabled": email_enabled(),
+                "deliveries_24h": await _delivery_counts(db, email=True),
+            },
+            "llm": {
+                "configured": bool(getattr(settings, "GOOGLE_GEMINI_API_KEY", "") or getattr(settings, "OPENAI_API_KEY", "")),
+                "model": settings.DEFAULT_LLM_MODEL,
+                "circuit_open": llm_breaker.opened_at is not None,
+                "classified_24h": classified,
+            },
+        }
+    )

@@ -425,6 +425,10 @@ app = workflow.compile(checkpointer=AsyncRedisSaver(redis_client))
 
 **Dates.** Relative dates ("Friday", "tomorrow") resolve in `APP_TIMEZONE`, not UTC.
 
+**Workflow visibility.** Every run records its steps in order: the Supervisor (intent, confidence, and whether the intent came from the LLM, the built-in rules, or a yes/cancel answer), then the specialist agent with the tools it called and the time each step took. The dashboard draws this under every reply in the agent panel and on the Agent workflow screen, which also shows per-agent run counts. The Admin screen's Integrations tab shows whether Google Chat, the AI model and email are connected and being used.
+
+**Conversation state.** Each turn starts clean: a new request clears any pending confirmation, the previous reply and the "cancelled" marker, so a later "yes" cannot answer an old delete prompt. A message that names a task never inherits the previous one; one that names none ("mark as done", "move that deadline to Friday") means the task just discussed. Deleting needs an explicit reference on top of the confirmation, which expires after 10 minutes.
+
 **LLM use.** With no API key the supervisor uses the deterministic classifier; with a key it uses structured output and falls back to the classifier after three failed attempts. Specialist replies are grounded in tool data and fall back to deterministic text if the model fails.
 
 ## 6. Proactive Agent Flows

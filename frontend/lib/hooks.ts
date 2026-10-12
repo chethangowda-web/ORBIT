@@ -54,6 +54,10 @@ export function useWorkload(enabled: boolean) {
   return useQuery({ queryKey: keys.workload, queryFn: api.analytics.workload, enabled });
 }
 
+export function useIntegrations() {
+  return useQuery({ queryKey: ["integrations"], queryFn: api.admin.integrations, refetchInterval: 30_000 });
+}
+
 export function useUsers() {
   return useQuery({
     queryKey: keys.users,

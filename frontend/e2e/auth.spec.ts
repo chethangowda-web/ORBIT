@@ -5,7 +5,7 @@ test.describe("authentication and access", () => {
   test("anonymous visitors are sent to the login page", async ({ page }) => {
     await page.goto("/tasks");
     await expect(page).toHaveURL(/\/login/);
-    await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
   });
 
   test("the login page has no Google sign-in and offers one-click demo accounts", async ({ page }) => {
@@ -20,7 +20,7 @@ test.describe("authentication and access", () => {
 
   test("a wrong password shows an error and stays on the page", async ({ page }) => {
     await page.goto("/login");
-    await page.getByLabel("Work email").fill(ACCOUNTS.employee.email);
+    await page.getByLabel("Email", { exact: true }).fill(ACCOUNTS.employee.email);
     await page.getByLabel("Password").fill("definitely-wrong");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page.getByRole("alert").filter({ hasText: /invalid email or password/i })).toBeVisible();

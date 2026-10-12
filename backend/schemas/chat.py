@@ -82,6 +82,8 @@ class ChatExecutionMetadata(BaseModel):
     tool_calls_made: List[str] = Field(default_factory=list)
     node_durations_ms: Dict[str, float] = Field(default_factory=dict)
     total_duration_ms: float = 0.0
+    classifier: Optional[str] = None  # llm | rules | flow
+    steps: List[Dict[str, Any]] = Field(default_factory=list)
     status: str = "SUCCESS"
 
 
