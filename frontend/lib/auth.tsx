@@ -53,6 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
   const [user, setUser] = useState<SessionUser | User | null>(null);
   const [status, setStatus] = useState<AuthStatus>("loading");
+  const [tokenVersion, setTokenVersion] = useState(0);
 
   const logout = useCallback(
     (reason?: "expired") => {
@@ -100,7 +101,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const delay = Math.min(exp * 1000 - Date.now(), 2 ** 31 - 1);
     const timer = window.setTimeout(() => logout("expired"), Math.max(delay, 0));
     return () => window.clearTimeout(timer);
-  }, [status, logout]);
+  }, [status, logout, tokenVersion]);
+
+  // Keep an active session alive: once half of the token's life has passed, quietly swap it for a fresh one.
+  // Checked every few minutes and whenever the tab is shown again (a sleeping laptop wakes up mid-session).
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    let running = false;
+    const renewIfHalfSpent = async () => {
+      const claims = decodeTokenClaims(window.localStorage.getItem(TOKEN_KEY));
+      if (running || !claims?.exp || !claims.iat) return;
+      const now = Date.now() / 1000;
+      if (claims.exp <= now || now < claims.iat + (claims.exp - claims.iat) / 2) return;
+      running = true;
+      try {
+        const fresh = await api.auth.refresh();
+        window.localStorage.setItem(TOKEN_KEY, fresh.access_token);
+        writeCookie(fresh.access_token);
+        setTokenVersion((v) => v + 1);
+      } catch {
+        // A rejected token ends the session through the usual 401 handler; a network blip is retried next time.
+      } finally {
+        running = false;
+      }
+    };
+    void renewIfHalfSpent();
+    const timer = window.setInterval(() => void renewIfHalfSpent(), 5 * 60_000);
+    const onVisible = () => document.visibilityState === "visible" && void renewIfHalfSpent();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [status]);
 
   const setSession = useCallback<AuthContextValue["setSession"]>(
     ({ access_token, user: sessionUser }) => {

@@ -329,6 +329,21 @@ async def logout(
     return api_response(data={"message": "Logged out successfully."})
 
 
+@router.post("/refresh", status_code=status.HTTP_200_OK)
+async def refresh_session(current_user: User = Depends(get_current_user)):
+    """Swap a still-valid token for a fresh one, so an active session does not run out mid-work."""
+    token = create_access_token(
+        data={"sub": str(current_user.id), "email": current_user.email, "role": current_user.role}
+    )
+    token_data = TokenResponseData(
+        access_token=token,
+        token_type="bearer",
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        user=UserSummary.model_validate(current_user),
+    )
+    return api_response(data=token_data.model_dump())
+
+
 @router.get("/me", status_code=status.HTTP_200_OK)
 async def get_current_user_profile(
     current_user: User = Depends(get_current_user),

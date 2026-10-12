@@ -107,3 +107,19 @@ async def test_get_profile_unauthorized(client: AsyncClient):
     assert response.status_code == 401
     res = response.json()
     assert res["success"] is False
+
+
+async def test_a_valid_session_can_be_renewed_with_a_fresh_token(client, seed_test_user, user_auth_headers):
+    res = await client.post("/api/auth/refresh", headers=user_auth_headers)
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["access_token"] and data["user"]["email"] == seed_test_user.email
+
+    # the new token works on its own
+    me = await client.get("/api/users/me", headers={"Authorization": f"Bearer {data['access_token']}"})
+    assert me.status_code == 200
+
+
+async def test_renewal_needs_a_valid_token(client):
+    assert (await client.post("/api/auth/refresh")).status_code == 401
+    assert (await client.post("/api/auth/refresh", headers={"Authorization": "Bearer nonsense"})).status_code == 401
