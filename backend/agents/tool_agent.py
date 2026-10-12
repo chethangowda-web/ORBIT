@@ -29,7 +29,7 @@ from auth.rbac import is_manager
 from services.assignment import rank_assignees
 from services.duplicate_check import check_for_duplicates, describe
 from services.llm import call_llm_with_tools, llm_available
-from services.wording import friendly
+from services.wording import due_phrase, friendly
 from tools.base import get_tool_session, resolve_user_reference
 from tools.analytics_tools import get_task_stats
 from tools.task_tools import complete_task, create_task, get_task_by_id, search_tasks, update_task
@@ -354,7 +354,7 @@ def _describe_change(name: str, args: dict[str, Any], title: str) -> str:
     if args.get("status"):
         parts.append(f"now {friendly(args['status']).lower()}")
     if args.get("due_date"):
-        parts.append(f"due {args['due_date']}")
+        parts.append(f"now {due_phrase(args['due_date'])}")
     if args.get("assignee_name"):
         parts.append(f"now with {args['assignee_name']}")
     if args.get("title"):
